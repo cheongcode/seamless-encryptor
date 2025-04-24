@@ -1230,11 +1230,6 @@ module.exports = require("util");
 /******/ 	}
 /******/ 	
 /************************************************************************/
-/******/ 	/* webpack/runtime/compat */
-/******/ 	
-/******/ 	if (typeof __webpack_require__ !== 'undefined') __webpack_require__.ab = __dirname + "/native_modules/";
-/******/ 	
-/************************************************************************/
 var __webpack_exports__ = {};
 // This entry needs to be wrapped in an IIFE because it needs to be isolated against other modules in the chunk.
 (() => {
@@ -1263,7 +1258,7 @@ function createWindow() {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
-      preload: 'C:\\Users\\brand\\GitHub\\seamless-encryptor\\.webpack\\renderer\\main_window\\preload.js',
+      preload: '/Users/handsomeintern/Documents/GitHub/seamless-encryptor/.webpack/renderer/main_window/preload.js',
       sandbox: true,
       webSecurity: true
     },
@@ -1307,6 +1302,23 @@ app.whenReady().then(() => {
 // for applications and their menu bar to stay active until the user quits
 // explicitly with Cmd + Q.
 app.on('window-all-closed', () => {
+  // Clean up temp files
+  try {
+    const tempDir = path.join(app.getPath('temp'), 'seamless-encryptor');
+    if (fs.existsSync(tempDir)) {
+      // Read directory and delete all files
+      const files = fs.readdirSync(tempDir);
+      for (const file of files) {
+        const filePath = path.join(tempDir, file);
+        fs.unlinkSync(filePath);
+      }
+      // Try to delete the directory
+      fs.rmdirSync(tempDir);
+    }
+  } catch (error) {
+    console.error('Error cleaning up temp directory:', error);
+  }
+
   if (process.platform !== 'darwin') {
     app.quit();
   }
@@ -1359,6 +1371,27 @@ const storageService = {
   }
 };
 
+// Helper function to decrypt data
+async function decryptData(encryptedData, encryptionKey) {
+  try {
+    const key = Buffer.from(encryptionKey, 'hex');
+    const iv = encryptedData.slice(0, 16);
+    const authTag = encryptedData.slice(16, 32);
+    const encrypted = encryptedData.slice(32);
+    
+    const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
+    decipher.setAuthTag(authTag);
+    
+    return Buffer.concat([
+      decipher.update(encrypted),
+      decipher.final()
+    ]);
+  } catch (error) {
+    console.error('Decryption failed:', error);
+    throw new Error(`Decryption failed: ${error.message}`);
+  }
+}
+
 // IPC Handlers
 ipcMain.handle('select-file', async () => {
   const result = await dialog.showOpenDialog(mainWindow, {
@@ -1403,66 +1436,81 @@ ipcMain.handle('encrypt-and-upload', async (event, filePath) => {
   }
 });
 
-ipcMain.handle('download-file', async (event, fileId, fileName) => {
-  try {
-    // Start progress
-    event.sender.send('progress', 0);
-    
-    const key = getEncryptionKey();
-    const storageKey = `${fileId}/${fileName}.enc`;
-    
-    // Download from storage
-    event.sender.send('progress', 30);
-    const encryptedData = await storageService.downloadFile(storageKey);
-    event.sender.send('progress', 60);
-    
-    // Extract IV, auth tag and encrypted data
-    const iv = encryptedData.slice(0, 16);
-    const authTag = encryptedData.slice(16, 32);
-    const encrypted = encryptedData.slice(32);
-    
-    // Decrypt
-    const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
-    decipher.setAuthTag(authTag);
-    
-    const decrypted = Buffer.concat([
-      decipher.update(encrypted),
-      decipher.final()
-    ]);
-    
-    event.sender.send('progress', 80);
-    
-    // Save the file
-    const result = await dialog.showSaveDialog({
-      defaultPath: fileName,
-      filters: [
-        { name: 'All Files', extensions: ['*'] }
-      ]
-    });
-    
-    if (!result.canceled) {
-      await fs.promises.writeFile(result.filePath, decrypted);
-      
-      event.sender.send('progress', 100);
-      event.sender.send('success', 'File downloaded and decrypted successfully!');
-      
-      return {
-        success: true,
-        path: result.filePath
-      };
+ipcMain.handle('download-file', async (event, { fileId, fileName }) => {
+    try {
+        // Send progress updates
+        event.sender.send('download-progress', { progress: 0, status: 'Starting download...' });
+        
+        // Get encryption key
+        const encryptionKey = getEncryptionKey();
+        if (!encryptionKey) {
+            throw new Error('Encryption key not found');
+        }
+
+        // Construct storage key
+        const storageKey = `${fileId}/${fileName}.enc`;
+
+        // Download encrypted data
+        event.sender.send('download-progress', { progress: 25, status: 'Downloading encrypted file...' });
+        const encryptedData = await storageService.downloadFile(storageKey);
+
+        // Decrypt the data
+        event.sender.send('download-progress', { progress: 50, status: 'Decrypting file...' });
+        const decryptedData = await decryptData(encryptedData, encryptionKey.toString('hex'));
+
+        // Save the decrypted file
+        event.sender.send('download-progress', { progress: 75, status: 'Saving file...' });
+        const savePath = await dialog.showSaveDialog({
+            defaultPath: fileName,
+            filters: [{ name: 'All Files', extensions: ['*'] }]
+        });
+
+        if (savePath.canceled) {
+            return { success: false, error: 'Download cancelled' };
+        }
+
+        await fs.promises.writeFile(savePath.filePath, decryptedData);
+        event.sender.send('download-progress', { progress: 100, status: 'Download complete!' });
+
+        return { success: true };
+    } catch (err) {
+        console.error('Download error:', err);
+        return { success: false, error: err.message };
     }
-    
-    return {
-      success: false,
-      error: 'Save canceled'
-    };
-  } catch (error) {
-    event.sender.send('error', `Decryption failed: ${error.message}`);
-    return {
-      success: false,
-      error: error.message
-    };
-  }
+});
+
+// Add new IPC handler for downloading encrypted files
+ipcMain.handle('download-encrypted-file', async (event, { fileId, fileName }) => {
+    try {
+        // Send progress updates
+        event.sender.send('download-progress', { progress: 0, status: 'Starting download...' });
+        
+        // Construct storage key
+        const storageKey = `${fileId}/${fileName}.enc`;
+
+        // Download encrypted data
+        event.sender.send('download-progress', { progress: 50, status: 'Downloading encrypted file...' });
+        const encryptedData = await storageService.downloadFile(storageKey);
+
+        // Save the encrypted file
+        event.sender.send('download-progress', { progress: 75, status: 'Saving file...' });
+        const savePath = await dialog.showSaveDialog({
+            defaultPath: `${fileName}.encrypted`,
+            filters: [{ name: 'Encrypted Files', extensions: ['encrypted'] }]
+        });
+
+        if (savePath.canceled) {
+            return { success: false, error: 'Download cancelled' };
+        }
+
+        await fs.promises.writeFile(savePath.filePath, encryptedData);
+        event.sender.send('download-progress', { progress: 100, status: 'Download complete!' });
+
+        return { success: true };
+    } catch (err) {
+        console.error('Download error:', err);
+        return { success: false, error: err.message };
+    }
 });
 
 ipcMain.handle('delete-file', async (event, fileId) => {
@@ -1620,7 +1668,7 @@ ipcMain.handle('save-file-dialog', async () => {
 });
 
 // Handle drag and drop files
-ipcMain.handle('save-dropped-file', async (event, fileObject) => {
+ipcMain.handle('save-dropped-file', async (event, fileInfo) => {
   try {
     // We need to save the file because renderer process can't directly access file paths
     const tempDir = path.join(app.getPath('temp'), 'seamless-encryptor');
@@ -1630,11 +1678,25 @@ ipcMain.handle('save-dropped-file', async (event, fileObject) => {
       fs.mkdirSync(tempDir, { recursive: true });
     }
     
-    // Generate a unique file path
-    const tempFilePath = path.join(tempDir, path.basename(fileObject.name || 'file'));
+    // Generate a unique file path with timestamp to avoid conflicts
+    const timestamp = Date.now();
+    const fileName = fileInfo.name || 'file';
+    const tempFilePath = path.join(tempDir, `${timestamp}-${path.basename(fileName)}`);
     
-    // Write file data to temp file
-    await fs.promises.writeFile(tempFilePath, Buffer.from(await fileObject.arrayBuffer()));
+    // Convert the array back to a buffer and write to file
+    const buffer = Buffer.from(new Uint8Array(fileInfo.data));
+    await fs.promises.writeFile(tempFilePath, buffer);
+    
+    // Schedule cleanup of the temp file (after 1 minute)
+    setTimeout(() => {
+      try {
+        if (fs.existsSync(tempFilePath)) {
+          fs.unlinkSync(tempFilePath);
+        }
+      } catch (cleanupError) {
+        console.error('Failed to clean up temp file:', cleanupError);
+      }
+    }, 60000);
     
     return tempFilePath;
   } catch (error) {

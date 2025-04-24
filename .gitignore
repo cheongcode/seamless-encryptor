@@ -134,3 +134,24 @@ dist
 .yarn/build-state.yml
 .yarn/install-state.gz
 .pnp.*
+
+
+# Webpack build artifacts
+.webpack/
+dist/
+build/
+
+# Source maps and hot updates
+*.hot-update.*
+*.js.map
+
+# Node-related
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Electron-specific
+out/
+release/
+.webpack/**/preload.js

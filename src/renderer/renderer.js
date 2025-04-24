@@ -106,6 +106,7 @@ document.addEventListener('DOMContentLoaded', () => {
               <span class="file-name">${file.name}</span>
               <div class="file-actions">
                   <button onclick="downloadFile('${file.id}', '${file.name}')">Download</button>
+                  <button onclick="downloadEncryptedFile('${file.id}', '${file.name}')">Download Encrypted</button>
                   <button onclick="deleteFile('${file.id}')" class="delete">Delete</button>
               </div>
           `;
@@ -148,8 +149,38 @@ document.addEventListener('DOMContentLoaded', () => {
   // For files coming from drag and drop
   async function handleDroppedFile(file) {
       try {
-          // First, save the file to a temporary location
-          const tempPath = await window.api.saveDroppedFile(file);
+          // Check file size (limit to 100MB to prevent memory issues)
+          const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB
+          if (file.size > MAX_FILE_SIZE) {
+              throw new Error(`File too large. Maximum size is ${MAX_FILE_SIZE / (1024 * 1024)}MB`);
+          }
+          
+          // Show progress
+          progressContainer.style.display = 'block';
+          progressBar.style.width = '0%';
+          status.textContent = 'Reading dropped file...';
+          
+          // Read the file content
+          const reader = new FileReader();
+          const fileData = await new Promise((resolve, reject) => {
+              reader.onload = (e) => resolve(e.target.result);
+              reader.onerror = (e) => reject(new Error('Error reading file'));
+              reader.readAsArrayBuffer(file);
+          });
+          
+          // Create a simplified file object with only the necessary data
+          const fileInfo = {
+              name: file.name,
+              type: file.type,
+              size: file.size,
+              data: Array.from(new Uint8Array(fileData))
+          };
+          
+          progressBar.style.width = '30%';
+          status.textContent = 'Processing file...';
+          
+          // Save the file data to a temporary location
+          const tempPath = await window.api.saveDroppedFile(fileInfo);
           if (tempPath) {
               // Then process it like a selected file
               await handleSelectedFile(tempPath);
@@ -158,6 +189,7 @@ document.addEventListener('DOMContentLoaded', () => {
           }
       } catch (err) {
           showError(`Error: ${err.message || 'Unknown error'}`);
+          progressContainer.style.display = 'none';
       }
   }
 
@@ -165,14 +197,10 @@ document.addEventListener('DOMContentLoaded', () => {
   window.downloadFile = async function(fileId, fileName) {
       try {
           progressContainer.style.display = 'block';
-          progressBar.style.width = '0%';
-          status.textContent = 'Downloading and decrypting...';
-
+          
           const result = await window.api.downloadFile(fileId, fileName);
           
           if (result.success) {
-              progressBar.style.width = '100%';
-              status.textContent = 'File downloaded and decrypted successfully!';
               showSuccess('File downloaded and decrypted successfully!');
           } else {
               throw new Error(result.error || 'Unknown error during download');
@@ -180,7 +208,10 @@ document.addEventListener('DOMContentLoaded', () => {
       } catch (err) {
           showError(`Error: ${err.message || 'Unknown error'}`);
       } finally {
-          progressContainer.style.display = 'none';
+          // Hide progress after a short delay to allow user to see completion
+          setTimeout(() => {
+              progressContainer.style.display = 'none';
+          }, 1500);
       }
   };
 
@@ -199,9 +230,36 @@ document.addEventListener('DOMContentLoaded', () => {
       }
   };
 
+  // Add new function for downloading encrypted files
+  window.downloadEncryptedFile = async function(fileId, fileName) {
+      try {
+          progressContainer.style.display = 'block';
+          
+          const result = await window.api.downloadEncryptedFile(fileId, fileName);
+          
+          if (result.success) {
+              showSuccess('Encrypted file downloaded successfully!');
+          } else {
+              throw new Error(result.error || 'Unknown error during download');
+          }
+      } catch (err) {
+          showError(`Error: ${err.message || 'Unknown error'}`);
+      } finally {
+          // Hide progress after a short delay to allow user to see completion
+          setTimeout(() => {
+              progressContainer.style.display = 'none';
+          }, 1500);
+      }
+  };
+
   // Progress and status updates
   window.api.onProgress((value) => {
       progressBar.style.width = `${value}%`;
+  });
+
+  window.api.onDownloadProgress((data) => {
+      progressBar.style.width = `${data.progress}%`;
+      status.textContent = data.status;
   });
 
   window.api.onError((message) => {

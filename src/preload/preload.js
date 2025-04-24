@@ -9,7 +9,8 @@ contextBridge.exposeInMainWorld('api', {
   // File operations
   encryptFile: (filePath) => ipcRenderer.invoke('encrypt-file', filePath),
   decryptFile: (encryptedData) => ipcRenderer.invoke('decrypt-file', encryptedData),
-  downloadFile: (fileId, fileName) => ipcRenderer.invoke('download-file', fileId, fileName),
+  downloadFile: (fileId, fileName) => ipcRenderer.invoke('download-file', { fileId, fileName }),
+  downloadEncryptedFile: (fileId, fileName) => ipcRenderer.invoke('download-encrypted-file', { fileId, fileName }),
   deleteFile: (fileId) => ipcRenderer.invoke('delete-file', fileId),
   saveDroppedFile: (fileObject) => ipcRenderer.invoke('save-dropped-file', fileObject),
   
@@ -26,6 +27,10 @@ contextBridge.exposeInMainWorld('api', {
   onProgress: (callback) => {
     ipcRenderer.on('progress', (_event, value) => callback(value));
     return () => ipcRenderer.removeListener('progress', callback);
+  },
+  onDownloadProgress: (callback) => {
+    ipcRenderer.on('download-progress', (_event, data) => callback(data));
+    return () => ipcRenderer.removeListener('download-progress', callback);
   },
   onError: (callback) => {
     ipcRenderer.on('error', (_event, message) => callback(message));
