@@ -1,4 +1,4 @@
-// DOM Elements
+// Handle UI events and encryption processes
 document.addEventListener('DOMContentLoaded', () => {
   const dropZone = document.getElementById('dropZone');
   const selectFileBtn = document.getElementById('selectFile');
@@ -9,7 +9,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const success = document.getElementById('success');
   const fileList = document.getElementById('fileList');
 
-  // Initialize encryption key
+  // Start with a fresh encryption key
   let encryptionKey = null;
 
   async function initializeKey() {
@@ -21,13 +21,13 @@ document.addEventListener('DOMContentLoaded', () => {
       encryptionKey = key;
   }
 
-  // Prevent default drag behaviors
+  // Set up drag and drop behavior
   ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
       dropZone.addEventListener(eventName, preventDefaults, false);
       document.body.addEventListener(eventName, preventDefaults, false);
   });
 
-  // Highlight drop zone when dragging over it
+  // Visual feedback when dragging files
   ['dragenter', 'dragover'].forEach(eventName => {
       dropZone.addEventListener(eventName, highlight, false);
   });
@@ -36,10 +36,10 @@ document.addEventListener('DOMContentLoaded', () => {
       dropZone.addEventListener(eventName, unhighlight, false);
   });
 
-  // Handle dropped files
+  // Handle files
   dropZone.addEventListener('drop', handleDrop, false);
 
-  // Handle file selection button
+  // File button click
   selectFileBtn.addEventListener('click', async () => {
       const filePath = await window.api.openFileDialog();
       if (filePath) {
@@ -88,7 +88,7 @@ document.addEventListener('DOMContentLoaded', () => {
   function updateFileList() {
       fileList.innerHTML = '';
       
-      // Get all files from localStorage
+      // Get all encrypted files from storage
       const files = Object.keys(localStorage)
           .filter(key => key.startsWith('file-'))
           .map(key => JSON.parse(localStorage.getItem(key)))
@@ -114,18 +114,18 @@ document.addEventListener('DOMContentLoaded', () => {
       });
   }
 
-  // For files coming from the file dialog
+  // Process files selected through the file dialog
   async function handleSelectedFile(filePath) {
       try {
           progressContainer.style.display = 'block';
           progressBar.style.width = '0%';
           status.textContent = 'Encrypting and uploading file...';
 
-          // Encrypt and upload the file
+          // Encrypt and save the file
           const result = await window.api.encryptFile(filePath);
           
           if (result && result.success) {
-              // Store file info in localStorage
+              // Keep track of the file info
               const fileInfo = {
                   id: result.fileId,
                   name: result.fileName,
@@ -133,7 +133,7 @@ document.addEventListener('DOMContentLoaded', () => {
               };
               localStorage.setItem(`file-${result.fileId}`, JSON.stringify(fileInfo));
               
-              // Update UI
+              // Update the UI
               updateFileList();
               showSuccess('File encrypted and uploaded successfully!');
           } else {
@@ -146,7 +146,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
   }
 
-  // For files coming from drag and drop
+  // Process files dropped onto the drop zone
   async function handleDroppedFile(file) {
       try {
           // Check file size (limit to 100MB to prevent memory issues)
@@ -193,7 +193,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
   }
 
-  // Attach download and delete functions to window
+  // Make functions available globally for button clicks
   window.downloadFile = async function(fileId, fileName) {
       try {
           progressContainer.style.display = 'block';
@@ -230,7 +230,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
   };
 
-  // Add new function for downloading encrypted files
+  // Download encrypted version of a file
   window.downloadEncryptedFile = async function(fileId, fileName) {
       try {
           progressContainer.style.display = 'block';
@@ -252,7 +252,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
   };
 
-  // Progress and status updates
+  // Listen for events from the main process
   window.api.onProgress((value) => {
       progressBar.style.width = `${value}%`;
   });
@@ -270,7 +270,7 @@ document.addEventListener('DOMContentLoaded', () => {
       showSuccess(message);
   });
 
-  // Initialize
+  // Start up
   initializeKey();
   updateFileList();
 }); 

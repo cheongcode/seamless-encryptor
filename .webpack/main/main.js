@@ -909,7 +909,7 @@ const path = __webpack_require__(/*! path */ "path");
 const KEY_STORAGE_PATH = app ? path.join(app.getPath('userData'), 'keys') : '';
 
 /**
- * Ensure the key storage directory exists
+ * Make sure we have a place to store keys
  */
 function ensureKeyStorageExists() {
   if (!KEY_STORAGE_PATH) return;
@@ -920,19 +920,17 @@ function ensureKeyStorageExists() {
 }
 
 /**
- * Generate a master key
- * @returns {Buffer} 32-byte random key
+ * Create a new master encryption key
  */
 function generateMasterKey() {
   return crypto.randomBytes(32);
 }
 
-// In-memory master key
+// Keep master key in memory for quick access
 let masterKey = null;
 
 /**
- * Get the master key, creating it if it doesn't exist
- * @returns {Promise<Buffer>} The master key
+ * Get or create master key
  */
 async function getMasterKey() {
   if (masterKey) return masterKey;
@@ -956,9 +954,7 @@ async function getMasterKey() {
 }
 
 /**
- * Store an encrypted file key
- * @param {string} fileId - Unique file identifier
- * @param {Object} encryptedKey - Encrypted key data
+ * Save an encrypted file key
  */
 function storeFileKey(fileId, encryptedKey) {
   try {
@@ -972,9 +968,7 @@ function storeFileKey(fileId, encryptedKey) {
 }
 
 /**
- * Get an encrypted file key
- * @param {string} fileId - Unique file identifier
- * @returns {Object|null} Encrypted key data or null if not found
+ * Retrieve an encrypted file key
  */
 function getFileKey(fileId) {
   try {
@@ -994,9 +988,7 @@ function getFileKey(fileId) {
 }
 
 /**
- * Remove a file key
- * @param {string} fileId - Unique file identifier
- * @returns {boolean} True if successful, false otherwise
+ * Delete a file key
  */
 function removeFileKey(fileId) {
   try {
@@ -1035,7 +1027,6 @@ const crypto = __webpack_require__(/*! crypto */ "crypto");
 
 /**
  * Generate a random encryption key
- * @returns {Buffer} 32-byte encryption key
  */
 function generateKey() {
     return crypto.randomBytes(32);
@@ -1043,9 +1034,6 @@ function generateKey() {
 
 /**
  * Encrypt data using AES-256-GCM
- * @param {Buffer} data - Data to encrypt
- * @param {Buffer} key - 32-byte encryption key
- * @returns {Object} Object containing encryptedData, iv, and authTag
  */
 function encrypt(data, key) {
     const iv = crypto.randomBytes(16);
@@ -1067,9 +1055,6 @@ function encrypt(data, key) {
 
 /**
  * Decrypt data using AES-256-GCM
- * @param {Object} encryptedObj - Object containing encryptedData, iv, and tag
- * @param {Buffer} key - 32-byte encryption key
- * @returns {Buffer} Decrypted data
  */
 function decrypt(encryptedObj, key) {
     const { encryptedData, iv, tag } = encryptedObj;
@@ -1084,9 +1069,6 @@ function decrypt(encryptedObj, key) {
 
 /**
  * Encrypt a file key with the master key
- * @param {Buffer} fileKey - File encryption key
- * @param {Buffer} masterKey - Master encryption key
- * @returns {Object} Encrypted key data
  */
 function encryptKey(fileKey, masterKey) {
     return encrypt(fileKey, masterKey);
@@ -1094,9 +1076,6 @@ function encryptKey(fileKey, masterKey) {
 
 /**
  * Decrypt a file key with the master key
- * @param {Object} encryptedKey - Encrypted key data
- * @param {Buffer} masterKey - Master encryption key
- * @returns {Buffer} Decrypted file key
  */
 function decryptKey(encryptedKey, masterKey) {
     return decrypt(encryptedKey, masterKey);
@@ -1230,6 +1209,11 @@ module.exports = require("util");
 /******/ 	}
 /******/ 	
 /************************************************************************/
+/******/ 	/* webpack/runtime/compat */
+/******/ 	
+/******/ 	if (typeof __webpack_require__ !== 'undefined') __webpack_require__.ab = __dirname + "/native_modules/";
+/******/ 	
+/************************************************************************/
 var __webpack_exports__ = {};
 // This entry needs to be wrapped in an IIFE because it needs to be isolated against other modules in the chunk.
 (() => {
@@ -1240,13 +1224,13 @@ const { app, BrowserWindow, ipcMain, dialog } = __webpack_require__(/*! electron
 const path = __webpack_require__(/*! path */ "path");
 const fs = __webpack_require__(/*! fs */ "fs");
 const crypto = __webpack_require__(/*! crypto */ "crypto");
-// Use our utility modules
+// Import utility modules
 const cryptoUtil = __webpack_require__(/*! ../crypto/encryption */ "./src/crypto/encryption.js");
 const keyManager = __webpack_require__(/*! ../config/keyManager */ "./src/config/keyManager.js");
 
 let mainWindow;
 
-// Handle creating/removing shortcuts on Windows when installing/uninstalling.
+// Handle creating/removing shortcuts on Windows when installing/uninstalling
 if (__webpack_require__(/*! electron-squirrel-startup */ "./node_modules/electron-squirrel-startup/index.js")) {
   app.quit();
 }
@@ -1258,7 +1242,7 @@ function createWindow() {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
-      preload: '/Users/handsomeintern/Documents/GitHub/seamless-encryptor/.webpack/renderer/main_window/preload.js',
+      preload: 'C:\\Users\\brand\\GitHub\\seamless-encryptor\\.webpack\\renderer\\main_window\\preload.js',
       sandbox: true,
       webSecurity: true
     },
@@ -1267,7 +1251,7 @@ function createWindow() {
   // Load the index.html from webpack
   mainWindow.loadURL('http://localhost:3000/main_window');
 
-  // Open the DevTools in development
+  // Open DevTools in development mode
   if (true) {
     mainWindow.webContents.openDevTools();
   }
@@ -1283,14 +1267,10 @@ function createWindow() {
   });
 }
 
-// This method will be called when Electron has finished
-// initialization and is ready to create browser windows.
-// Some APIs can only be used after this event occurs.
+// Create window when app is ready
 app.whenReady().then(() => {
   createWindow();
 
-  // On OS X it's common to re-create a window in the app when the
-  // dock icon is clicked and there are no other windows open.
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
       createWindow();
@@ -1298,15 +1278,12 @@ app.whenReady().then(() => {
   });
 });
 
-// Quit when all windows are closed, except on macOS. There, it's common
-// for applications and their menu bar to stay active until the user quits
-// explicitly with Cmd + Q.
 app.on('window-all-closed', () => {
   // Clean up temp files
   try {
     const tempDir = path.join(app.getPath('temp'), 'seamless-encryptor');
     if (fs.existsSync(tempDir)) {
-      // Read directory and delete all files
+      // Delete all files in the temp folder
       const files = fs.readdirSync(tempDir);
       for (const file of files) {
         const filePath = path.join(tempDir, file);
@@ -1324,18 +1301,18 @@ app.on('window-all-closed', () => {
   }
 });
 
-// Mock storage service for now
+// Storage service for saving encrypted files
 const storageService = {
   uploadFile: async (key, data) => {
-    // In a real app, this would upload to a cloud service
+    // For now, just save to the app's user data folder
     const storageDir = path.join(app.getPath('userData'), 'encrypted');
     
-    // Create the base directory if it doesn't exist
+    // Create base directory if needed
     if (!fs.existsSync(storageDir)) {
       fs.mkdirSync(storageDir, { recursive: true });
     }
     
-    // Extract directory part from the key (e.g., "fileId" from "fileId/filename.enc")
+    // Create subdirectory for this file
     const keyParts = key.split('/');
     if (keyParts.length > 1) {
       const dirPart = path.join(storageDir, keyParts[0]);
@@ -1393,34 +1370,44 @@ async function decryptData(encryptedData, encryptionKey) {
 }
 
 // IPC Handlers
-ipcMain.handle('select-file', async () => {
-  const result = await dialog.showOpenDialog(mainWindow, {
-    properties: ['openFile']
-  });
-  return result.filePaths[0];
-});
-
-ipcMain.handle('encrypt-and-upload', async (event, filePath) => {
+ipcMain.handle('encrypt-file', async (event, filePath) => {
   try {
-    // Read file
-    const fileData = await fs.promises.readFile(filePath);
-    const fileName = path.basename(filePath);
+    // Start progress tracking
+    event.sender.send('progress', 0);
     
-    // Generate file key and encrypt
-    const fileKey = crypto.randomBytes(32);
-    const encryptedData = crypto.encrypt(fileData, fileKey);
+    // Get the encryption key and read the file
+    const key = getEncryptionKey();
+    const inputBuffer = await fs.promises.readFile(filePath);
     
-    // Encrypt file key with master key
-    const masterKey = await keyManager.getMasterKey();
-    const encryptedKey = crypto.encryptKey(fileKey, masterKey);
+    event.sender.send('progress', 20);
     
-    // Store encrypted key
+    // Create initialization vector and encrypt the file
+    const iv = crypto.randomBytes(16);
+    const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+    
+    const encrypted = Buffer.concat([
+      cipher.update(inputBuffer),
+      cipher.final()
+    ]);
+    
+    event.sender.send('progress', 50);
+    
+    // Get the authentication tag and combine everything
+    const authTag = cipher.getAuthTag();
+    const encryptedData = Buffer.concat([iv, authTag, encrypted]);
+    
+    // Generate ID and save encrypted file
     const fileId = crypto.randomBytes(16).toString('hex');
-    keyManager.storeFileKey(fileId, encryptedKey);
-    
-    // Save encrypted data locally
+    const fileName = path.basename(filePath);
     const storageKey = `${fileId}/${fileName}.enc`;
-    await storageService.uploadFile(storageKey, encryptedData.encryptedData);
+    
+    event.sender.send('progress', 70);
+    
+    await storageService.uploadFile(storageKey, encryptedData);
+    
+    // Complete
+    event.sender.send('progress', 100);
+    event.sender.send('success', 'File encrypted and uploaded successfully!');
     
     return {
       success: true,
@@ -1428,7 +1415,32 @@ ipcMain.handle('encrypt-and-upload', async (event, filePath) => {
       fileName
     };
   } catch (error) {
-    console.error('Encrypt and upload error:', error);
+    event.sender.send('error', `Encryption failed: ${error.message}`);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+});
+
+ipcMain.handle('decrypt-file', async (event, encryptedData) => {
+  try {
+    const key = getEncryptionKey();
+    const iv = encryptedData.slice(0, 16);
+    const authTag = encryptedData.slice(16, 32);
+    const encrypted = encryptedData.slice(32);
+    
+    const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
+    decipher.setAuthTag(authTag);
+    
+    const decrypted = Buffer.concat([
+      decipher.update(encrypted),
+      decipher.final()
+    ]);
+    
+    return decrypted;
+  } catch (error) {
+    event.sender.send('error', `Decryption failed: ${error.message}`);
     return {
       success: false,
       error: error.message
@@ -1479,7 +1491,7 @@ ipcMain.handle('download-file', async (event, { fileId, fileName }) => {
     }
 });
 
-// Add new IPC handler for downloading encrypted files
+// Download the encrypted file without decrypting
 ipcMain.handle('download-encrypted-file', async (event, { fileId, fileName }) => {
     try {
         // Send progress updates
@@ -1542,82 +1554,6 @@ ipcMain.handle('delete-file', async (event, fileId) => {
   }
 });
 
-ipcMain.handle('encrypt-file', async (event, filePath) => {
-  try {
-    // Notify start
-    event.sender.send('progress', 0);
-    
-    // Implementation for file encryption
-    const key = getEncryptionKey();
-    const inputBuffer = await fs.promises.readFile(filePath);
-    
-    // Update progress
-    event.sender.send('progress', 20);
-    
-    const iv = crypto.randomBytes(16);
-    const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
-    
-    const encrypted = Buffer.concat([
-      cipher.update(inputBuffer),
-      cipher.final()
-    ]);
-    
-    // Update progress
-    event.sender.send('progress', 50);
-    
-    const authTag = cipher.getAuthTag();
-    const encryptedData = Buffer.concat([iv, authTag, encrypted]);
-    
-    // Upload to storage
-    const fileId = crypto.randomBytes(16).toString('hex');
-    const fileName = path.basename(filePath);
-    const storageKey = `${fileId}/${fileName}.enc`;
-    
-    // Update progress
-    event.sender.send('progress', 70);
-    
-    await storageService.uploadFile(storageKey, encryptedData);
-    
-    // Complete
-    event.sender.send('progress', 100);
-    event.sender.send('success', 'File encrypted and uploaded successfully!');
-    
-    return {
-      success: true,
-      fileId,
-      fileName
-    };
-  } catch (error) {
-    event.sender.send('error', `Encryption failed: ${error.message}`);
-    return {
-      success: false,
-      error: error.message
-    };
-  }
-});
-
-ipcMain.handle('decrypt-file', async (event, encryptedData) => {
-  try {
-    const key = getEncryptionKey();
-    const iv = encryptedData.slice(0, 16);
-    const authTag = encryptedData.slice(16, 32);
-    const encrypted = encryptedData.slice(32);
-    
-    const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
-    decipher.setAuthTag(authTag);
-    
-    const decrypted = Buffer.concat([
-      decipher.update(encrypted),
-      decipher.final()
-    ]);
-    
-    return decrypted;
-  } catch (error) {
-    event.sender.send('error', `Decryption failed: ${error.message}`);
-    throw error;
-  }
-});
-
 ipcMain.handle('generate-key', () => {
   const key = crypto.randomBytes(32);
   return key.toString('hex');
@@ -1670,24 +1606,24 @@ ipcMain.handle('save-file-dialog', async () => {
 // Handle drag and drop files
 ipcMain.handle('save-dropped-file', async (event, fileInfo) => {
   try {
-    // We need to save the file because renderer process can't directly access file paths
+    // Save to temp directory since renderer can't access file paths
     const tempDir = path.join(app.getPath('temp'), 'seamless-encryptor');
     
-    // Create temp dir if it doesn't exist
+    // Create temp dir if needed
     if (!fs.existsSync(tempDir)) {
       fs.mkdirSync(tempDir, { recursive: true });
     }
     
-    // Generate a unique file path with timestamp to avoid conflicts
+    // Create unique filename with timestamp
     const timestamp = Date.now();
     const fileName = fileInfo.name || 'file';
     const tempFilePath = path.join(tempDir, `${timestamp}-${path.basename(fileName)}`);
     
-    // Convert the array back to a buffer and write to file
+    // Convert array to buffer and save
     const buffer = Buffer.from(new Uint8Array(fileInfo.data));
     await fs.promises.writeFile(tempFilePath, buffer);
     
-    // Schedule cleanup of the temp file (after 1 minute)
+    // Clean up temp file after 1 minute
     setTimeout(() => {
       try {
         if (fs.existsSync(tempFilePath)) {

@@ -7,7 +7,7 @@ const path = require('path');
 const KEY_STORAGE_PATH = app ? path.join(app.getPath('userData'), 'keys') : '';
 
 /**
- * Ensure the key storage directory exists
+ * Make sure we have a place to store keys
  */
 function ensureKeyStorageExists() {
   if (!KEY_STORAGE_PATH) return;
@@ -18,19 +18,17 @@ function ensureKeyStorageExists() {
 }
 
 /**
- * Generate a master key
- * @returns {Buffer} 32-byte random key
+ * Create a new master encryption key
  */
 function generateMasterKey() {
   return crypto.randomBytes(32);
 }
 
-// In-memory master key
+// Keep master key in memory for quick access
 let masterKey = null;
 
 /**
- * Get the master key, creating it if it doesn't exist
- * @returns {Promise<Buffer>} The master key
+ * Get or create master key
  */
 async function getMasterKey() {
   if (masterKey) return masterKey;
@@ -54,9 +52,7 @@ async function getMasterKey() {
 }
 
 /**
- * Store an encrypted file key
- * @param {string} fileId - Unique file identifier
- * @param {Object} encryptedKey - Encrypted key data
+ * Save an encrypted file key
  */
 function storeFileKey(fileId, encryptedKey) {
   try {
@@ -70,9 +66,7 @@ function storeFileKey(fileId, encryptedKey) {
 }
 
 /**
- * Get an encrypted file key
- * @param {string} fileId - Unique file identifier
- * @returns {Object|null} Encrypted key data or null if not found
+ * Retrieve an encrypted file key
  */
 function getFileKey(fileId) {
   try {
@@ -92,9 +86,7 @@ function getFileKey(fileId) {
 }
 
 /**
- * Remove a file key
- * @param {string} fileId - Unique file identifier
- * @returns {boolean} True if successful, false otherwise
+ * Delete a file key
  */
 function removeFileKey(fileId) {
   try {

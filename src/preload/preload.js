@@ -1,10 +1,8 @@
-// See the Electron documentation for details on how to use preload scripts:
-// https://www.electronjs.org/docs/latest/tutorial/process-model#preload-scripts
+// Preload script for secure IPC communication
 
 const { contextBridge, ipcRenderer } = require('electron');
 
-// Expose protected methods that allow the renderer process to use
-// the ipcRenderer without exposing the entire object
+// Expose specific API methods to the renderer process
 contextBridge.exposeInMainWorld('api', {
   // File operations
   encryptFile: (filePath) => ipcRenderer.invoke('encrypt-file', filePath),
