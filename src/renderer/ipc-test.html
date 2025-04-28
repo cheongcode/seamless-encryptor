@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>IPC Test Page</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+      background-color: #222;
+      color: white;
+    }
+    button {
+      display: block;
+      width: 100%;
+      padding: 15px;
+      margin: 10px 0;
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 16px;
+    }
+    button:hover {
+      background-color: #45a049;
+    }
+    #result {
+      padding: 10px;
+      margin-top: 20px;
+      background-color: #333;
+      border-radius: 4px;
+      min-height: 50px;
+      max-height: 300px;
+      overflow-y: auto;
+      font-family: monospace;
+      white-space: pre-wrap;
+    }
+    .console {
+      margin-top: 20px;
+      padding: 10px;
+      background-color: #111;
+      border-radius: 4px;
+      max-height: 200px;
+      overflow-y: auto;
+      font-family: monospace;
+      font-size: 12px;
+    }
+    h1 {
+      color: #4CAF50;
+    }
+    .status {
+      padding: 10px;
+      margin-top: 10px;
+      border-radius: 4px;
+    }
+    .status.success {
+      background-color: rgba(76, 175, 80, 0.3);
+    }
+    .status.error {
+      background-color: rgba(255, 0, 0, 0.3);
+    }
+  </style>
+</head>
+<body>
+  <h1>IPC Test Page</h1>
+  
+  <div id="api-status" class="status">Checking API status...</div>
+  
+  <div>
+    <h2>Test Functions</h2>
+    <button id="btn-test-ipc">Test Basic IPC</button>
+    <button id="btn-generate-key">Generate Key</button>
+    <button id="btn-open-file">Open File Dialog</button>
+    <button id="btn-list-files">List Files</button>
+  </div>
+  
+  <div>
+    <h2>Result</h2>
+    <div id="result">No result yet</div>
+  </div>
+  
+  <div>
+    <h2>Console</h2>
+    <div id="console" class="console"></div>
+  </div>
+  
+  <script>
+    // Custom console logger
+    const consoleDiv = document.getElementById('console');
+    const originalConsole = {
+      log: console.log,
+      error: console.error,
+      warn: console.warn
+    };
+    
+    function appendToConsole(level, message, ...args) {
+      const timestamp = new Date().toLocaleTimeString();
+      let formattedArgs = '';
+      if (args.length > 0) {
+        try {
+          formattedArgs = ' ' + args.map(arg => {
+            if (typeof arg === 'object') {
+              return JSON.stringify(arg);
+            }
+            return String(arg);
+          }).join(' ');
+        } catch (e) {
+          formattedArgs = ' [Complex Object]';
+        }
+      }
+      
+      const logEntry = document.createElement('div');
+      logEntry.className = `log-${level}`;
+      logEntry.textContent = `[${timestamp}] [${level}] ${message}${formattedArgs}`;
+      consoleDiv.appendChild(logEntry);
+      consoleDiv.scrollTop = consoleDiv.scrollHeight;
+    }
+    
+    console.log = function(message, ...args) {
+      originalConsole.log(message, ...args);
+      appendToConsole('info', message, ...args);
+    };
+    
+    console.error = function(message, ...args) {
+      originalConsole.error(message, ...args);
+      appendToConsole('error', message, ...args);
+    };
+    
+    console.warn = function(message, ...args) {
+      originalConsole.warn(message, ...args);
+      appendToConsole('warn', message, ...args);
+    };
+    
+    // Display result
+    function showResult(data) {
+      const resultDiv = document.getElementById('result');
+      if (typeof data === 'object') {
+        try {
+          resultDiv.textContent = JSON.stringify(data, null, 2);
+        } catch (e) {
+          resultDiv.textContent = 'Result is a complex object that cannot be displayed';
+        }
+      } else {
+        resultDiv.textContent = data;
+      }
+    }
+    
+    // Check API availability
+    window.addEventListener('DOMContentLoaded', () => {
+      const statusDiv = document.getElementById('api-status');
+      
+      try {
+        console.log('Checking API availability');
+        if (window.api) {
+          console.log('API is available');
+          statusDiv.textContent = 'API is available ✅';
+          statusDiv.className = 'status success';
+          
+          // List available methods
+          const methods = Object.keys(window.api);
+          console.log(`Available API methods: ${methods.join(', ')}`);
+        } else {
+          console.error('API is NOT available');
+          statusDiv.textContent = 'API is NOT available ❌';
+          statusDiv.className = 'status error';
+        }
+      } catch (error) {
+        console.error('Error checking API:', error);
+        statusDiv.textContent = `Error checking API: ${error.message}`;
+        statusDiv.className = 'status error';
+      }
+    });
+    
+    // Button event handlers
+    document.getElementById('btn-test-ipc').addEventListener('click', async () => {
+      console.log('Testing basic IPC...');
+      try {
+        if (!window.api || !window.api.testIPC) {
+          throw new Error('testIPC method is not available');
+        }
+        
+        const result = await window.api.testIPC();
+        console.log('IPC test result:', result);
+        showResult(`IPC test result: ${result}`);
+      } catch (error) {
+        console.error('IPC test error:', error);
+        showResult(`Error: ${error.message}`);
+      }
+    });
+    
+    document.getElementById('btn-generate-key').addEventListener('click', async () => {
+      console.log('Generating key...');
+      try {
+        if (!window.api || !window.api.generateKey) {
+          throw new Error('generateKey method is not available');
+        }
+        
+        const result = await window.api.generateKey();
+        console.log('Generated key:', result);
+        showResult(`Generated key: ${result}`);
+      } catch (error) {
+        console.error('Generate key error:', error);
+        showResult(`Error: ${error.message}`);
+      }
+    });
+    
+    document.getElementById('btn-open-file').addEventListener('click', async () => {
+      console.log('Opening file dialog...');
+      try {
+        if (!window.api || !window.api.openFileDialog) {
+          throw new Error('openFileDialog method is not available');
+        }
+        
+        const result = await window.api.openFileDialog();
+        console.log('File dialog result:', result);
+        showResult(result);
+      } catch (error) {
+        console.error('File dialog error:', error);
+        showResult(`Error: ${error.message}`);
+      }
+    });
+    
+    document.getElementById('btn-list-files').addEventListener('click', async () => {
+      console.log('Listing files...');
+      try {
+        if (!window.api || !window.api.listFiles) {
+          throw new Error('listFiles method is not available');
+        }
+        
+        const result = await window.api.listFiles();
+        console.log('Files list:', result);
+        showResult(result);
+      } catch (error) {
+        console.error('List files error:', error);
+        showResult(`Error: ${error.message}`);
+      }
+    });
+  </script>
+</body>
+</html> 

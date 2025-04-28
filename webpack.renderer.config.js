@@ -1,11 +1,17 @@
 const rules = require('./webpack.rules');
 const path = require('path');
 const HtmlWebpackPlugin = require('html-webpack-plugin');
+const MiniCssExtractPlugin = require('mini-css-extract-plugin');
+
+console.log('Loading webpack.renderer.config.js...');
 
 // Add CSS rule
 rules.push({
   test: /\.css$/,
-  use: [{ loader: 'style-loader' }, { loader: 'css-loader' }],
+  use: [
+    MiniCssExtractPlugin.loader,
+    { loader: 'css-loader' }
+  ],
 });
 
 module.exports = {
@@ -16,6 +22,9 @@ module.exports = {
     new HtmlWebpackPlugin({
       template: path.resolve(__dirname, 'src/renderer/index.html'),
       filename: 'index.html',
+    }),
+    new MiniCssExtractPlugin({
+      filename: 'styles.css'
     }),
   ],
   resolve: {
@@ -30,4 +39,4 @@ module.exports = {
     publicPath: './',
   },
   target: 'web',
-}; 
+};

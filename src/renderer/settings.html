@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com">
+    <title>Settings - Seamless Encryptor</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        /* Base glassmorphism effects */
+        .glass-card {
+            background: rgba(30, 35, 50, 0.25);
+            border-radius: 16px;
+            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.2);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid rgba(65, 130, 255, 0.1);
+            transition: all 0.3s ease;
+        }
+        
+        .glass-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 40px rgba(0, 0, 0, 0.3);
+            border-color: rgba(0, 210, 255, 0.3);
+        }
+        
+        /* Gradient text effect */
+        .text-gradient {
+            background: linear-gradient(to right, #4a9eff, #00e5ff);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+        }
+        
+        /* Make sure we have a darker gradient overlay on the body */
+        body {
+            background-color: #121420;
+            background-image: 
+                radial-gradient(ellipse at top right, rgba(138, 43, 226, 0.15), transparent 70%),
+                radial-gradient(ellipse at bottom left, rgba(0, 205, 255, 0.15), transparent 70%);
+            background-attachment: fixed;
+            min-height: 100vh;
+            overflow-x: hidden;
+            color: rgba(255, 255, 255, 0.85);
+        }
+        
+        /* Custom toggle switch styling */
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 48px;
+            height: 24px;
+        }
+        
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(30, 35, 50, 0.5);
+            transition: .4s;
+            border-radius: 24px;
+        }
+        
+        .toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 18px;
+            width: 18px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+        
+        input:checked + .toggle-slider {
+            background-color: rgba(65, 130, 255, 0.7);
+        }
+        
+        input:checked + .toggle-slider:before {
+            transform: translateX(24px);
+        }
+        
+        /* Custom scrollbar for a better look */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: rgba(30, 35, 50, 0.3);
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: rgba(65, 130, 255, 0.5);
+            border-radius: 3px;
+        }
+        
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(0, 210, 255, 0.7);
+        }
+        
+        /* Responsive mobile adjustments */
+        @media (max-width: 768px) {
+            .container {
+                padding: 1rem;
+                width: 100%;
+            }
+            
+            .settings-grid {
+                grid-template-columns: 1fr !important;
+            }
+            
+            .button {
+                width: 100%;
+                margin-bottom: 0.5rem;
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-100 font-sans min-h-screen p-4">
+    <div class="container mx-auto max-w-3xl">
+        <header class="flex items-center justify-between mb-6">
+            <a href="index.html" class="flex items-center">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-2 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16l-4-4m0 0l4-4m-4 4h18" />
+                </svg>
+                <h1 class="text-2xl font-bold text-gradient">Settings</h1>
+            </a>
+        </header>
+        
+        <div class="glass-card p-6 mb-6">
+            <h2 class="text-xl font-semibold mb-4">Application Settings</h2>
+            
+            <div class="space-y-6">
+                <div class="settings-grid grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <!-- Encryption Settings -->
+                    <div class="glass-card p-4">
+                        <h3 class="text-lg font-medium mb-3 text-gradient">Encryption</h3>
+                        
+                        <div class="space-y-4">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <p class="font-medium">Auto-delete originals</p>
+                                    <p class="text-sm text-gray-400">Automatically delete original files after encryption</p>
+                                </div>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="setting-auto-delete">
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                            
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <p class="font-medium">Compress before encryption</p>
+                                    <p class="text-sm text-gray-400">Compress files before encrypting to save space</p>
+                                </div>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="setting-compress" checked>
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Interface Settings -->
+                    <div class="glass-card p-4">
+                        <h3 class="text-lg font-medium mb-3 text-gradient">Interface</h3>
+                        
+                        <div class="space-y-4">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <p class="font-medium">Show notifications</p>
+                                    <p class="text-sm text-gray-400">Display desktop notifications for completed tasks</p>
+                                </div>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="setting-notifications" checked>
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                            
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <p class="font-medium">Confirm actions</p>
+                                    <p class="text-sm text-gray-400">Ask for confirmation before risky operations</p>
+                                </div>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="setting-confirm-actions" checked>
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Storage Settings -->
+                    <div class="glass-card p-4">
+                        <h3 class="text-lg font-medium mb-3 text-gradient">Storage</h3>
+                        
+                        <div class="space-y-4">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <p class="font-medium">Default output location</p>
+                                    <p class="text-sm text-gray-400">Where encrypted files are saved by default</p>
+                                </div>
+                                <button id="browse-output-dir" class="text-sm bg-gray-700 hover:bg-gray-600 px-3 py-1 rounded-md transition-colors duration-200">
+                                    Browse...
+                                </button>
+                            </div>
+                            
+                            <div>
+                                <p class="text-sm text-gray-400 mb-1">Current location</p>
+                                <p id="current-output-dir" class="text-sm font-mono bg-gray-800 p-2 rounded-md truncate">~/Documents/Encrypted</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Advanced Settings -->
+                    <div class="glass-card p-4">
+                        <h3 class="text-lg font-medium mb-3 text-gradient">Advanced</h3>
+                        
+                        <div class="space-y-4">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <p class="font-medium">Clear app data</p>
+                                    <p class="text-sm text-gray-400">Reset all app settings (does not affect your keys)</p>
+                                </div>
+                                <button id="clear-app-data" class="text-sm bg-red-800 hover:bg-red-700 px-3 py-1 rounded-md transition-colors duration-200">
+                                    Reset
+                                </button>
+                            </div>
+                            
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <p class="font-medium">Debug mode</p>
+                                    <p class="text-sm text-gray-400">Enable detailed logs for troubleshooting</p>
+                                </div>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="setting-debug-mode">
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="flex justify-end pt-4 space-x-3">
+                    <button id="reset-defaults" class="px-4 py-2 border border-gray-600 text-gray-300 rounded-md hover:bg-gray-700 transition-colors duration-200">
+                        Reset to Defaults
+                    </button>
+                    <button id="save-settings" class="px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white rounded-md transition-all duration-300">
+                        Save Changes
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <footer class="text-center text-gray-500 text-sm pt-2 pb-6">
+            <p>Seamless Encryptor v1.0.0</p>
+            <p class="mt-1"> 2025 Secure Digital Tools</p>
+        </footer>
+    </div>
+    
+    <script src="js/settings.js" type="module"></script>
+</body>
+</html>

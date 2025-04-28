@@ -3,15 +3,25 @@
   "productName": "seamless-encryptor",
   "version": "1.0.0",
   "description": "A secure file encryption application",
-  "main": ".webpack/main/main.js",
+  "main": "src/index.js",
   "scripts": {
     "start": "electron-forge start",
-    "build": "webpack --config webpack.main.config.js --mode production && webpack --config webpack.preload.config.js --mode production && webpack --config webpack.renderer.config.js --mode production",
-    "dev": "webpack --config webpack.main.config.js --mode development --watch & webpack --config webpack.preload.config.js --mode development --watch & webpack --config webpack.renderer.config.js --mode development --watch",
+    "clean-start": "rmdir /s /q .webpack && electron-forge start",
+    "start:full": "npm run tailwind && npm run webpack && electron-forge start",
+    "start:win": "npm run tailwind & npm run webpack & electron-forge start",
+    "build": "webpack --mode production && electron-builder",
+    "webpack": "webpack --mode production",
+    "dev": "concurrently \"npm run tailwind:watch\" \"webpack --mode development --watch\" \"electron-forge start\"",
+    "dev:simple": "concurrently \"npm run tailwind:watch\" \"electron src/index.js\"",
+    "dev:win": "powershell -Command \"npm run tailwind; electron src/index.js\"",
     "package": "electron-forge package",
     "make": "electron-forge make",
     "publish": "electron-forge publish",
-    "lint": "echo \"No linting configured\""
+    "lint": "echo \"No linting configured\"",
+    "tailwind": "tailwindcss -i ./src/renderer/styles-tailwind.css -o ./src/renderer/styles.css",
+    "tailwind:watch": "tailwindcss -i ./src/renderer/styles-tailwind.css -o ./src/renderer/styles.css --watch",
+    "test-ipc": "electron src/test-ipc.js",
+    "test:ipc": "electron src/test-ipc.js"
   },
   "keywords": [],
   "author": {
@@ -30,19 +40,32 @@
     "@electron-forge/plugin-webpack": "^7.8.0",
     "@electron/fuses": "^1.8.0",
     "@vercel/webpack-asset-relocator-loader": "^1.7.3",
+    "concurrently": "^9.1.2",
     "css-loader": "^6.8.1",
-    "electron": "^28.0.0",
+    "electron": "^28.3.3",
     "html-webpack-plugin": "^5.6.0",
+    "mini-css-extract-plugin": "^2.7.7",
     "node-loader": "^2.1.0",
     "style-loader": "^3.3.3",
     "webpack": "^5.89.0",
-    "webpack-cli": "^5.1.4",
-    "mini-css-extract-plugin": "^2.7.7"
+    "webpack-cli": "^5.1.4"
   },
   "dependencies": {
+    "autoprefixer": "^10.4.21",
+    "clsx": "^2.1.1",
     "crypto-js": "^4.2.0",
     "electron-squirrel-startup": "^1.0.1",
     "electron-store": "^8.1.0",
-    "keytar": "^7.9.0"
+    "framer-motion": "^12.9.1",
+    "gsap": "^3.12.7",
+    "keytar": "^7.9.0",
+    "libsodium-wrappers": "^0.7.15",
+    "miscreant": "^0.3.2",
+    "phosphor-react": "^1.4.1",
+    "postcss": "^8.5.3",
+    "react-toastify": "^11.0.5",
+    "sodium-native": "^5.0.1",
+    "tailwindcss": "^3.4.17",
+    "tailwindcss-glassmorphism": "^0.1.0"
   }
 }

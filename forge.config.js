@@ -30,6 +30,10 @@ module.exports = {
       name: '@electron-forge/plugin-webpack',
       config: {
         mainConfig: './webpack.main.config.js',
+        preload: {
+          entry: './preload.js',
+          config: './webpack.preload.config.js'
+        },
         renderer: {
           config: './webpack.renderer.config.js',
           entryPoints: [
@@ -37,16 +41,13 @@ module.exports = {
               html: './src/renderer/index.html',
               js: './src/renderer/renderer.js',
               name: 'main_window',
-              preload: {
-                js: './src/preload/preload.js',
-              },
               nodeIntegration: false,
             },
           ],
         },
         devContentSecurityPolicy: "default-src 'self' 'unsafe-inline' 'unsafe-eval'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline';",
-        port: 3000,
-        loggerPort: 9000,
+        port: 5000,
+        loggerPort: 7000,
       },
     },
     new FusesPlugin({

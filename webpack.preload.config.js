@@ -1,10 +1,20 @@
 const path = require('path');
+const rules = require('./webpack.rules');
 
 module.exports = {
-  entry: './src/preload/preload.js',
+  entry: './preload.js',
   output: {
     path: path.resolve(__dirname, '.webpack/preload'),
-    filename: 'preload.js'
+    filename: 'preload.js',
+    library: {
+      type: 'commonjs2'
+    }
+  },
+  module: {
+    rules,
+  },
+  resolve: {
+    extensions: ['.js', '.json']
   },
   target: 'electron-preload',
   node: {

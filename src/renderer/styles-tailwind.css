@@ -1,0 +1,115 @@
+/* Base Tailwind imports */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom variables and effects */
+:root {
+  --neon-cyan: rgba(0, 255, 255, 0.75);
+  --neon-purple: rgba(138, 43, 226, 0.75);
+  --neon-pink: rgba(255, 0, 128, 0.75);
+  --glass-bg: rgba(255, 255, 255, 0.05);
+  --glass-border: rgba(255, 255, 255, 0.1);
+  --glass-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.2);
+}
+
+@layer base {
+  body {
+    @apply bg-gray-900 text-white;
+    background: radial-gradient(ellipse at top right, rgba(138, 43, 226, 0.15), transparent 70%),
+                radial-gradient(ellipse at bottom left, rgba(0, 255, 255, 0.15), transparent 70%);
+    background-attachment: fixed;
+  }
+}
+
+@layer components {
+  /* Glass Card Component */
+  .glass-card {
+    @apply rounded-xl border border-white/10 bg-white/5 backdrop-blur-md 
+           shadow-lg hover:-translate-y-0.5 transition-all;
+    box-shadow: var(--glass-shadow);
+  }
+  
+  /* Button Components */
+  .btn {
+    @apply rounded-lg py-2.5 px-5 font-medium transition-all;
+  }
+  
+  .btn-primary {
+    @apply bg-gradient-to-r from-blue-500 to-cyan-400 text-white shadow;
+    text-shadow: 0 0 4px rgba(0, 255, 255, 0.5);
+    box-shadow: 0 0 10px rgba(0, 255, 255, 0.2);
+  }
+  
+  .btn-primary:hover {
+    @apply shadow-lg;
+    box-shadow: 0 0 15px rgba(0, 255, 255, 0.4);
+  }
+  
+  .btn-secondary {
+    @apply bg-gray-800 text-white hover:bg-gray-700;
+  }
+  
+  .btn-danger {
+    @apply bg-gradient-to-r from-red-500 to-pink-500 text-white;
+  }
+  
+  /* Form Elements */
+  .form-input {
+    @apply bg-gray-800/60 border border-gray-700 rounded-md px-4 py-2 
+           focus:outline-none focus:ring-2 focus:ring-neon-cyan/40 focus:border-neon-cyan
+           transition-all backdrop-blur-sm;
+  }
+  
+  /* Neon Text */
+  .text-gradient {
+    @apply text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-500;
+  }
+  
+  .text-neon-cyan {
+    color: var(--neon-cyan);
+    text-shadow: 0 0 5px rgba(0, 255, 255, 0.3);
+  }
+  
+  /* Sidebar Nav */
+  .sidebar-link {
+    @apply flex items-center px-4 py-3 text-gray-400 hover:bg-gray-700/50 hover:text-white rounded-md transition-colors;
+  }
+  
+  .sidebar-link.active {
+    @apply bg-gradient-to-r from-gray-800 to-gray-700/50 text-white border-l-4 border-cyan-400;
+  }
+  
+  /* File Cards */
+  .file-card {
+    @apply glass-card p-4 transition-all hover:-translate-y-1 hover:shadow-xl;
+  }
+
+  /* Drag & Drop Area */
+  .drag-drop-area {
+    @apply border-2 border-dashed border-gray-600 rounded-lg p-8 
+           flex flex-col justify-center items-center transition-all
+           hover:border-blue-500 hover:bg-blue-500/5;
+  }
+
+  .drag-drop-area.active {
+    @apply border-cyan-400 bg-cyan-500/10;
+    box-shadow: 0 0 20px rgba(0, 255, 255, 0.2);
+  }
+}
+
+/* Responsive Design Utilities */
+@layer utilities {
+  .responsive-container {
+    @apply w-full px-4 mx-auto;
+    max-width: min(95%, 1200px);
+  }
+  
+  .responsive-grid {
+    @apply grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4;
+  }
+  
+  .responsive-padding {
+    @apply p-4 md:p-6 lg:p-8;
+  }
+}

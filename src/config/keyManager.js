@@ -1,114 +1,266 @@
 const crypto = require('crypto');
+const keytar = require('keytar');
 const { app } = require('electron');
-const fs = require('fs');
 const path = require('path');
+const fs = require('fs');
+const ElectronStore = require('electron-store');
 
-// Key storage path
-const KEY_STORAGE_PATH = app ? path.join(app.getPath('userData'), 'keys') : '';
+const APP_NAME = 'seamless-encryptor';
+const KEY_SERVICE = 'seamless-encryptor-keys';
+const MASTER_KEY_ACCOUNT = 'master';
 
-/**
- * Make sure we have a place to store keys
- */
-function ensureKeyStorageExists() {
-  if (!KEY_STORAGE_PATH) return;
-  
-  if (!fs.existsSync(KEY_STORAGE_PATH)) {
-    fs.mkdirSync(KEY_STORAGE_PATH, { recursive: true });
-  }
-}
+// Store for non-sensitive settings
+const store = new ElectronStore({
+  name: 'key-settings',
+  encryptionKey: 'seamless-encryptor-config' // Simple encryption for settings
+});
 
 /**
- * Create a new master encryption key
+ * Key Management Module
+ * Handles secure storage and retrieval of encryption keys
  */
-function generateMasterKey() {
-  return crypto.randomBytes(32);
-}
-
-// Keep master key in memory for quick access
-let masterKey = null;
-
-/**
- * Get or create master key
- */
-async function getMasterKey() {
-  if (masterKey) return masterKey;
-  
-  try {
-    ensureKeyStorageExists();
-    const keyPath = path.join(KEY_STORAGE_PATH, 'master.key');
+module.exports = {
+  /**
+   * Initialize the key manager
+   * @returns {Promise<void>}
+   */
+  init: async () => {
+    // Check if we have a master key
+    const hasMasterKey = await keytar.getPassword(KEY_SERVICE, MASTER_KEY_ACCOUNT);
     
-    if (fs.existsSync(keyPath)) {
-      masterKey = await fs.promises.readFile(keyPath);
-    } else {
-      masterKey = generateMasterKey();
-      await fs.promises.writeFile(keyPath, masterKey);
+    if (!hasMasterKey) {
+      // Generate a new master key
+      const masterKey = crypto.randomBytes(32);
+      await keytar.setPassword(KEY_SERVICE, MASTER_KEY_ACCOUNT, masterKey.toString('hex'));
+      
+      // Store salt for derived keys
+      const salt = crypto.randomBytes(16);
+      store.set('masterSalt', salt.toString('hex'));
+    }
+  },
+  
+  /**
+   * Generate a new encryption key
+   * @returns {Promise<Buffer>} The generated key
+   */
+  generateKey: async () => {
+    return crypto.randomBytes(32);
+  },
+  
+  /**
+   * Get the master encryption key
+   * @returns {Promise<Buffer>} The master key
+   */
+  getMasterKey: async () => {
+    const masterKeyHex = await keytar.getPassword(KEY_SERVICE, MASTER_KEY_ACCOUNT);
+    if (!masterKeyHex) {
+      throw new Error('Master key not found. Application may need to be initialized.');
+    }
+    return Buffer.from(masterKeyHex, 'hex');
+  },
+  
+  /**
+   * Derive a key from a password
+   * @param {string} password The password to derive a key from
+   * @returns {Promise<Buffer>} The derived key
+   */
+  deriveKeyFromPassword: async (password) => {
+    // Get the salt
+    const saltHex = store.get('masterSalt');
+    if (!saltHex) {
+      throw new Error('Salt not found. Application may need to be initialized.');
     }
     
-    return masterKey;
-  } catch (error) {
-    console.error('Error getting master key:', error);
-    throw error;
-  }
-}
-
-/**
- * Save an encrypted file key
- */
-function storeFileKey(fileId, encryptedKey) {
-  try {
-    ensureKeyStorageExists();
-    const keyPath = path.join(KEY_STORAGE_PATH, `${fileId}.key`);
-    fs.writeFileSync(keyPath, JSON.stringify(encryptedKey));
-  } catch (error) {
-    console.error('Error storing file key:', error);
-    throw error;
-  }
-}
-
-/**
- * Retrieve an encrypted file key
- */
-function getFileKey(fileId) {
-  try {
-    ensureKeyStorageExists();
-    const keyPath = path.join(KEY_STORAGE_PATH, `${fileId}.key`);
+    const salt = Buffer.from(saltHex, 'hex');
     
-    if (fs.existsSync(keyPath)) {
-      const data = fs.readFileSync(keyPath, 'utf8');
-      return JSON.parse(data);
+    // Derive key using PBKDF2
+    return new Promise((resolve, reject) => {
+      crypto.pbkdf2(password, salt, 100000, 32, 'sha256', (err, derivedKey) => {
+        if (err) reject(err);
+        else resolve(derivedKey);
+      });
+    });
+  },
+  
+  /**
+   * Save a key for a specific file
+   * @param {string} fileId The file ID to associate with the key
+   * @param {Buffer} key The encryption key to save
+   * @returns {Promise<void>}
+   */
+  saveKeyForFile: async (fileId, key) => {
+    const masterKey = await module.exports.getMasterKey();
+    
+    // Encrypt the file key with the master key
+    const iv = crypto.randomBytes(16);
+    const cipher = crypto.createCipheriv('aes-256-gcm', masterKey, iv);
+    
+    const encrypted = Buffer.concat([
+      cipher.update(key),
+      cipher.final()
+    ]);
+    
+    const authTag = cipher.getAuthTag();
+    
+    // Save the encrypted key
+    const keyData = {
+      iv: iv.toString('hex'),
+      authTag: authTag.toString('hex'),
+      encryptedKey: encrypted.toString('hex')
+    };
+    
+    store.set(`fileKeys.${fileId}`, keyData);
+  },
+  
+  /**
+   * Get a key for a specific file
+   * @param {string} fileId The file ID to get the key for
+   * @returns {Promise<Buffer>} The decrypted key
+   */
+  getKeyForFile: async (fileId) => {
+    const masterKey = await module.exports.getMasterKey();
+    
+    // Get the encrypted key data
+    const keyData = store.get(`fileKeys.${fileId}`);
+    if (!keyData) {
+      throw new Error(`No key found for file ID: ${fileId}`);
     }
     
-    return null;
-  } catch (error) {
-    console.error('Error getting file key:', error);
-    return null;
-  }
-}
-
-/**
- * Delete a file key
- */
-function removeFileKey(fileId) {
-  try {
-    ensureKeyStorageExists();
-    const keyPath = path.join(KEY_STORAGE_PATH, `${fileId}.key`);
+    // Decrypt the file key
+    const iv = Buffer.from(keyData.iv, 'hex');
+    const authTag = Buffer.from(keyData.authTag, 'hex');
+    const encryptedKey = Buffer.from(keyData.encryptedKey, 'hex');
     
-    if (fs.existsSync(keyPath)) {
-      fs.unlinkSync(keyPath);
+    const decipher = crypto.createDecipheriv('aes-256-gcm', masterKey, iv);
+    decipher.setAuthTag(authTag);
+    
+    return Buffer.concat([
+      decipher.update(encryptedKey),
+      decipher.final()
+    ]);
+  },
+  
+  /**
+   * Delete a key for a specific file
+   * @param {string} fileId The file ID to delete the key for
+   * @returns {Promise<boolean>} True if the key was deleted, false if it didn't exist
+   */
+  deleteKeyForFile: async (fileId) => {
+    if (store.has(`fileKeys.${fileId}`)) {
+      store.delete(`fileKeys.${fileId}`);
       return true;
     }
+    return false;
+  },
+  
+  /**
+   * Change the master password
+   * @param {string} oldPassword The current password
+   * @param {string} newPassword The new password
+   * @returns {Promise<boolean>} True if successful
+   */
+  changeMasterPassword: async (oldPassword, newPassword) => {
+    // Verify old password
+    const oldKey = await module.exports.deriveKeyFromPassword(oldPassword);
+    const masterKey = await module.exports.getMasterKey();
     
-    return false;
-  } catch (error) {
-    console.error('Error removing file key:', error);
-    return false;
+    // Compare keys
+    if (!crypto.timingSafeEqual(oldKey, masterKey)) {
+      return false;
+    }
+    
+    // Generate new master key from new password
+    const newKey = await module.exports.deriveKeyFromPassword(newPassword);
+    
+    // Update the master key
+    await keytar.setPassword(KEY_SERVICE, MASTER_KEY_ACCOUNT, newKey.toString('hex'));
+    
+    return true;
+  },
+  
+  /**
+   * Export all keys to a file (should be used with caution!)
+   * @param {string} exportPath The path to export keys to
+   * @param {string} password A password to protect the export
+   * @returns {Promise<void>}
+   */
+  exportKeys: async (exportPath, password) => {
+    // Get all keys
+    const masterKey = await module.exports.getMasterKey();
+    const fileKeys = store.get('fileKeys') || {};
+    
+    // Create export object
+    const exportData = {
+      masterKey: masterKey.toString('hex'),
+      fileKeys
+    };
+    
+    // Encrypt the export
+    const salt = crypto.randomBytes(16);
+    const key = await module.exports.deriveKeyFromPassword(password);
+    const iv = crypto.randomBytes(16);
+    const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+    
+    const encrypted = Buffer.concat([
+      cipher.update(JSON.stringify(exportData)),
+      cipher.final()
+    ]);
+    
+    const authTag = cipher.getAuthTag();
+    
+    // Create the output
+    const output = {
+      salt: salt.toString('hex'),
+      iv: iv.toString('hex'),
+      authTag: authTag.toString('hex'),
+      data: encrypted.toString('hex')
+    };
+    
+    // Write to file
+    fs.writeFileSync(exportPath, JSON.stringify(output));
+  },
+  
+  /**
+   * Import keys from a file
+   * @param {string} importPath The path to import keys from
+   * @param {string} password The password protecting the import
+   * @returns {Promise<boolean>} True if successful
+   */
+  importKeys: async (importPath, password) => {
+    try {
+      // Read the file
+      const importData = JSON.parse(fs.readFileSync(importPath, 'utf8'));
+      
+      // Derive key from password using the stored salt
+      const salt = Buffer.from(importData.salt, 'hex');
+      const key = crypto.pbkdf2Sync(password, salt, 100000, 32, 'sha256');
+      
+      // Decrypt the data
+      const iv = Buffer.from(importData.iv, 'hex');
+      const authTag = Buffer.from(importData.authTag, 'hex');
+      const encryptedData = Buffer.from(importData.data, 'hex');
+      
+      const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
+      decipher.setAuthTag(authTag);
+      
+      const decrypted = Buffer.concat([
+        decipher.update(encryptedData),
+        decipher.final()
+      ]).toString();
+      
+      // Parse the decrypted data
+      const parsedData = JSON.parse(decrypted);
+      
+      // Import the master key
+      await keytar.setPassword(KEY_SERVICE, MASTER_KEY_ACCOUNT, parsedData.masterKey);
+      
+      // Import file keys
+      store.set('fileKeys', parsedData.fileKeys);
+      
+      return true;
+    } catch (error) {
+      console.error('Error importing keys:', error);
+      return false;
+    }
   }
-}
-
-module.exports = {
-  generateMasterKey,
-  getMasterKey,
-  storeFileKey,
-  getFileKey,
-  removeFileKey
 }; 
