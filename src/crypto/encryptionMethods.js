@@ -21,6 +21,8 @@ try {
   miscreant = null;
 }
 
+let currentEncryptionMethod = 'aes-256-gcm'; // Default method
+
 /**
  * Collection of encryption algorithms with standardized interfaces
  */
@@ -196,7 +198,7 @@ module.exports = {
    * @returns {string} - Current encryption method
    */
   getEncryptionMethod: () => {
-    return 'aes-256-gcm'; // Default method
+    return currentEncryptionMethod;
   },
   
   /**
@@ -206,7 +208,11 @@ module.exports = {
    */
   setEncryptionMethod: (method) => {
     const supportedMethods = module.exports.getAllEncryptionMethods();
-    return supportedMethods.includes(method);
+    if (supportedMethods.includes(method)) {
+      currentEncryptionMethod = method;
+      return true;
+    }
+    return false;
   }
 };
 

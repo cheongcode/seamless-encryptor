@@ -110,6 +110,22 @@ try {
       return safeInvoke('create-custom-key', passphrase, entropyPhrase);
     },
     
+    // Encryption methods
+    getEncryptionMethods: () => {
+      console.log('[preload.js] getEncryptionMethods() called');
+      return safeInvoke('get-encryption-methods');
+    },
+    
+    getCurrentEncryptionMethod: () => {
+      console.log('[preload.js] getCurrentEncryptionMethod() called');
+      return safeInvoke('get-current-encryption-method');
+    },
+    
+    setEncryptionMethod: (method) => {
+      console.log('[preload.js] setEncryptionMethod() called with:', method);
+      return safeInvoke('set-encryption-method', method);
+    },
+    
     // Event listeners (for async notifications from main process)
     onError: (callback) => {
       console.log('[preload.js] onError listener registered');
@@ -133,6 +149,18 @@ try {
         console.log('[preload.js] Progress event received:', progress);
         callback(progress);
       });
+    },
+
+    // Entropy Analysis
+    analyzeFileEntropy: (fileIdOrPath) => {
+      console.log('[preload.js] analyzeFileEntropy() called with:', fileIdOrPath);
+      return safeInvoke('analyze-file-entropy', fileIdOrPath);
+    },
+
+    // Shell operations
+    openExternalUrl: (url) => {
+      console.log('[preload.js] openExternalUrl() called with:', url);
+      return safeInvoke('open-external-url', url);
     }
   };
   
@@ -165,7 +193,32 @@ try {
   ipcRenderer.on('debug', (event, message) => {
     console.log('[preload.js] Debug message from main process:', message);
   });
-  
+
+  // --- Settings API ---
+  console.log('[preload.js] Exposing settingsApi...');
+  contextBridge.exposeInMainWorld('settingsApi', {
+    getAppSettings: () => safeInvoke('get-app-settings'),
+    setAppSettings: (settings) => safeInvoke('set-app-settings', settings),
+    resetAppSettings: () => safeInvoke('reset-app-settings'),
+    selectOutputDirectory: () => safeInvoke('select-output-directory'),
+    getDefaultOutputDir: () => safeInvoke('get-default-output-dir'),
+    clearAppData: () => safeInvoke('clear-app-data')
+  });
+  console.log('[preload.js] settingsApi exposed successfully.');
+
+  // --- Cloud API (for Google Drive, etc.) ---
+  console.log('[preload.js] Exposing cloudApi...');
+  contextBridge.exposeInMainWorld('cloudApi', {
+    // Google Drive
+    connectGDrive: () => safeInvoke('gdrive-connect'),
+    disconnectGDrive: () => safeInvoke('gdrive-disconnect'),
+    getGDriveAuthStatus: () => safeInvoke('gdrive-status'),
+    exchangeGDriveAuthCode: (code) => safeInvoke('gdrive-exchange-auth-code', code),
+    listGDriveFiles: (options) => safeInvoke('gdrive-list-files', options)
+    // Future cloud provider functions can be added here
+  });
+  console.log('[preload.js] cloudApi exposed successfully.');
+
 } catch (error) {
   console.error('[preload.js] Error setting up preload API:', error);
   console.error('Error in preload script:', error);

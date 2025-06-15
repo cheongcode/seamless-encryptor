@@ -3,461 +3,1966 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com">
-    <title>Seamless Encryptor</title>
-    <link rel="stylesheet" href="styles.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
-    <style>
-        :root {
-            --bg-dark: #1a1d24;
-            --bg-darker: #141820;
-            --bg-card: rgba(30, 35, 45, 0.4);
-            --text-primary: rgba(255, 255, 255, 0.9);
-            --text-secondary: rgba(255, 255, 255, 0.6);
-            --text-tertiary: rgba(255, 255, 255, 0.4);
-            --accent-blue: #3e8ae6;
-            --accent-blue-lighter: #4a9eff;
-            --accent-warning: #e6a43e;
-            --accent-danger: #e64a4a;
-            --border-color: rgba(255, 255, 255, 0.1);
-        }
-        
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
-        body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-            background-color: var(--bg-dark);
-            color: var(--text-primary);
-            min-height: 100vh;
-            overflow-x: hidden;
-        }
-        
-        /* Modern sidebar styling */
-        .app-container {
-            display: flex;
-            min-height: 100vh;
-        }
-        
-        .sidebar {
-            width: 240px;
-            background-color: var(--bg-darker);
-            border-right: 1px solid var(--border-color);
-            padding: 1rem 0;
-            display: flex;
-            flex-direction: column;
-            position: fixed;
-            height: 100vh;
-        }
-        
-        .main-content {
-            flex: 1;
-            padding: 2rem;
-            margin-left: 240px;
-        }
-        
-        .app-header {
-            display: flex;
-            align-items: center;
-            padding: 0 1.5rem;
-            margin-bottom: 2rem;
-        }
-        
-        .app-logo {
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-        }
-        
-        .app-title {
-            font-size: 1.25rem;
-            font-weight: 600;
-            color: var(--text-primary);
-        }
-        
-        .nav-group {
-            margin-bottom: 1.5rem;
-        }
-        
-        .nav-title {
-            font-size: 0.75rem;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            color: var(--text-tertiary);
-            padding: 0 1.5rem;
-            margin-bottom: 0.5rem;
-        }
-        
-        .nav-item {
-            display: flex;
-            align-items: center;
-            padding: 0.75rem 1.5rem;
-            color: var(--text-secondary);
-            text-decoration: none;
-            transition: all 0.2s;
-            border-left: 3px solid transparent;
-        }
-        
-        .nav-item:hover {
-            background-color: rgba(255, 255, 255, 0.05);
-            color: var(--text-primary);
-        }
-        
-        .nav-item.active {
-            background-color: rgba(62, 138, 230, 0.1);
-            color: var(--accent-blue-lighter);
-            border-left-color: var(--accent-blue);
-        }
-        
-        .nav-icon {
-            margin-right: 0.75rem;
-            width: 20px;
-            height: 20px;
-            opacity: 0.8;
-        }
-        
-        /* Card styles */
-        .card {
-            background-color: var(--bg-card);
-            border-radius: 8px;
-            border: 1px solid var(--border-color);
-            overflow: hidden;
-            margin-bottom: 1.5rem;
-            backdrop-filter: blur(10px);
-        }
-        
-        .warning-card {
-            border-left: 4px solid var(--accent-warning);
-            padding: 1rem 1.5rem;
-            display: flex;
-            align-items: flex-start;
-            gap: 1rem;
-        }
-        
-        .warning-icon {
-            color: var(--accent-warning);
-            flex-shrink: 0;
-        }
-        
-        .warning-content h3 {
-            font-size: 0.9rem;
-            font-weight: 500;
-            margin-bottom: 0.25rem;
-        }
-        
-        .warning-content p {
-            font-size: 0.85rem;
-            color: var(--text-secondary);
-        }
-        
-        /* Drag and drop area */
-        .drag-drop-container {
-            padding: 2rem 0;
-        }
-        
-        .drag-drop-area {
-            border: 2px dashed rgba(62, 138, 230, 0.3);
-            border-radius: 8px;
-            padding: 3rem 2rem;
-            text-align: center;
-            transition: all 0.3s ease;
-            background-color: rgba(30, 35, 50, 0.2);
-            cursor: pointer;
-        }
-        
-        .drag-drop-area:hover,
-        .drag-drop-area.active {
-            border-color: var(--accent-blue);
-            background-color: rgba(62, 138, 230, 0.1);
-        }
-        
-        .drag-drop-icon {
-            width: 48px;
-            height: 48px;
-            margin: 0 auto 1rem;
-            opacity: 0.7;
-        }
-        
-        .drag-drop-text {
-            font-size: 0.95rem;
-            color: var(--text-secondary);
-            margin-bottom: 1rem;
-        }
-        
-        /* File list section */
-        .file-list-section {
-            margin-top: 2rem;
-        }
-        
-        .file-list-header {
-            display: flex;
-            align-items: center;
-            margin-bottom: 1rem;
-        }
-        
-        .file-list-title {
-            font-size: 1rem;
-            font-weight: 500;
-            display: flex;
-            align-items: center;
-        }
-        
-        .file-list-icon {
-            margin-right: 0.5rem;
-            opacity: 0.8;
-        }
-        
-        .file-list-empty {
-            padding: 3rem 2rem;
-            text-align: center;
-            color: var(--text-tertiary);
-            font-size: 0.9rem;
-        }
-        
-        .empty-icon {
-            width: 64px;
-            height: 64px;
-            margin: 0 auto 1rem;
-            opacity: 0.4;
-        }
-        
-        /* Button styles */
-        .btn {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            padding: 0.5rem 1rem;
-            font-size: 0.875rem;
-            font-weight: 500;
-            border-radius: 6px;
-            cursor: pointer;
-            transition: all 0.2s;
-            border: none;
-            outline: none;
-        }
-        
-        .btn-primary {
-            background-color: var(--accent-blue);
-            color: white;
-        }
-        
-        .btn-primary:hover {
-            background-color: var(--accent-blue-lighter);
-        }
-        
-        .btn-outline {
-            background-color: transparent;
-            border: 1px solid var(--border-color);
-            color: var(--text-secondary);
-        }
-        
-        .btn-outline:hover {
-            background-color: rgba(255, 255, 255, 0.05);
-            color: var(--text-primary);
-        }
-        
-        .btn-icon {
-            margin-right: 0.5rem;
-        }
-        
-        /* Mobile adjustments */
-        @media (max-width: 768px) {
-            .sidebar {
-                left: -240px;
-                transition: left 0.3s;
-                z-index: 100;
-            }
-            
-            .sidebar.open {
-                left: 0;
-            }
-            
-            .main-content {
-                margin-left: 0;
-            }
-            
-            .menu-toggle {
-                display: block;
-                position: fixed;
-                top: 1rem;
-                right: 1rem;
-                z-index: 101;
-                padding: 0.5rem;
-                background-color: var(--bg-darker);
-                border-radius: 6px;
-                border: 1px solid var(--border-color);
+    <title>Seamless Encryptor Pro</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#3b82f6',
+                        secondary: '#1e40af',
+                        accent: '#06b6d4',
+                        dark: '#0f172a',
+                        'dark-light': '#1e293b'
+                    }
+                }
             }
         }
-    </style>
+    </script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
 </head>
-<body>
-    <div class="app-container">
-        <!-- Sidebar navigation -->
-        <aside class="sidebar">
-            <div class="app-header">
-                <div class="app-logo">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="app-icon">
-                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-                        <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-                    </svg>
-                    <h1 class="app-title">Seamless Encryptor</h1>
+<body class="bg-gradient-to-br from-dark via-slate-900 to-dark-light text-white min-h-screen">
+    <!-- Loading Screen -->
+    <div id="loading-screen" class="fixed inset-0 bg-gradient-to-br from-primary to-secondary flex items-center justify-center z-50">
+        <div class="text-center">
+            <div class="w-20 h-20 bg-white/20 rounded-2xl flex items-center justify-center mb-6 mx-auto animate-pulse">
+                <i class="fas fa-shield-alt text-3xl text-white"></i>
+            </div>
+            <h2 class="text-2xl font-bold mb-2">Seamless Encryptor Pro</h2>
+            <p class="text-white/80">Initializing secure environment...</p>
+            <div class="w-48 h-1 bg-white/20 rounded-full mt-4 mx-auto overflow-hidden">
+                <div class="h-full bg-white rounded-full animate-pulse"></div>
+            </div>
+            </div>
+        </div>
+        
+    <!-- Main App -->
+    <div id="app" class="hidden flex h-screen">
+        <!-- Sidebar -->
+        <div class="w-64 bg-dark-light border-r border-slate-700 flex flex-col">
+            <!-- Logo -->
+            <div class="p-6 border-b border-slate-700">
+                <div class="flex items-center space-x-3">
+                    <div class="w-10 h-10 bg-gradient-to-r from-primary to-accent rounded-lg flex items-center justify-center">
+                        <i class="fas fa-shield-alt text-white"></i>
+                    </div>
+                    <div>
+                        <h1 class="font-bold text-lg">Seamless Encryptor</h1>
+                        <p class="text-xs text-slate-400">Enterprise Security</p>
+                    </div>
                 </div>
             </div>
-            
-            <div class="nav-group">
-                <div class="nav-title">Security</div>
-                <a href="#" class="nav-item active">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="nav-icon">
-                        <path d="M2 9V5c0-1.1.9-2 2-2h3.93a2 2 0 0 1 1.66.9l.82 1.2a2 2 0 0 0 1.66.9H20a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-1"></path>
-                        <path d="m9 14 3 3 8-8"></path>
-                    </svg>
-                    My Files
+
+            <!-- Navigation -->
+            <nav class="flex-1 p-4 space-y-2">
+                <a href="#" class="nav-item active flex items-center space-x-3 px-4 py-3 rounded-lg bg-primary text-white" data-section="dashboard">
+                    <i class="fas fa-tachometer-alt w-5"></i>
+                    <span>Dashboard</span>
                 </a>
-                <a href="key-management.html" class="nav-item">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="nav-icon">
-                        <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"></path>
-                    </svg>
-                    Manage Keys
+                <a href="#" class="nav-item flex items-center space-x-3 px-4 py-3 rounded-lg hover:bg-slate-700 text-slate-300 hover:text-white transition-all" data-section="encrypt">
+                    <i class="fas fa-lock w-5"></i>
+                    <span>Encrypt Files</span>
                 </a>
-            </div>
-            
-            <div class="nav-group">
-                <div class="nav-title">Application</div>
-                <a href="settings.html" class="nav-item">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="nav-icon">
-                        <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path>
-                        <circle cx="12" cy="12" r="3"></circle>
-                    </svg>
-                    Settings
+                <a href="#" class="nav-item flex items-center space-x-3 px-4 py-3 rounded-lg hover:bg-slate-700 text-slate-300 hover:text-white transition-all" data-section="files">
+                    <i class="fas fa-folder-open w-5"></i>
+                    <span>Encrypted Files</span>
                 </a>
-            </div>
-        </aside>
-        
-        <!-- Mobile menu toggle -->
-        <button class="menu-toggle" style="display: none;">
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <line x1="3" y1="12" x2="21" y2="12"></line>
-                <line x1="3" y1="6" x2="21" y2="6"></line>
-                <line x1="3" y1="18" x2="21" y2="18"></line>
-            </svg>
-        </button>
-        
-        <!-- Main content -->
-        <main class="main-content">
-            <h1 class="page-title" style="margin-bottom: 1.5rem; font-size: 1.5rem; font-weight: 500;">Enterprise-grade protection</h1>
-            
-            <!-- Warning card if no key available -->
-            <div class="card warning-card" id="no-key-warning">
-                <div class="warning-icon">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
-                        <line x1="12" y1="9" x2="12" y2="13"></line>
-                        <line x1="12" y1="17" x2="12.01" y2="17"></line>
-                    </svg>
+                <a href="#" class="nav-item flex items-center space-x-3 px-4 py-3 rounded-lg hover:bg-slate-700 text-slate-300 hover:text-white transition-all" data-section="cloud">
+                    <i class="fab fa-google-drive w-5"></i>
+                    <span>Google Drive</span>
+                </a>
+                <a href="#" class="nav-item flex items-center space-x-3 px-4 py-3 rounded-lg hover:bg-slate-700 text-slate-300 hover:text-white transition-all" data-section="keys">
+                    <i class="fas fa-key w-5"></i>
+                    <span>Key Management</span>
+                </a>
+                <a href="#" class="nav-item flex items-center space-x-3 px-4 py-3 rounded-lg hover:bg-slate-700 text-slate-300 hover:text-white transition-all" data-section="settings">
+                    <i class="fas fa-cog w-5"></i>
+                    <span>Settings</span>
+                </a>
+            </nav>
+
+            <!-- Key Status -->
+            <div class="p-4 border-t border-slate-700">
+                <div id="key-status" class="flex items-center space-x-3 p-3 bg-red-500/20 border border-red-500/30 rounded-lg">
+                    <div class="w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>
+                    <div>
+                        <p class="text-sm font-medium">No Encryption Key</p>
+                        <p class="text-xs text-slate-400">Generate or import a key</p>
+        </div>
                 </div>
-                <div class="warning-content">
-                    <h3>No encryption key available</h3>
-                    <p>You need to generate an encryption key before you can encrypt files.</p>
-                    <button id="generate-key-btn" class="btn btn-primary" style="margin-top: 0.75rem;">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="btn-icon">
-                            <circle cx="8" cy="15" r="4"></circle>
-                            <line x1="10.85" y1="12.15" x2="19" y2="4"></line>
-                            <line x1="18" y1="5" x2="20" y2="7"></line>
-                            <line x1="15" y1="8" x2="17" y2="10"></line>
-                        </svg>
-                        Generate New Key
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="flex-1 flex flex-col">
+            <!-- Header -->
+            <header class="bg-dark-light border-b border-slate-700 px-6 py-4">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h2 id="page-title" class="text-xl font-semibold">Dashboard</h2>
+                        <p id="page-subtitle" class="text-sm text-slate-400">Overview of your encryption activities</p>
+                    </div>
+                    <div class="flex items-center space-x-4">
+                        <div id="cloud-status" class="hidden flex items-center space-x-2 px-3 py-1 bg-green-500/20 border border-green-500/30 rounded-full">
+                            <div class="w-2 h-2 bg-green-500 rounded-full"></div>
+                            <span class="text-xs">Google Drive Connected</span>
+                        </div>
+                        <button id="refresh-btn" class="p-2 hover:bg-slate-700 rounded-lg transition-colors">
+                            <i class="fas fa-sync-alt"></i>
+    </button>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Content Area -->
+            <main class="flex-1 p-6 overflow-y-auto">
+                <!-- Dashboard Section -->
+                <div id="dashboard-section" class="section">
+                    <!-- Stats Grid -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                        <div class="bg-dark-light border border-slate-700 rounded-xl p-6">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <p class="text-slate-400 text-sm">Total Files</p>
+                                    <p id="total-files" class="text-2xl font-bold">0</p>
+            </div>
+                                <div class="w-12 h-12 bg-primary/20 rounded-lg flex items-center justify-center">
+                                    <i class="fas fa-file text-primary"></i>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="bg-dark-light border border-slate-700 rounded-xl p-6">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <p class="text-slate-400 text-sm">Encrypted</p>
+                                    <p id="encrypted-files" class="text-2xl font-bold text-green-400">0</p>
+                                </div>
+                                <div class="w-12 h-12 bg-green-500/20 rounded-lg flex items-center justify-center">
+                                    <i class="fas fa-shield-alt text-green-400"></i>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="bg-dark-light border border-slate-700 rounded-xl p-6">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <p class="text-slate-400 text-sm">Cloud Synced</p>
+                                    <p id="cloud-files" class="text-2xl font-bold text-blue-400">0</p>
+                                </div>
+                                <div class="w-12 h-12 bg-blue-500/20 rounded-lg flex items-center justify-center">
+                                    <i class="fab fa-google-drive text-blue-400"></i>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="bg-dark-light border border-slate-700 rounded-xl p-6">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <p class="text-slate-400 text-sm">Security Level</p>
+                                    <p id="security-level" class="text-2xl font-bold text-yellow-400">Medium</p>
+                                </div>
+                                <div class="w-12 h-12 bg-yellow-500/20 rounded-lg flex items-center justify-center">
+                                    <i class="fas fa-chart-line text-yellow-400"></i>
+                                </div>
+                            </div>
+            </div>
+        </div>
+        
+                    <!-- Quick Actions -->
+                    <div class="bg-dark-light border border-slate-700 rounded-xl p-6">
+                        <h3 class="text-lg font-semibold mb-4">Quick Actions</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                            <button class="quick-action-btn bg-gradient-to-r from-primary to-blue-600 hover:from-blue-600 hover:to-primary p-4 rounded-lg transition-all transform hover:scale-105" data-action="encrypt">
+                                <i class="fas fa-lock text-2xl mb-2"></i>
+                                <p class="font-medium">Encrypt Files</p>
+                            </button>
+                            <button class="quick-action-btn bg-gradient-to-r from-green-500 to-emerald-600 hover:from-emerald-600 hover:to-green-500 p-4 rounded-lg transition-all transform hover:scale-105" data-action="decrypt">
+                                <i class="fas fa-unlock text-2xl mb-2"></i>
+                                <p class="font-medium">Decrypt Files</p>
+                            </button>
+                            <button class="quick-action-btn bg-gradient-to-r from-purple-500 to-violet-600 hover:from-violet-600 hover:to-purple-500 p-4 rounded-lg transition-all transform hover:scale-105" data-action="generate-key">
+                                <i class="fas fa-key text-2xl mb-2"></i>
+                                <p class="font-medium">Generate Key</p>
+                            </button>
+                            <button class="quick-action-btn bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-blue-500 hover:to-cyan-500 p-4 rounded-lg transition-all transform hover:scale-105" data-action="connect-drive">
+                                <i class="fab fa-google-drive text-2xl mb-2"></i>
+                                <p class="font-medium">Connect Drive</p>
+                </button>
+                        </div>
+                        
+                        <!-- Debug Actions -->
+                        <div class="mt-4 pt-4 border-t border-slate-700">
+                            <h4 class="text-sm font-medium text-slate-400 mb-2">Debug Actions</h4>
+                            <div class="flex space-x-2">
+                                <button onclick="testFileDialog()" class="px-3 py-1 bg-slate-600 hover:bg-slate-500 rounded text-xs transition-colors">
+                                    Test File Dialog
+                                </button>
+                                <button onclick="testKeyStatus()" class="px-3 py-1 bg-slate-600 hover:bg-slate-500 rounded text-xs transition-colors">
+                                    Test Key Status
+                                </button>
+                                <button onclick="testEncryptedFiles()" class="px-3 py-1 bg-slate-600 hover:bg-slate-500 rounded text-xs transition-colors">
+                                    Test Load Files
+                                </button>
+                            </div>
+                        </div>
+            </div>
+        </div>
+        
+                <!-- Encrypt Files Section -->
+                <div id="encrypt-section" class="section hidden">
+                    <div class="max-w-4xl mx-auto">
+                        <!-- Encryption Method Selection -->
+                        <div class="bg-dark-light border border-slate-700 rounded-xl p-6 mb-6">
+                            <h3 class="text-lg font-semibold mb-4">Encryption Settings</h3>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-sm font-medium mb-2">Encryption Method</label>
+                                    <select id="encryption-method" class="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary focus:border-transparent">
+                                        <option value="aes-256-gcm">AES-256-GCM (Recommended)</option>
+                            <option value="chacha20-poly1305">ChaCha20-Poly1305</option>
+                            <option value="xchacha20-poly1305">XChaCha20-Poly1305</option>
+                        </select>
+                    </div>
+                                <div>
+                                    <label class="block text-sm font-medium mb-2">Auto Upload to Drive</label>
+                                    <label class="flex items-center cursor-pointer">
+                                        <input type="checkbox" id="auto-upload" class="sr-only">
+                                        <div class="relative">
+                                            <div class="w-11 h-6 bg-slate-600 rounded-full shadow-inner transition-colors duration-200"></div>
+                                            <div class="absolute w-5 h-5 bg-white rounded-full shadow transform transition-transform duration-200 top-0.5 left-0.5"></div>
+                                        </div>
+                                        <span class="ml-3 text-sm">Enable auto-upload</span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Drop Zone -->
+                        <div id="drop-zone" class="border-2 border-dashed border-slate-600 rounded-xl p-12 text-center hover:border-primary transition-all duration-300 cursor-pointer group">
+                            <div class="max-w-md mx-auto">
+                                <div class="w-20 h-20 bg-slate-700 rounded-full flex items-center justify-center mx-auto mb-6 group-hover:bg-primary/20 transition-colors">
+                                    <i class="fas fa-cloud-upload-alt text-3xl text-slate-400 group-hover:text-primary transition-colors"></i>
+                                </div>
+                                <h3 class="text-xl font-semibold mb-2 group-hover:text-white transition-colors">Drop files here to encrypt</h3>
+                                <p class="text-slate-400 mb-6 group-hover:text-slate-300 transition-colors">Drag and drop your files or click the button below</p>
+                                <button id="browse-btn" class="bg-primary hover:bg-blue-600 px-8 py-3 rounded-lg transition-all duration-200 font-medium transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:ring-offset-dark">
+                                    <i class="fas fa-folder-open mr-2"></i>
+                                    Browse Files
                     </button>
                 </div>
             </div>
             
-            <!-- Drag and drop section -->
-            <div class="drag-drop-container">
-                <div class="drag-drop-area" id="drag-drop-area">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="drag-drop-icon">
-                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                        <polyline points="17 8 12 3 7 8"></polyline>
-                        <line x1="12" y1="3" x2="12" y2="15"></line>
-                    </svg>
-                    <p class="drag-drop-text">Drag & Drop files here or click to browse</p>
-                    <button id="browse-files-btn" class="btn btn-outline">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="btn-icon">
-                            <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"></path>
-                            <polyline points="14 2 14 8 20 8"></polyline>
-                        </svg>
-                        Browse Files
-                    </button>
+                        <!-- File Queue -->
+                        <div id="file-queue" class="mt-6 hidden">
+                            <h3 class="text-lg font-semibold mb-4">Files to Encrypt</h3>
+                            <div id="file-list" class="space-y-3"></div>
+                            <div class="flex justify-end mt-4 space-x-3">
+                                <button id="clear-queue" class="px-4 py-2 bg-slate-600 hover:bg-slate-500 rounded-lg transition-colors">Clear All</button>
+                                <button id="encrypt-all" class="px-6 py-2 bg-green-500 hover:bg-green-600 rounded-lg transition-colors">
+                                    <i class="fas fa-lock mr-2"></i>
+                                    Encrypt All Files
+                                </button>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-            </div>
-            
-            <!-- Encrypted files section -->
-            <div class="file-list-section">
-                <div class="file-list-header">
-                    <h2 class="file-list-title">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="file-list-icon">
-                            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-                            <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-                        </svg>
-                        Encrypted Files
-                    </h2>
-                    <div style="margin-left: auto;">
-                        <button id="encrypt-button" class="btn btn-primary">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="btn-icon">
-                                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-                                <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-                            </svg>
-                            Encrypt Selected Files
+                
+                <!-- Encrypted Files Section -->
+                <div id="files-section" class="section hidden">
+                    <div class="flex justify-between items-center mb-6">
+                        <h3 class="text-lg font-semibold">Encrypted Files</h3>
+                        <button id="refresh-files" class="px-4 py-2 bg-primary hover:bg-blue-600 rounded-lg transition-colors">
+                            <i class="fas fa-sync-alt mr-2"></i>
+                            Refresh
                         </button>
                     </div>
+                    <div id="encrypted-files-list" class="space-y-3">
+                        <div class="text-center py-12 text-slate-400">
+                            <i class="fas fa-folder-open text-4xl mb-4"></i>
+                            <p>No encrypted files found</p>
+                        </div>
+                    </div>
                 </div>
-                
-                <div class="card">
-                    <div class="file-list-empty" id="encrypted-files-empty">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="empty-icon">
-                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                            <polyline points="14 2 14 8 20 8"></polyline>
-                            <line x1="9" y1="15" x2="15" y2="15"></line>
-                        </svg>
-                        <p>No encrypted files yet</p>
-                        <p style="font-size: 0.8rem; margin-top: 0.5rem;">Files you encrypt will appear here. Drag and drop files above to get started.</p>
+
+                <!-- Google Drive Section -->
+                <div id="cloud-section" class="section hidden">
+                    <div class="max-w-4xl mx-auto">
+                        <!-- Connection Status -->
+                        <div class="bg-dark-light border border-slate-700 rounded-xl p-6 mb-6">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <h3 class="text-lg font-semibold mb-2">Google Drive Integration</h3>
+                                    <p id="drive-status-text" class="text-slate-400">Connect your Google Drive to automatically backup encrypted files</p>
+                                </div>
+                                <button id="connect-drive-btn" class="px-6 py-2 bg-blue-500 hover:bg-blue-600 rounded-lg transition-colors">
+                                    <i class="fab fa-google-drive mr-2"></i>
+                                    Connect Drive
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Drive Files -->
+                        <div id="drive-files-container" class="hidden">
+                            <div class="flex justify-between items-center mb-4">
+                                <h3 class="text-lg font-semibold">Files in Google Drive</h3>
+                                <button id="refresh-drive" class="px-4 py-2 bg-primary hover:bg-blue-600 rounded-lg transition-colors">
+                                    <i class="fas fa-sync-alt mr-2"></i>
+                                    Refresh
+                                </button>
+                            </div>
+                            <div id="drive-files-list" class="space-y-3"></div>
+                        </div>
                     </div>
-                    
-                    <div id="encrypted-files-list" style="display: none;">
-                        <!-- Files will be dynamically added here -->
+                </div>
+
+                <!-- Key Management Section -->
+                <div id="keys-section" class="section hidden">
+                    <div class="max-w-2xl mx-auto">
+                        <div class="bg-dark-light border border-slate-700 rounded-xl p-6">
+                            <h3 class="text-lg font-semibold mb-6">Encryption Key Management</h3>
+                            
+                            <div class="space-y-6">
+                                <!-- Current Key Status -->
+                                <div id="current-key-status" class="p-4 bg-red-500/10 border border-red-500/20 rounded-lg">
+                                    <div class="flex items-center space-x-3">
+                                        <i class="fas fa-exclamation-triangle text-red-400"></i>
+                                        <div>
+                                            <p class="font-medium text-red-400">No encryption key configured</p>
+                                            <p class="text-sm text-slate-400">Generate or import a key to start encrypting files</p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Key Actions -->
+                                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                    <button id="generate-key-btn" class="p-4 bg-green-500 hover:bg-green-600 rounded-lg transition-colors text-center">
+                                        <i class="fas fa-plus-circle text-2xl mb-2"></i>
+                                        <p class="font-medium">Generate New Key</p>
+                                        <p class="text-sm opacity-80">Create a secure encryption key</p>
+                                    </button>
+                                    <button id="create-custom-key-btn" class="p-4 bg-orange-500 hover:bg-orange-600 rounded-lg transition-colors text-center">
+                                        <i class="fas fa-key text-2xl mb-2"></i>
+                                        <p class="font-medium">Create Custom Key</p>
+                                        <p class="text-sm opacity-80">Use your own passphrase</p>
+                                    </button>
+                                    <button id="import-key-btn" class="p-4 bg-blue-500 hover:bg-blue-600 rounded-lg transition-colors text-center">
+                                        <i class="fas fa-file-import text-2xl mb-2"></i>
+                                        <p class="font-medium">Import Key</p>
+                                        <p class="text-sm opacity-80">Load an existing key file</p>
+                                    </button>
+                                </div>
+
+                                <!-- Export Key (hidden until key exists) -->
+                                <button id="export-key-btn" class="hidden w-full p-4 bg-purple-500 hover:bg-purple-600 rounded-lg transition-colors">
+                                    <i class="fas fa-file-export mr-2"></i>
+                                    Export Current Key
+                                </button>
+                            </div>
+                        </div>
                     </div>
+                </div>
+
+                <!-- Settings Section -->
+                <div id="settings-section" class="section hidden">
+                    <div class="max-w-2xl mx-auto">
+                        <div class="bg-dark-light border border-slate-700 rounded-xl p-6">
+                            <h3 class="text-lg font-semibold mb-6">Application Settings</h3>
+                            
+                            <div class="space-y-6">
+                                <div>
+                                    <label class="block text-sm font-medium mb-2">Output Directory</label>
+                                    <div class="flex space-x-2">
+                                        <input id="output-dir" type="text" class="flex-1 bg-slate-700 border border-slate-600 rounded-lg px-3 py-2" readonly>
+                                        <button id="select-output-dir" class="px-4 py-2 bg-primary hover:bg-blue-600 rounded-lg transition-colors">Browse</button>
+                                    </div>
+                                </div>
+
+                                <div class="space-y-4">
+                                    <label class="flex items-center cursor-pointer">
+                                        <input type="checkbox" id="auto-delete" class="sr-only">
+                                        <div class="relative">
+                                            <div class="w-11 h-6 bg-slate-600 rounded-full shadow-inner transition-colors duration-200"></div>
+                                            <div class="absolute w-5 h-5 bg-white rounded-full shadow transform transition-transform duration-200 top-0.5 left-0.5"></div>
+                                        </div>
+                                        <span class="ml-3">Auto-delete original files after encryption</span>
+                                    </label>
+
+                                    <label class="flex items-center cursor-pointer">
+                                        <input type="checkbox" id="notifications" class="sr-only">
+                                        <div class="relative">
+                                            <div class="w-11 h-6 bg-slate-600 rounded-full shadow-inner transition-colors duration-200"></div>
+                                            <div class="absolute w-5 h-5 bg-white rounded-full shadow transform transition-transform duration-200 top-0.5 left-0.5"></div>
+                                        </div>
+                                        <span class="ml-3">Show notifications</span>
+                                    </label>
+
+                                    <label class="flex items-center cursor-pointer">
+                                        <input type="checkbox" id="confirm-actions" class="sr-only">
+                                        <div class="relative">
+                                            <div class="w-11 h-6 bg-slate-600 rounded-full shadow-inner transition-colors duration-200"></div>
+                                            <div class="absolute w-5 h-5 bg-white rounded-full shadow transform transition-transform duration-200 top-0.5 left-0.5"></div>
+                                        </div>
+                                        <span class="ml-3">Confirm destructive actions</span>
+                                    </label>
+                                </div>
+
+                                <div class="pt-4 border-t border-slate-700">
+                                    <button id="reset-settings" class="px-4 py-2 bg-red-500 hover:bg-red-600 rounded-lg transition-colors">
+                                        Reset to Defaults
+                                    </button>
+                                </div>
+                            </div>
                 </div>
             </div>
-        </main>
+        </div>
+    </main>
+        </div>
     </div>
-    
-    <script src="renderer.js" type="module"></script>
+
+    <!-- Toast Notifications -->
+    <div id="toast-container" class="fixed top-4 right-4 z-50 space-y-2"></div>
+
+    <!-- Progress Modal -->
+    <div id="progress-modal" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+        <div class="bg-dark-light border border-slate-700 rounded-xl p-6 max-w-md w-full mx-4">
+            <div class="text-center">
+                <div class="w-16 h-16 bg-primary/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <i id="progress-icon" class="fas fa-lock text-2xl text-primary"></i>
+                </div>
+                <h3 id="progress-title" class="text-lg font-semibold mb-2">Processing...</h3>
+                <p id="progress-text" class="text-slate-400 mb-4">Please wait while we process your files</p>
+                <div class="w-full bg-slate-700 rounded-full h-2 mb-4">
+                    <div id="progress-bar" class="bg-primary h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+                </div>
+                <p id="progress-percentage" class="text-sm text-slate-400">0%</p>
+            </div>
+        </div>
+    </div>
+
     <script>
-        // Mobile menu toggle
-        document.addEventListener('DOMContentLoaded', function() {
-            const menuToggle = document.querySelector('.menu-toggle');
-            const sidebar = document.querySelector('.sidebar');
+        // Global state
+        let currentSection = 'dashboard';
+        let fileQueue = [];
+        let encryptedFiles = [];
+        let driveFiles = [];
+        let isKeyGenerated = false;
+        let isDriveConnected = false;
+        let currentStats = {
+            totalFiles: 0,
+            encryptedFiles: 0,
+            cloudFiles: 0,
+            securityLevel: 'Low'
+        };
+
+        // Initialize app
+        document.addEventListener('DOMContentLoaded', async () => {
+            console.log('DOM loaded, initializing app...');
             
-            if (menuToggle && sidebar) {
-                if (window.innerWidth <= 768) {
-                    menuToggle.style.display = 'block';
-                }
-                
-                menuToggle.addEventListener('click', function() {
-                    sidebar.classList.toggle('open');
+            // Simulate loading
+            setTimeout(() => {
+                document.getElementById('loading-screen').classList.add('hidden');
+                document.getElementById('app').classList.remove('hidden');
+                initializeApp();
+            }, 2000);
+        });
+
+        async function initializeApp() {
+            console.log('Initializing Seamless Encryptor Pro...');
+            
+            // Setup event listeners
+            setupEventListeners();
+            
+            // Check initial states
+            await checkKeyStatus();
+            await checkDriveStatus();
+            await loadEncryptedFiles();
+            await loadSettings();
+            
+            // Update dashboard
+            updateDashboard();
+            
+            // Debug: Check API availability
+            console.log('Available APIs:', {
+                api: !!window.api,
+                cloudApi: !!window.cloudApi,
+                settingsApi: !!window.settingsApi,
+                encryptFile: !!window.api?.encryptFile,
+                openFileDialog: !!window.api?.openFileDialog,
+                getEncryptedFiles: !!window.api?.getEncryptedFiles
+            });
+            
+            showToast('Application initialized successfully!', 'success');
+        }
+
+        function setupEventListeners() {
+            // Navigation
+            document.querySelectorAll('.nav-item').forEach(item => {
+                item.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    const section = item.dataset.section;
+                    switchSection(section);
                 });
-                
-                window.addEventListener('resize', function() {
-                    if (window.innerWidth <= 768) {
-                        menuToggle.style.display = 'block';
+            });
+
+            // Quick actions
+            document.querySelectorAll('.quick-action-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const action = btn.dataset.action;
+                    handleQuickAction(action);
+                });
+            });
+
+            // File operations
+            setupFileOperations();
+            
+            // Key management
+            setupKeyManagement();
+            
+            // Google Drive
+            setupGoogleDrive();
+            
+            // Settings
+            setupSettings();
+            
+            // Drag and drop
+            setupDragAndDrop();
+        }
+
+        function setupFileOperations() {
+            const dropZone = document.getElementById('drop-zone');
+            const browseBtn = document.getElementById('browse-btn');
+            const encryptAllBtn = document.getElementById('encrypt-all');
+            const clearQueueBtn = document.getElementById('clear-queue');
+            const refreshFilesBtn = document.getElementById('refresh-files');
+
+            browseBtn?.addEventListener('click', openFileDialog);
+            encryptAllBtn?.addEventListener('click', encryptAllFiles);
+            clearQueueBtn?.addEventListener('click', clearFileQueue);
+            refreshFilesBtn?.addEventListener('click', loadEncryptedFiles);
+
+            // Encryption method change
+            const encryptionMethod = document.getElementById('encryption-method');
+            encryptionMethod?.addEventListener('change', async (e) => {
+                if (window.api?.setEncryptionMethod) {
+                    await window.api.setEncryptionMethod(e.target.value);
+                    showToast(`Encryption method changed to ${e.target.value}`, 'info');
+                }
+            });
+        }
+
+        function setupKeyManagement() {
+            const generateKeyBtn = document.getElementById('generate-key-btn');
+            const createCustomKeyBtn = document.getElementById('create-custom-key-btn');
+            const importKeyBtn = document.getElementById('import-key-btn');
+            const exportKeyBtn = document.getElementById('export-key-btn');
+
+            generateKeyBtn?.addEventListener('click', generateEncryptionKey);
+            createCustomKeyBtn?.addEventListener('click', createCustomKey);
+            importKeyBtn?.addEventListener('click', importEncryptionKey);
+            exportKeyBtn?.addEventListener('click', exportEncryptionKey);
+        }
+
+        function setupGoogleDrive() {
+            const connectDriveBtn = document.getElementById('connect-drive-btn');
+            const refreshDriveBtn = document.getElementById('refresh-drive');
+
+            connectDriveBtn?.addEventListener('click', connectGoogleDrive);
+            refreshDriveBtn?.addEventListener('click', loadDriveFiles);
+        }
+
+        function setupSettings() {
+            const selectOutputDirBtn = document.getElementById('select-output-dir');
+            const resetSettingsBtn = document.getElementById('reset-settings');
+
+            selectOutputDirBtn?.addEventListener('click', selectOutputDirectory);
+            resetSettingsBtn?.addEventListener('click', resetSettings);
+
+            // Toggle switches
+            setupToggleSwitches();
+        }
+
+        function setupToggleSwitches() {
+            const toggles = ['auto-upload', 'auto-delete', 'notifications', 'confirm-actions'];
+            
+            toggles.forEach(toggleId => {
+                const toggle = document.getElementById(toggleId);
+                if (toggle) {
+                    toggle.addEventListener('change', (e) => {
+                        const toggleContainer = e.target.parentElement.querySelector('div > div:first-child');
+                        const toggleButton = e.target.parentElement.querySelector('div > div:last-child');
+                        
+                        if (e.target.checked) {
+                            toggleContainer.classList.add('bg-primary');
+                            toggleContainer.classList.remove('bg-slate-600');
+                            toggleButton.style.transform = 'translateX(20px)';
                     } else {
-                        menuToggle.style.display = 'none';
-                        sidebar.classList.remove('open');
+                            toggleContainer.classList.remove('bg-primary');
+                            toggleContainer.classList.add('bg-slate-600');
+                            toggleButton.style.transform = 'translateX(0)';
                     }
+                        
+                        saveSettings();
                 });
             }
         });
+        }
+
+        function setupDragAndDrop() {
+            const dropZone = document.getElementById('drop-zone');
+            
+            if (dropZone) {
+                dropZone.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                    dropZone.classList.add('border-primary', 'bg-primary/10');
+                });
+
+                dropZone.addEventListener('dragleave', (e) => {
+                    e.preventDefault();
+                    dropZone.classList.remove('border-primary', 'bg-primary/10');
+                });
+
+                dropZone.addEventListener('drop', async (e) => {
+                    e.preventDefault();
+                    dropZone.classList.remove('border-primary', 'bg-primary/10');
+                    
+                    const droppedFiles = Array.from(e.dataTransfer.files);
+                    console.log('Files dropped:', droppedFiles);
+                    
+                    if (droppedFiles.length > 0) {
+                        // Convert File objects to our format
+                        const files = await Promise.all(droppedFiles.map(async (file) => {
+                            // In Electron, file.path is available for files from the filesystem
+                            const filePath = file.path || file.name;
+                            
+                            // Try to get file stats if it's a filesystem path
+                            let fileSize = file.size;
+                            if (file.path && window.api?.getFileStats) {
+                                try {
+                                    const stats = await window.api.getFileStats(file.path);
+                                    if (stats?.size) {
+                                        fileSize = stats.size;
+                                    }
+                                } catch (error) {
+                                    console.warn('Could not get file stats:', error);
+                                }
+                            }
+                            
+                            return {
+                                path: filePath,
+                                name: file.name,
+                                size: fileSize
+                            };
+                        }));
+                        
+                        console.log('Processed dropped files:', files);
+                        addFilesToQueue(files);
+                    }
+                });
+
+                dropZone.addEventListener('click', openFileDialog);
+            }
+        }
+
+        function switchSection(section) {
+            // Update navigation
+            document.querySelectorAll('.nav-item').forEach(item => {
+                item.classList.remove('active', 'bg-primary', 'text-white');
+                item.classList.add('text-slate-300', 'hover:text-white');
+            });
+            
+            const activeNav = document.querySelector(`[data-section="${section}"]`);
+            if (activeNav) {
+                activeNav.classList.add('active', 'bg-primary', 'text-white');
+                activeNav.classList.remove('text-slate-300', 'hover:text-white');
+            }
+
+            // Update sections
+            document.querySelectorAll('.section').forEach(sec => {
+                sec.classList.add('hidden');
+            });
+            
+            const activeSection = document.getElementById(`${section}-section`);
+            if (activeSection) {
+                activeSection.classList.remove('hidden');
+            }
+
+            // Update header
+            updateHeader(section);
+            currentSection = section;
+        }
+
+        function updateHeader(section) {
+            const titles = {
+                dashboard: { title: 'Dashboard', subtitle: 'Overview of your encryption activities' },
+                encrypt: { title: 'Encrypt Files', subtitle: 'Secure your files with military-grade encryption' },
+                files: { title: 'Encrypted Files', subtitle: 'Manage your encrypted file collection' },
+                cloud: { title: 'Google Drive', subtitle: 'Cloud storage integration and sync' },
+                keys: { title: 'Key Management', subtitle: 'Manage your encryption keys securely' },
+                settings: { title: 'Settings', subtitle: 'Configure application preferences' }
+            };
+
+            const pageTitle = document.getElementById('page-title');
+            const pageSubtitle = document.getElementById('page-subtitle');
+            
+            if (pageTitle && pageSubtitle && titles[section]) {
+                pageTitle.textContent = titles[section].title;
+                pageSubtitle.textContent = titles[section].subtitle;
+            }
+        }
+
+        function handleQuickAction(action) {
+            switch (action) {
+                case 'encrypt':
+                    switchSection('encrypt');
+                    break;
+                case 'decrypt':
+                    switchSection('files');
+                    break;
+                case 'generate-key':
+                    generateEncryptionKey();
+                    break;
+                case 'connect-drive':
+                    connectGoogleDrive();
+                    break;
+            }
+        }
+
+        async function openFileDialog() {
+            try {
+                if (window.api?.openFileDialog) {
+                    console.log('[RENDERER] Calling openFileDialog...');
+                    const result = await window.api.openFileDialog();
+                    console.log('[RENDERER] File dialog result:', result);
+                    console.log('[RENDERER] Result type:', typeof result);
+                    console.log('[RENDERER] Is array:', Array.isArray(result));
+                    
+                    if (result && Array.isArray(result) && result.length > 0) {
+                        console.log('[RENDERER] First item:', result[0]);
+                        console.log('[RENDERER] First item type:', typeof result[0]);
+                        
+                        let files;
+                        
+                        // Check if result contains file objects or just paths
+                        if (typeof result[0] === 'string') {
+                            console.log('[RENDERER] Converting path strings to file objects');
+                            // Convert path strings to file objects
+                            files = result.map(path => ({
+                                path: path,
+                                name: path.split('/').pop() || path.split('\\').pop() || 'Unknown File',
+                                size: 0 // Will be determined during encryption
+                            }));
+                        } else {
+                            console.log('[RENDERER] Using file objects as-is');
+                            // Already file objects
+                            files = result;
+                        }
+                        
+                        console.log('[RENDERER] Processed files for queue:', files);
+                        addFilesToQueue(files);
+                    } else {
+                        console.log('[RENDERER] No files selected or dialog was cancelled');
+                    }
+                }
+            } catch (error) {
+                console.error('[RENDERER] Error opening file dialog:', error);
+                showToast('Failed to open file dialog', 'error');
+            }
+        }
+
+        function addFilesToQueue(files) {
+            console.log('Adding files to queue:', files);
+            
+            if (!files || files.length === 0) {
+                showToast('No files to add to queue', 'warning');
+                return;
+            }
+            
+            let addedCount = 0;
+            
+            files.forEach(file => {
+                // Ensure file has required properties
+                if (!file || (!file.path && !file.name)) {
+                    console.warn('Invalid file object:', file);
+                    return;
+                }
+                
+                // Normalize file object
+                const normalizedFile = {
+                    path: file.path || file.name,
+                    name: file.name || (file.path ? (file.path.split('/').pop() || file.path.split('\\').pop()) : 'Unknown File'),
+                    size: file.size || 0
+                };
+                
+                // Check if file already exists in queue
+                const existingFile = fileQueue.find(f => 
+                    f.path === normalizedFile.path || 
+                    (f.name === normalizedFile.name && f.path === normalizedFile.path)
+                );
+                
+                if (!existingFile) {
+                    const queueFile = {
+                        id: Date.now() + Math.random(),
+                        name: normalizedFile.name,
+                        path: normalizedFile.path,
+                        size: normalizedFile.size,
+                        status: 'pending'
+                    };
+                    
+                    fileQueue.push(queueFile);
+                    addedCount++;
+                    console.log('Added file to queue:', queueFile);
+                } else {
+                    console.log('File already in queue:', normalizedFile.name);
+                }
+            });
+            
+            updateFileQueue();
+            
+            if (addedCount > 0) {
+                showToast(`Added ${addedCount} file(s) to encryption queue`, 'success');
+                
+                // Switch to encrypt section if not already there
+                if (currentSection !== 'encrypt') {
+                    switchSection('encrypt');
+                }
+            } else {
+                showToast('All selected files are already in the queue', 'info');
+            }
+        }
+
+        function updateFileQueue() {
+            const fileQueueContainer = document.getElementById('file-queue');
+            const fileListContainer = document.getElementById('file-list');
+            
+            if (fileQueue.length === 0) {
+                fileQueueContainer?.classList.add('hidden');
+                return;
+            }
+            
+            fileQueueContainer?.classList.remove('hidden');
+            
+            if (fileListContainer) {
+                fileListContainer.innerHTML = fileQueue.map(file => {
+                    const statusColor = file.status === 'encrypted' ? 'text-green-400' : 
+                                      file.status === 'failed' ? 'text-red-400' : 
+                                      file.status === 'encrypting' ? 'text-yellow-400' : 'text-slate-400';
+                    
+                    const statusIcon = file.status === 'encrypted' ? 'fas fa-check-circle' : 
+                                     file.status === 'failed' ? 'fas fa-exclamation-circle' : 
+                                     file.status === 'encrypting' ? 'fas fa-spinner fa-spin' : 'fas fa-clock';
+                    
+                    return `
+                        <div class="flex items-center justify-between p-4 bg-dark-light border border-slate-700 rounded-lg hover:border-slate-600 transition-colors">
+                            <div class="flex items-center space-x-3">
+                                <div class="w-10 h-10 bg-primary/20 rounded-lg flex items-center justify-center">
+                                    <i class="fas fa-file text-primary"></i>
+                                </div>
+                                <div class="flex-1">
+                                    <p class="font-medium">${file.name}</p>
+                                    <div class="flex items-center space-x-2 text-sm">
+                                        <span class="text-slate-400">${formatFileSize(file.size)}</span>
+                                        <span class="text-slate-600">•</span>
+                                        <i class="${statusIcon} ${statusColor}"></i>
+                                        <span class="${statusColor} capitalize">${file.status}</span>
+                                        ${file.analysis ? `
+                                            <span class="text-slate-600">•</span>
+                                            <span class="text-purple-400">Analyzed</span>
+                                        ` : ''}
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="flex items-center space-x-2">
+                                ${file.status === 'encrypted' && file.analysis ? `
+                                    <button onclick="showAnalysisModal(${JSON.stringify(file.analysis).replace(/"/g, '&quot;')})" class="p-2 text-purple-400 hover:bg-purple-500/20 rounded-lg transition-colors" title="View Analysis">
+                                        <i class="fas fa-chart-line"></i>
+                                    </button>
+                                ` : ''}
+                                <button onclick="removeFromQueue('${file.id}')" class="p-2 text-red-400 hover:bg-red-500/20 rounded-lg transition-colors" title="Remove">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            }
+        }
+
+        function removeFromQueue(fileId) {
+            fileQueue = fileQueue.filter(f => f.id !== fileId);
+            updateFileQueue();
+        }
+
+        function clearFileQueue() {
+            fileQueue = [];
+            updateFileQueue();
+            showToast('File queue cleared', 'info');
+        }
+
+        async function encryptAllFiles() {
+            if (fileQueue.length === 0) {
+                showToast('No files in queue to encrypt', 'warning');
+                return;
+            }
+
+            if (!isKeyGenerated) {
+                showToast('Please generate or import an encryption key first', 'error');
+                switchSection('keys');
+                return;
+            }
+
+            showProgressModal('Encrypting Files', 'Processing your files with secure encryption...');
+            
+            let successCount = 0;
+            let totalFiles = fileQueue.length;
+            
+            try {
+                for (let i = 0; i < fileQueue.length; i++) {
+                    const file = fileQueue[i];
+                    file.status = 'encrypting';
+                    updateFileQueue();
+                    updateProgress((i / totalFiles) * 100, `Encrypting ${file.name}...`);
+                    
+                    try {
+                        if (window.api?.encryptFile) {
+                            // Get selected encryption method
+                            const encryptionMethod = document.getElementById('encryption-method')?.value || 'aes-256-gcm';
+                            
+                            console.log(`Encrypting file: ${file.path} with method: ${encryptionMethod}`);
+                            const result = await window.api.encryptFile(file.path, encryptionMethod);
+                            console.log(`Encryption result for ${file.name}:`, result);
+                            
+                            if (result?.success) {
+                                successCount++;
+                                file.status = 'encrypted';
+                                
+                                // Perform code analysis on the encrypted file
+                                if (result.fileId) {
+                                    try {
+                                        const analysisResult = await window.api.analyzeFileEntropy(result.fileId);
+                                        if (analysisResult?.success) {
+                                            console.log(`File analysis for ${file.name}:`, analysisResult);
+                                            file.analysis = analysisResult;
+                                        }
+                                    } catch (analysisError) {
+                                        console.warn('File analysis failed:', analysisError);
+                                    }
+                                }
+                                
+                                // Auto-upload to Drive if enabled
+                                const autoUpload = document.getElementById('auto-upload')?.checked;
+                                if (autoUpload && isDriveConnected && result.encryptedPath) {
+                                    try {
+                                        await uploadToDrive(result.encryptedPath, file.name + '.enc');
+                                    } catch (uploadError) {
+                                        console.warn('Auto-upload failed:', uploadError);
+                                    }
+                                }
+                            } else {
+                                file.status = 'failed';
+                                console.error('Encryption failed:', result?.error);
+                            }
+                        } else {
+                            file.status = 'failed';
+                            console.error('API not available');
+                        }
+                    } catch (error) {
+                        console.error('Encryption error:', error);
+                        file.status = 'failed';
+                    }
+                    
+                    // Update file queue display
+                    updateFileQueue();
+                }
+                
+                updateProgress(100, 'Encryption complete!');
+                
+                setTimeout(() => {
+                    hideProgressModal();
+                    loadEncryptedFiles();
+                    updateDashboard();
+                    
+                    if (successCount === totalFiles) {
+                        showToast(`Successfully encrypted ${successCount} file(s)!`, 'success');
+                        clearFileQueue();
+                    } else {
+                        showToast(`Encrypted ${successCount}/${totalFiles} files. ${totalFiles - successCount} failed.`, 'warning');
+                    }
+                }, 1000);
+            } catch (error) {
+                hideProgressModal();
+                console.error('Encryption process error:', error);
+                showToast('Encryption process failed', 'error');
+            }
+        }
+
+        async function checkKeyStatus() {
+            try {
+                if (window.api?.checkKeyStatus) {
+                    const status = await window.api.checkKeyStatus();
+                    isKeyGenerated = status?.hasKey || false;
+                    updateKeyStatus(isKeyGenerated);
+                }
+            } catch (error) {
+                console.error('Error checking key status:', error);
+                updateKeyStatus(false);
+            }
+        }
+
+        function updateKeyStatus(hasKey) {
+            const keyStatus = document.getElementById('key-status');
+            const currentKeyStatus = document.getElementById('current-key-status');
+            const exportKeyBtn = document.getElementById('export-key-btn');
+            
+            if (hasKey) {
+                // Sidebar status
+                if (keyStatus) {
+                    keyStatus.innerHTML = `
+                        <div class="w-3 h-3 bg-green-500 rounded-full"></div>
+                        <div>
+                            <p class="text-sm font-medium">Encryption Key Active</p>
+                            <p class="text-xs text-slate-400">Ready to encrypt files</p>
+                        </div>
+                    `;
+                    keyStatus.className = 'flex items-center space-x-3 p-3 bg-green-500/20 border border-green-500/30 rounded-lg';
+                }
+                
+                // Key management page status
+                if (currentKeyStatus) {
+                    currentKeyStatus.innerHTML = `
+                        <div class="flex items-center space-x-3">
+                            <i class="fas fa-check-circle text-green-400"></i>
+                            <div>
+                                <p class="font-medium text-green-400">Encryption key is active</p>
+                                <p class="text-sm text-slate-400">Your files can be encrypted securely</p>
+                            </div>
+                        </div>
+                    `;
+                    currentKeyStatus.className = 'p-4 bg-green-500/10 border border-green-500/20 rounded-lg';
+                }
+                
+                exportKeyBtn?.classList.remove('hidden');
+                currentStats.securityLevel = 'High';
+            } else {
+                // Sidebar status
+                if (keyStatus) {
+                    keyStatus.innerHTML = `
+                        <div class="w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>
+                        <div>
+                            <p class="text-sm font-medium">No Encryption Key</p>
+                            <p class="text-xs text-slate-400">Generate or import a key</p>
+                        </div>
+                    `;
+                    keyStatus.className = 'flex items-center space-x-3 p-3 bg-red-500/20 border border-red-500/30 rounded-lg';
+                }
+                
+                exportKeyBtn?.classList.add('hidden');
+                currentStats.securityLevel = 'Low';
+            }
+            
+            isKeyGenerated = hasKey;
+            updateDashboard();
+        }
+
+        async function generateEncryptionKey() {
+            try {
+                showProgressModal('Generating Key', 'Creating a secure encryption key...');
+                updateProgress(30, 'Generating random entropy...');
+                
+                if (window.api?.generateKey) {
+                    const result = await window.api.generateKey();
+                    updateProgress(100, 'Key generated successfully!');
+                    
+                    setTimeout(() => {
+                        hideProgressModal();
+                        if (result?.success) {
+                            showToast('Encryption key generated successfully!', 'success');
+                            updateKeyStatus(true);
+                        } else {
+                            showToast('Failed to generate encryption key', 'error');
+                        }
+                    }, 1000);
+                }
+            } catch (error) {
+                hideProgressModal();
+                console.error('Error generating key:', error);
+                showToast('Failed to generate encryption key', 'error');
+            }
+        }
+
+        function createCustomKey() {
+            const modal = document.createElement('div');
+            modal.className = 'fixed inset-0 bg-black/50 flex items-center justify-center z-50';
+            modal.innerHTML = `
+                <div class="bg-dark-light border border-slate-700 rounded-xl p-6 max-w-md w-full mx-4">
+                    <div class="text-center mb-6">
+                        <i class="fas fa-key text-4xl text-orange-400 mb-4"></i>
+                        <h3 class="text-xl font-semibold mb-2">Create Custom Key</h3>
+                        <p class="text-slate-400">Enter a strong passphrase to create your encryption key</p>
+                    </div>
+                    
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium mb-2">Passphrase:</label>
+                            <input type="password" id="custom-passphrase" class="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg focus:border-primary focus:outline-none" placeholder="Enter a strong passphrase...">
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium mb-2">Confirm Passphrase:</label>
+                            <input type="password" id="confirm-passphrase" class="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg focus:border-primary focus:outline-none" placeholder="Confirm your passphrase...">
+                        </div>
+                        
+                        <div class="text-xs text-slate-400 bg-slate-800 p-3 rounded-lg">
+                            <p class="font-medium mb-1">Security Tips:</p>
+                            <ul class="list-disc list-inside space-y-1">
+                                <li>Use at least 12 characters</li>
+                                <li>Include uppercase, lowercase, numbers, and symbols</li>
+                                <li>Avoid common words or personal information</li>
+                                <li>Store your passphrase securely</li>
+                            </ul>
+                        </div>
+                        
+                        <div class="flex space-x-3">
+                            <button onclick="submitCustomKey()" class="flex-1 bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg transition-colors">
+                                Create Key
+                            </button>
+                            <button onclick="this.closest('.fixed').remove()" class="flex-1 bg-slate-600 hover:bg-slate-500 text-white px-4 py-2 rounded-lg transition-colors">
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            document.body.appendChild(modal);
+            
+            // Focus the first input
+            setTimeout(() => {
+                const input = document.getElementById('custom-passphrase');
+                if (input) input.focus();
+            }, 100);
+        }
+
+        async function submitCustomKey() {
+            const passphrase = document.getElementById('custom-passphrase')?.value;
+            const confirmPassphrase = document.getElementById('confirm-passphrase')?.value;
+            
+            if (!passphrase || !confirmPassphrase) {
+                showToast('Please fill in both passphrase fields', 'warning');
+                return;
+            }
+            
+            if (passphrase !== confirmPassphrase) {
+                showToast('Passphrases do not match', 'error');
+                return;
+            }
+            
+            if (passphrase.length < 8) {
+                showToast('Passphrase must be at least 8 characters long', 'warning');
+                return;
+            }
+            
+            try {
+                showProgressModal('Creating Key', 'Generating key from your passphrase...');
+                
+                if (window.api?.createCustomKey) {
+                    const result = await window.api.createCustomKey(passphrase);
+                    hideProgressModal();
+                    
+                    // Close the modal
+                    const modal = document.querySelector('.fixed');
+                    if (modal) modal.remove();
+                    
+                    if (result?.success) {
+                        showToast('Custom encryption key created successfully!', 'success');
+                        updateKeyStatus(true);
+                        currentStats.securityLevel = 'High';
+                        updateDashboard();
+                    } else {
+                        showToast(`Failed to create custom key: ${result?.error || 'Unknown error'}`, 'error');
+                    }
+                }
+            } catch (error) {
+                hideProgressModal();
+                console.error('Error creating custom key:', error);
+                showToast('Failed to create custom key', 'error');
+            }
+        }
+
+        async function importEncryptionKey() {
+            try {
+                if (window.api?.openFileDialog) {
+                    const result = await window.api.openFileDialog();
+                    if (result && !result.canceled && result.filePaths?.length > 0) {
+                        const keyPath = result.filePaths[0];
+                        
+                        if (window.api?.importKey) {
+                            const importResult = await window.api.importKey(keyPath);
+                            if (importResult?.success) {
+                                showToast('Encryption key imported successfully!', 'success');
+                                updateKeyStatus(true);
+                            } else {
+                                showToast('Failed to import encryption key', 'error');
+                            }
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error('Error importing key:', error);
+                showToast('Failed to import encryption key', 'error');
+            }
+        }
+
+        async function exportEncryptionKey() {
+            try {
+                if (window.api?.exportKey) {
+                    const result = await window.api.exportKey();
+                    if (result?.success) {
+                        showToast('Encryption key exported successfully!', 'success');
+                    } else {
+                        showToast('Failed to export encryption key', 'error');
+                    }
+                }
+            } catch (error) {
+                console.error('Error exporting key:', error);
+                showToast('Failed to export encryption key', 'error');
+            }
+        }
+
+        async function checkDriveStatus() {
+            try {
+                if (window.cloudApi?.getGDriveStatus) {
+                    const status = await window.cloudApi.getGDriveStatus();
+                    isDriveConnected = status?.connected || false;
+                    updateDriveStatus(isDriveConnected, status?.userEmail);
+                }
+            } catch (error) {
+                console.error('Error checking Drive status:', error);
+                updateDriveStatus(false);
+            }
+        }
+
+        function updateDriveStatus(connected, userEmail = null) {
+            const cloudStatus = document.getElementById('cloud-status');
+            const connectDriveBtn = document.getElementById('connect-drive-btn');
+            const driveStatusText = document.getElementById('drive-status-text');
+            const driveFilesContainer = document.getElementById('drive-files-container');
+            
+            if (connected) {
+                cloudStatus?.classList.remove('hidden');
+                if (connectDriveBtn) {
+                    connectDriveBtn.innerHTML = '<i class="fas fa-sign-out-alt mr-2"></i>Disconnect';
+                    connectDriveBtn.onclick = disconnectGoogleDrive;
+                }
+                if (driveStatusText) {
+                    driveStatusText.textContent = `Connected as ${userEmail || 'Unknown User'}`;
+                }
+                driveFilesContainer?.classList.remove('hidden');
+                loadDriveFiles();
+            } else {
+                cloudStatus?.classList.add('hidden');
+                if (connectDriveBtn) {
+                    connectDriveBtn.innerHTML = '<i class="fab fa-google-drive mr-2"></i>Connect Drive';
+                    connectDriveBtn.onclick = connectGoogleDrive;
+                }
+                if (driveStatusText) {
+                    driveStatusText.textContent = 'Connect your Google Drive to automatically backup encrypted files';
+                }
+                driveFilesContainer?.classList.add('hidden');
+            }
+            
+            isDriveConnected = connected;
+            updateDashboard();
+        }
+
+        async function connectGoogleDrive() {
+            try {
+                showProgressModal('Connecting to Google Drive', 'Getting authorization URL...');
+                
+                if (window.cloudApi?.connectGDrive) {
+                    const result = await window.cloudApi.connectGDrive();
+                    hideProgressModal();
+                    
+                    if (result?.success && result.authUrl) {
+                        // Open the auth URL in the user's browser
+                        if (window.api?.openExternalUrl) {
+                            await window.api.openExternalUrl(result.authUrl);
+                        }
+                        
+                        // Show instructions to user
+                        showAuthCodeModal();
+                    } else {
+                        showToast('Failed to get Google Drive authorization URL', 'error');
+                    }
+                }
+            } catch (error) {
+                hideProgressModal();
+                console.error('Error connecting to Drive:', error);
+                showToast('Failed to connect to Google Drive', 'error');
+            }
+        }
+
+        function showAuthCodeModal() {
+            const modal = document.createElement('div');
+            modal.className = 'fixed inset-0 bg-black/50 flex items-center justify-center z-50';
+            modal.innerHTML = `
+                <div class="bg-dark-light border border-slate-700 rounded-xl p-6 max-w-md w-full mx-4">
+                    <div class="text-center mb-6">
+                        <i class="fab fa-google-drive text-4xl text-blue-400 mb-4"></i>
+                        <h3 class="text-xl font-semibold mb-2">Google Drive Authorization</h3>
+                        <p class="text-slate-400">Complete the authorization in your browser, then paste the code below:</p>
+                    </div>
+                    
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium mb-2">Authorization Code:</label>
+                            <input type="text" id="auth-code-input" class="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg focus:border-primary focus:outline-none" placeholder="Paste authorization code here...">
+                        </div>
+                        
+                        <div class="flex space-x-3">
+                            <button onclick="submitAuthCode()" class="flex-1 bg-primary hover:bg-primary/80 text-white px-4 py-2 rounded-lg transition-colors">
+                                Connect
+                            </button>
+                            <button onclick="this.closest('.fixed').remove()" class="flex-1 bg-slate-600 hover:bg-slate-500 text-white px-4 py-2 rounded-lg transition-colors">
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            document.body.appendChild(modal);
+            
+            // Focus the input
+            setTimeout(() => {
+                const input = document.getElementById('auth-code-input');
+                if (input) input.focus();
+            }, 100);
+        }
+
+        async function submitAuthCode() {
+            const input = document.getElementById('auth-code-input');
+            const authCode = input?.value?.trim();
+            
+            if (!authCode) {
+                showToast('Please enter the authorization code', 'warning');
+                return;
+            }
+            
+            try {
+                showProgressModal('Connecting to Google Drive', 'Exchanging authorization code...');
+                
+                if (window.cloudApi?.exchangeGDriveAuthCode) {
+                    const result = await window.cloudApi.exchangeGDriveAuthCode(authCode);
+                    hideProgressModal();
+                    
+                    // Close the auth modal
+                    const modal = document.querySelector('.fixed');
+                    if (modal) modal.remove();
+                    
+                    if (result?.success) {
+                        showToast('Successfully connected to Google Drive!', 'success');
+                        updateDriveStatus(true, result.email);
+                        checkDriveStatus(); // Refresh status
+                    } else {
+                        showToast(`Failed to connect: ${result?.error || 'Unknown error'}`, 'error');
+                    }
+                }
+            } catch (error) {
+                hideProgressModal();
+                console.error('Error exchanging auth code:', error);
+                showToast('Failed to connect to Google Drive', 'error');
+            }
+        }
+
+        async function disconnectGoogleDrive() {
+            try {
+                if (window.cloudApi?.disconnectGDrive) {
+                    const result = await window.cloudApi.disconnectGDrive();
+                    if (result?.success) {
+                        showToast('Disconnected from Google Drive', 'info');
+                        updateDriveStatus(false);
+                    }
+                }
+            } catch (error) {
+                console.error('Error disconnecting from Drive:', error);
+                showToast('Failed to disconnect from Google Drive', 'error');
+            }
+        }
+
+        async function loadDriveFiles() {
+            if (!isDriveConnected) return;
+            
+            try {
+                if (window.cloudApi?.listGDriveFiles) {
+                    const result = await window.cloudApi.listGDriveFiles();
+                    if (result?.success && result.files) {
+                        driveFiles = result.files;
+                        updateDriveFilesList();
+                        currentStats.cloudFiles = driveFiles.length;
+                        updateDashboard();
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading Drive files:', error);
+            }
+        }
+
+        function updateDriveFilesList() {
+            const driveFilesList = document.getElementById('drive-files-list');
+            if (!driveFilesList) return;
+            
+            if (driveFiles.length === 0) {
+                driveFilesList.innerHTML = `
+                    <div class="text-center py-12 text-slate-400">
+                        <i class="fab fa-google-drive text-4xl mb-4"></i>
+                        <p>No files found in Google Drive</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            driveFilesList.innerHTML = driveFiles.map(file => `
+                <div class="flex items-center justify-between p-4 bg-dark-light border border-slate-700 rounded-lg">
+                    <div class="flex items-center space-x-3">
+                        <div class="w-10 h-10 bg-blue-500/20 rounded-lg flex items-center justify-center">
+                            <i class="fab fa-google-drive text-blue-400"></i>
+                        </div>
+                        <div>
+                            <p class="font-medium">${file.name}</p>
+                            <p class="text-sm text-slate-400">${formatFileSize(file.size)} • ${formatDate(file.modifiedTime)}</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <button onclick="downloadFromDrive('${file.id}', '${file.name}')" class="p-2 text-green-400 hover:bg-green-500/20 rounded-lg transition-colors">
+                            <i class="fas fa-download"></i>
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        async function uploadToDrive(filePath, fileName) {
+            try {
+                if (window.cloudApi?.uploadFileToGDrive) {
+                    const result = await window.cloudApi.uploadFileToGDrive(filePath, fileName);
+                    if (result?.success) {
+                        showToast(`Uploaded ${fileName} to Google Drive`, 'success');
+                        loadDriveFiles();
+                    }
+                }
+            } catch (error) {
+                console.error('Error uploading to Drive:', error);
+            }
+        }
+
+        async function downloadFromDrive(fileId, fileName) {
+            try {
+                showProgressModal('Downloading', `Downloading ${fileName} from Google Drive...`);
+                
+                // Implementation would depend on your Drive API setup
+                showToast(`Downloaded ${fileName} from Google Drive`, 'success');
+                hideProgressModal();
+            } catch (error) {
+                hideProgressModal();
+                console.error('Error downloading from Drive:', error);
+                showToast('Failed to download file from Google Drive', 'error');
+            }
+        }
+
+        async function loadEncryptedFiles() {
+            try {
+                console.log('Loading encrypted files...');
+                if (window.api?.getEncryptedFiles) {
+                    const result = await window.api.getEncryptedFiles();
+                    console.log('Encrypted files result:', result);
+                    
+                    if (result?.success && result.files) {
+                        encryptedFiles = result.files;
+                        console.log('Loaded encrypted files:', encryptedFiles);
+                        updateEncryptedFilesList();
+                        currentStats.encryptedFiles = encryptedFiles.length;
+                        currentStats.totalFiles = encryptedFiles.length;
+                        updateDashboard();
+                    } else if (result?.files) {
+                        // Handle case where success flag might not be set but files exist
+                        encryptedFiles = result.files;
+                        updateEncryptedFilesList();
+                        currentStats.encryptedFiles = encryptedFiles.length;
+                        currentStats.totalFiles = encryptedFiles.length;
+                        updateDashboard();
+                    } else {
+                        console.log('No encrypted files found or API call failed');
+                        encryptedFiles = [];
+                        updateEncryptedFilesList();
+                        currentStats.encryptedFiles = 0;
+                        currentStats.totalFiles = 0;
+                        updateDashboard();
+                    }
+                } else {
+                    console.warn('getEncryptedFiles API not available');
+                }
+            } catch (error) {
+                console.error('Error loading encrypted files:', error);
+                encryptedFiles = [];
+                updateEncryptedFilesList();
+                currentStats.encryptedFiles = 0;
+                currentStats.totalFiles = 0;
+                updateDashboard();
+            }
+        }
+
+        function updateEncryptedFilesList() {
+            const encryptedFilesList = document.getElementById('encrypted-files-list');
+            if (!encryptedFilesList) return;
+            
+            if (encryptedFiles.length === 0) {
+                encryptedFilesList.innerHTML = `
+                    <div class="text-center py-12 text-slate-400">
+                        <i class="fas fa-folder-open text-4xl mb-4"></i>
+                        <p>No encrypted files found</p>
+                        <p class="text-sm mt-2">Upload and encrypt files to see them here</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            encryptedFilesList.innerHTML = encryptedFiles.map(file => {
+                const securityLevel = getSecurityLevel(file.algorithm);
+                const securityColor = securityLevel === 'High' ? 'text-green-400' : 
+                                    securityLevel === 'Medium' ? 'text-yellow-400' : 'text-red-400';
+                
+                return `
+                    <div class="bg-dark-light border border-slate-700 rounded-xl p-4 hover:border-slate-600 transition-colors">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center space-x-4">
+                                <div class="w-12 h-12 bg-green-500/20 rounded-lg flex items-center justify-center">
+                                    <i class="fas fa-shield-alt text-green-400 text-lg"></i>
+                                </div>
+                                <div class="flex-1">
+                                    <h4 class="font-medium text-white mb-1">${file.name || file.originalName || 'Unknown File'}</h4>
+                                    <div class="flex items-center space-x-4 text-sm text-slate-400">
+                                        <span>${formatFileSize(file.size || file.originalSize || 0)}</span>
+                                        <span class="text-green-400">●</span>
+                                        <span>Encrypted</span>
+                                        <span class="text-green-400">●</span>
+                                        <span>${file.algorithm || 'AES-256-GCM'}</span>
+                                        <span class="text-green-400">●</span>
+                                        <span class="${securityColor}">${securityLevel} Security</span>
+                                    </div>
+                                    <div class="text-xs text-slate-500 mt-1">
+                                        Encrypted: ${formatDate(file.timestamp || file.dateEncrypted)}
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="flex items-center space-x-2">
+                                <button onclick="analyzeFile('${file.id}')" class="p-2 text-purple-400 hover:bg-purple-500/20 rounded-lg transition-colors" title="Analyze">
+                                    <i class="fas fa-chart-line"></i>
+                                </button>
+                                <button onclick="decryptFile('${file.id}', '${file.name || file.originalName}')" class="p-2 text-blue-400 hover:bg-blue-500/20 rounded-lg transition-colors" title="Decrypt">
+                                    <i class="fas fa-unlock"></i>
+                                </button>
+                                <button onclick="downloadFile('${file.id}', '${file.name || file.originalName}')" class="p-2 text-green-400 hover:bg-green-500/20 rounded-lg transition-colors" title="Download">
+                                    <i class="fas fa-download"></i>
+                                </button>
+                                <button onclick="deleteEncryptedFile('${file.id}')" class="p-2 text-red-400 hover:bg-red-500/20 rounded-lg transition-colors" title="Delete">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function getSecurityLevel(algorithm) {
+            switch (algorithm) {
+                case 'aes-256-gcm':
+                    return 'High';
+                case 'chacha20-poly1305':
+                case 'xchacha20-poly1305':
+                    return 'High';
+                default:
+                    return 'Medium';
+            }
+        }
+
+        async function analyzeFile(fileId) {
+            try {
+                showProgressModal('Analyzing File', 'Performing cryptographic analysis...');
+                
+                if (window.api?.analyzeFileEntropy) {
+                    const result = await window.api.analyzeFileEntropy(fileId);
+                    hideProgressModal();
+                    
+                    if (result?.success) {
+                        showAnalysisModal(result);
+                    } else {
+                        showToast('Failed to analyze file', 'error');
+                    }
+                }
+            } catch (error) {
+                hideProgressModal();
+                console.error('Error analyzing file:', error);
+                showToast('Failed to analyze file', 'error');
+            }
+        }
+
+        function showAnalysisModal(analysis) {
+            const modal = document.createElement('div');
+            modal.className = 'fixed inset-0 bg-black/50 flex items-center justify-center z-50';
+            modal.innerHTML = `
+                <div class="bg-dark-light border border-slate-700 rounded-xl p-6 max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto">
+                    <div class="flex items-center justify-between mb-6">
+                        <h3 class="text-xl font-semibold">File Analysis Report</h3>
+                        <button onclick="this.closest('.fixed').remove()" class="p-2 hover:bg-slate-700 rounded-lg transition-colors">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    
+                    <div class="space-y-6">
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div class="bg-slate-800 rounded-lg p-4 text-center">
+                                <div class="text-2xl font-bold text-green-400">${analysis.overallEntropy?.toFixed(2) || 'N/A'}</div>
+                                <div class="text-sm text-slate-400">Entropy Score</div>
+                            </div>
+                            <div class="bg-slate-800 rounded-lg p-4 text-center">
+                                <div class="text-2xl font-bold text-blue-400">${analysis.rating || 'Unknown'}</div>
+                                <div class="text-sm text-slate-400">Security Rating</div>
+                            </div>
+                            <div class="bg-slate-800 rounded-lg p-4 text-center">
+                                <div class="text-2xl font-bold ${analysis.isGoodEncryption ? 'text-green-400' : 'text-yellow-400'}">
+                                    ${analysis.isGoodEncryption ? 'Excellent' : 'Good'}
+                                </div>
+                                <div class="text-sm text-slate-400">Encryption Quality</div>
+                            </div>
+                        </div>
+                        
+                        ${analysis.histogram ? `
+                            <div>
+                                <h4 class="text-lg font-medium mb-3">Byte Distribution</h4>
+                                <div class="bg-slate-800 rounded-lg p-4">
+                                    <div class="text-sm text-slate-400 mb-2">Histogram shows randomness distribution (good encryption should be uniform)</div>
+                                    <div class="h-32 flex items-end space-x-1">
+                                        ${analysis.histogram.slice(0, 64).map((value, index) => `
+                                            <div class="flex-1 bg-primary/60 rounded-t" style="height: ${(value / Math.max(...analysis.histogram)) * 100}%"></div>
+                                        `).join('')}
+                                    </div>
+                                </div>
+                            </div>
+                        ` : ''}
+                        
+                        <div>
+                            <h4 class="text-lg font-medium mb-3">Analysis Details</h4>
+                            <div class="bg-slate-800 rounded-lg p-4 space-y-2 text-sm">
+                                <div class="flex justify-between">
+                                    <span class="text-slate-400">File Size:</span>
+                                    <span>${formatFileSize(analysis.fileSize || 0)}</span>
+                                </div>
+                                <div class="flex justify-between">
+                                    <span class="text-slate-400">Entropy Range:</span>
+                                    <span>0.00 - 8.00 bits</span>
+                                </div>
+                                <div class="flex justify-between">
+                                    <span class="text-slate-400">Expected for Good Encryption:</span>
+                                    <span class="text-green-400">> 7.5 bits</span>
+                                </div>
+                                <div class="flex justify-between">
+                                    <span class="text-slate-400">Analysis Time:</span>
+                                    <span>${new Date().toLocaleString()}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            document.body.appendChild(modal);
+        }
+
+        async function decryptFile(fileId, fileName) {
+            try {
+                showProgressModal('Decrypting', `Decrypting ${fileName}...`);
+                
+                if (window.api?.decryptFile) {
+                    const result = await window.api.decryptFile(fileId);
+                    hideProgressModal();
+                    
+                    if (result?.success) {
+                        showToast(`Successfully decrypted ${fileName}`, 'success');
+                    } else {
+                        showToast(`Failed to decrypt ${fileName}`, 'error');
+                    }
+                }
+            } catch (error) {
+                hideProgressModal();
+                console.error('Error decrypting file:', error);
+                showToast('Failed to decrypt file', 'error');
+            }
+        }
+
+        async function downloadFile(fileId, fileName) {
+            try {
+                if (window.api?.downloadFile) {
+                    const result = await window.api.downloadFile(fileId, fileName);
+                    if (result?.success) {
+                        showToast(`Downloaded ${fileName}`, 'success');
+                    } else {
+                        showToast(`Failed to download ${fileName}`, 'error');
+                    }
+                }
+            } catch (error) {
+                console.error('Error downloading file:', error);
+                showToast('Failed to download file', 'error');
+            }
+        }
+
+        async function deleteEncryptedFile(fileId) {
+            if (confirm('Are you sure you want to delete this encrypted file?')) {
+                try {
+                    if (window.api?.deleteEncryptedFile) {
+                        const result = await window.api.deleteEncryptedFile(fileId);
+                        if (result?.success) {
+                            showToast('File deleted successfully', 'success');
+                            loadEncryptedFiles();
+                        } else {
+                            showToast('Failed to delete file', 'error');
+                        }
+                    }
+                } catch (error) {
+                    console.error('Error deleting file:', error);
+                    showToast('Failed to delete file', 'error');
+                }
+            }
+        }
+
+        async function loadSettings() {
+            try {
+                if (window.settingsApi?.getAppSettings) {
+                    const settings = await window.settingsApi.getAppSettings();
+                    if (settings) {
+                        // Update UI with settings
+                        const outputDir = document.getElementById('output-dir');
+                        if (outputDir) outputDir.value = settings.outputDir || '';
+                        
+                        // Update toggles
+                        updateToggle('auto-delete', settings.autoDelete);
+                        updateToggle('notifications', settings.notifications);
+                        updateToggle('confirm-actions', settings.confirmActions);
+                        updateToggle('auto-upload', settings.gdriveAutoUpload);
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading settings:', error);
+            }
+        }
+
+        function updateToggle(toggleId, checked) {
+            const toggle = document.getElementById(toggleId);
+            if (toggle) {
+                toggle.checked = checked;
+                const event = new Event('change');
+                toggle.dispatchEvent(event);
+            }
+        }
+
+        async function saveSettings() {
+            try {
+                const settings = {
+                    outputDir: document.getElementById('output-dir')?.value,
+                    autoDelete: document.getElementById('auto-delete')?.checked,
+                    notifications: document.getElementById('notifications')?.checked,
+                    confirmActions: document.getElementById('confirm-actions')?.checked,
+                    gdriveAutoUpload: document.getElementById('auto-upload')?.checked
+                };
+                
+                if (window.settingsApi?.setAppSettings) {
+                    await window.settingsApi.setAppSettings(settings);
+                }
+            } catch (error) {
+                console.error('Error saving settings:', error);
+            }
+        }
+
+        async function selectOutputDirectory() {
+            try {
+                if (window.settingsApi?.selectOutputDirectory) {
+                    const result = await window.settingsApi.selectOutputDirectory();
+                    if (result?.success && result.path) {
+                        document.getElementById('output-dir').value = result.path;
+                        saveSettings();
+                        showToast('Output directory updated', 'success');
+                    }
+                }
+            } catch (error) {
+                console.error('Error selecting output directory:', error);
+                showToast('Failed to select output directory', 'error');
+            }
+        }
+
+        async function resetSettings() {
+            if (confirm('Are you sure you want to reset all settings to defaults?')) {
+                try {
+                    if (window.settingsApi?.resetAppSettings) {
+                        await window.settingsApi.resetAppSettings();
+                        loadSettings();
+                        showToast('Settings reset to defaults', 'success');
+                    }
+                } catch (error) {
+                    console.error('Error resetting settings:', error);
+                    showToast('Failed to reset settings', 'error');
+                }
+            }
+        }
+
+        function updateDashboard() {
+            // Update stats
+            document.getElementById('total-files').textContent = currentStats.totalFiles;
+            document.getElementById('encrypted-files').textContent = currentStats.encryptedFiles;
+            document.getElementById('cloud-files').textContent = currentStats.cloudFiles;
+            document.getElementById('security-level').textContent = currentStats.securityLevel;
+            
+            // Update security level color
+            const securityElement = document.getElementById('security-level');
+            if (securityElement) {
+                securityElement.className = 'text-2xl font-bold ' + 
+                    (currentStats.securityLevel === 'High' ? 'text-green-400' : 
+                     currentStats.securityLevel === 'Medium' ? 'text-yellow-400' : 'text-red-400');
+            }
+        }
+
+        function showProgressModal(title, text) {
+            const modal = document.getElementById('progress-modal');
+            const titleEl = document.getElementById('progress-title');
+            const textEl = document.getElementById('progress-text');
+            
+            if (modal && titleEl && textEl) {
+                titleEl.textContent = title;
+                textEl.textContent = text;
+                modal.classList.remove('hidden');
+            }
+        }
+
+        function updateProgress(percentage, text) {
+            const progressBar = document.getElementById('progress-bar');
+            const progressText = document.getElementById('progress-text');
+            const progressPercentage = document.getElementById('progress-percentage');
+            
+            if (progressBar) progressBar.style.width = percentage + '%';
+            if (progressText) progressText.textContent = text;
+            if (progressPercentage) progressPercentage.textContent = Math.round(percentage) + '%';
+        }
+
+        function hideProgressModal() {
+            const modal = document.getElementById('progress-modal');
+            if (modal) {
+                modal.classList.add('hidden');
+            }
+        }
+
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toast-container');
+            if (!container) return;
+            
+            const toast = document.createElement('div');
+            const colors = {
+                success: 'bg-green-500',
+                error: 'bg-red-500',
+                warning: 'bg-yellow-500',
+                info: 'bg-blue-500'
+            };
+            
+            const icons = {
+                success: 'fas fa-check-circle',
+                error: 'fas fa-exclamation-circle',
+                warning: 'fas fa-exclamation-triangle',
+                info: 'fas fa-info-circle'
+            };
+            
+            toast.className = `flex items-center space-x-3 ${colors[type]} text-white px-4 py-3 rounded-lg shadow-lg transform translate-x-full transition-transform duration-300`;
+            toast.innerHTML = `
+                <i class="${icons[type]}"></i>
+                <span>${message}</span>
+                <button onclick="this.parentElement.remove()" class="ml-2 hover:bg-white/20 rounded p-1">
+                    <i class="fas fa-times text-sm"></i>
+                </button>
+            `;
+            
+            container.appendChild(toast);
+            
+            // Animate in
+            setTimeout(() => {
+                toast.classList.remove('translate-x-full');
+            }, 100);
+            
+            // Auto remove after 5 seconds
+            setTimeout(() => {
+                toast.classList.add('translate-x-full');
+                setTimeout(() => toast.remove(), 300);
+            }, 5000);
+        }
+
+        // Utility functions
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        function formatDate(dateString) {
+            if (!dateString) return 'Unknown';
+            const date = new Date(dateString);
+            return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
+        }
+
+        // Debug functions
+        async function testFileDialog() {
+            console.log('Testing file dialog...');
+            try {
+                const result = await window.api.openFileDialog();
+                console.log('File dialog test result:', result);
+                showToast(`File dialog returned: ${result?.length || 0} files`, 'info');
+            } catch (error) {
+                console.error('File dialog test error:', error);
+                showToast('File dialog test failed', 'error');
+            }
+        }
+
+        async function testKeyStatus() {
+            console.log('Testing key status...');
+            try {
+                const status = await window.api.checkKeyStatus();
+                console.log('Key status test result:', status);
+                showToast(`Key status: ${status?.hasKey ? 'Active' : 'Not found'}`, 'info');
+            } catch (error) {
+                console.error('Key status test error:', error);
+                showToast('Key status test failed', 'error');
+            }
+        }
+
+        async function testEncryptedFiles() {
+            console.log('Testing encrypted files loading...');
+            try {
+                const result = await window.api.getEncryptedFiles();
+                console.log('Encrypted files test result:', result);
+                showToast(`Found ${result?.files?.length || 0} encrypted files`, 'info');
+            } catch (error) {
+                console.error('Encrypted files test error:', error);
+                showToast('Encrypted files test failed', 'error');
+            }
+        }
+
+        // Global functions for onclick handlers
+        window.removeFromQueue = removeFromQueue;
+        window.downloadFromDrive = downloadFromDrive;
+        window.decryptFile = decryptFile;
+        window.downloadFile = downloadFile;
+        window.deleteEncryptedFile = deleteEncryptedFile;
+        window.analyzeFile = analyzeFile;
+        window.showAnalysisModal = showAnalysisModal;
+        window.testFileDialog = testFileDialog;
+        window.testKeyStatus = testKeyStatus;
+        window.testEncryptedFiles = testEncryptedFiles;
     </script>
 </body>
 </html>

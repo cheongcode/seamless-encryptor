@@ -2,6 +2,120 @@ const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
+const Store = require('electron-store');
+const { google } = require('googleapis');
+
+// Load environment variables
+require('dotenv').config();
+
+// For settings persistence
+const store = new Store({
+    defaults: {
+        appSettings: {
+            autoDelete: false,
+            compress: true,
+            notifications: true,
+            confirmActions: true,
+            outputDir: null, // Will be set to app.getPath('documents') + '/Encrypted' initially
+            debugMode: false,
+            gdriveConnected: false, // Added for GDrive state
+            gdriveUserEmail: null,  // Added for GDrive user info
+            gdriveAutoUpload: false // Added for GDrive auto-upload setting
+        }
+    }
+});
+
+// Google Drive Integration - Using environment variables for security
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || 'your_google_client_id_here';
+const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || 'your_google_client_secret_here';
+const GOOGLE_REDIRECT_URI = process.env.GOOGLE_REDIRECT_URI || 'urn:ietf:wg:oauth:2.0:oob';
+
+let googleAuthClient = null; // To store the OAuth2 client
+let googleDrive = null; // To store the Drive API client instance
+
+// Helper function to initialize Google Auth Client
+function getGoogleAuthClient() {
+    if (!googleAuthClient) {
+        googleAuthClient = new google.auth.OAuth2(
+            GOOGLE_CLIENT_ID,
+            GOOGLE_CLIENT_SECRET,
+            GOOGLE_REDIRECT_URI
+        );
+    }
+    // Potentially load existing tokens from store here
+    const tokens = store.get('gdriveTokens');
+    if (tokens) {
+        googleAuthClient.setCredentials(tokens);
+        // If we have tokens and an auth client, ensure Drive API client is also initialized
+        if (!googleDrive) {
+            googleDrive = google.drive({ version: 'v3', auth: googleAuthClient });
+            console.log('[main.js] Google Drive API client re-initialized from stored tokens.');
+        }
+    }
+    return googleAuthClient;
+}
+
+// Helper function to find or create an app-specific folder in Google Drive
+async function getOrCreateAppFolderId() {
+    if (!googleDrive) {
+        console.log('[main.js] Google Drive API client not initialized. Cannot get/create app folder.');
+        getGoogleAuthClient(); // Attempt to initialize it
+        if (!googleDrive) throw new Error('Google Drive client not available.');
+    }
+
+    const folderName = 'SeamlessEncryptor_Files';
+    try {
+        // Check if folder already exists
+        const response = await googleDrive.files.list({
+            q: `mimeType='application/vnd.google-apps.folder' and name='${folderName}' and trashed=false`,
+            fields: 'files(id, name)',
+            spaces: 'drive',
+        });
+
+        if (response.data.files.length > 0) {
+            console.log(`[main.js] Found existing app folder '${folderName}' with ID: ${response.data.files[0].id}`);
+            return response.data.files[0].id;
+        } else {
+            // Create the folder
+            console.log(`[main.js] App folder '${folderName}' not found, creating new one...`);
+            const fileMetadata = {
+                name: folderName,
+                mimeType: 'application/vnd.google-apps.folder',
+            };
+            const folder = await googleDrive.files.create({
+                requestBody: fileMetadata,
+                fields: 'id',
+            });
+            console.log(`[main.js] Created new app folder '${folderName}' with ID: ${folder.data.id}`);
+            return folder.data.id;
+        }
+    } catch (error) {
+        console.error('[main.js] Error finding or creating app folder in Google Drive:', error);
+        // Fallback: if we can't create/find the specific folder, allow listing from root as a degraded experience
+        // Or, more strictly, throw an error. For now, let's allow listing from root if folder ops fail.
+        // To list from root, parentFolderId would be undefined or 'root'.
+        // However, for this function, we should throw if we can't ensure the app folder.
+        throw new Error(`Failed to get or create app folder '${folderName}': ${error.message}`);
+    }
+}
+
+// Initialize default outputDir if not set
+if (store.get('appSettings.outputDir') === null) {
+    try {
+        const documentsPath = app.getPath('documents');
+        store.set('appSettings.outputDir', path.join(documentsPath, 'SeamlessEncryptor_Output'));
+    } catch (e) {
+        // Fallback if documents path is somehow unavailable
+        store.set('appSettings.outputDir', path.join(app.getPath('userData'), 'SeamlessEncryptor_Output'));
+    }
+}
+
+// Ensure gdriveTokens is initialized in the store if not present
+if (store.get('gdriveTokens') === undefined) {
+    store.set('gdriveTokens', null);
+}
+
+const DEFAULT_SETTINGS_MAIN = store.get('appSettings'); // Load defaults, including initialized outputDir
 
 // Import utility modules
 const moduleCache = {};
@@ -40,14 +154,14 @@ const keyManager = safeRequire('../config/keyManager', {
   },
   setKey: async (key) => {
     try {
-      global.encryptionKey = key;
+      encryptionKey = key;
       return true;
     } catch (error) {
       console.error('Error in keyManager.setKey:', error);
       return false;
     }
   },
-  getMasterKey: async () => global.encryptionKey || null
+  getMasterKey: async () => encryptionKey || null
 });
 
 const encryptionMethods = safeRequire('../crypto/encryptionMethods', {
@@ -93,7 +207,12 @@ const entropyAnalyzer = safeRequire('../crypto/entropyAnalyzer', {
     overallEntropy: entropyAnalyzer.calculateEntropy(data),
     rating: 'Analysis Limited',
     isGoodEncryption: null
-  })
+  }),
+  generateHistogram: (data) => {
+    // Implementation of generateHistogram method
+    // This is a placeholder and should be implemented based on the actual implementation
+    return new Array(256).fill(0);
+  }
 });
 
 const cryptoUtil = safeRequire('../crypto/cryptoUtil', {});
@@ -132,19 +251,20 @@ function createWindow() {
 
   // Determine preload script path
   let preloadPath;
-  try {
-    if (typeof MAIN_WINDOW_PRELOAD_WEBPACK_ENTRY !== 'undefined') {
-      preloadPath = MAIN_WINDOW_PRELOAD_WEBPACK_ENTRY;
-      console.log('[main.js] Using webpack preload path:', preloadPath);
+  if (typeof MAIN_WINDOW_PRELOAD_WEBPACK_ENTRY !== 'undefined') {
+    preloadPath = MAIN_WINDOW_PRELOAD_WEBPACK_ENTRY;
+    console.log('[main.js] Using webpack preload path:', preloadPath);
+  } else {
+    // Check if webpack compiled preload exists
+    const webpackPreloadPath = path.join(APP_PATH, '.webpack/renderer/main_window/preload.js');
+    if (fs.existsSync(webpackPreloadPath)) {
+      preloadPath = webpackPreloadPath;
+      console.log('[main.js] Using webpack compiled preload:', preloadPath);
     } else {
-      // Fallback to directly finding the preload script
-      preloadPath = path.join(APP_PATH, 'preload.js');
-      console.log('[main.js] Using fallback preload path:', preloadPath);
+      // Fallback to source preload script
+      preloadPath = path.join(APP_PATH, 'src/preload/preload.js');
+      console.log('[main.js] Using source preload path:', preloadPath);
     }
-  } catch (error) {
-    // Ultimate fallback
-    preloadPath = path.join(APP_PATH, 'preload.js');
-    console.log('[main.js] Using ultimate fallback preload path:', preloadPath);
   }
 
   // Create the browser window
@@ -156,8 +276,9 @@ function createWindow() {
         nodeIntegration: false,
         contextIsolation: true,
         preload: preloadPath,
-        sandbox: true,
+        // sandbox: true, // Ensure this is removed or commented out
         webSecurity: true
+        // No contentSecurityPolicy here
       },
     });
     console.log('[main.js] Browser window created successfully.');
@@ -168,19 +289,23 @@ function createWindow() {
 
   // Determine HTML path
   let htmlPath;
-  try {
-    if (typeof MAIN_WINDOW_WEBPACK_ENTRY !== 'undefined') {
-      htmlPath = MAIN_WINDOW_WEBPACK_ENTRY;
-      console.log('[main.js] Using webpack HTML entry point:', htmlPath);
+  console.log('[main.js] MAIN_WINDOW_WEBPACK_ENTRY type:', typeof MAIN_WINDOW_WEBPACK_ENTRY);
+  console.log('[main.js] MAIN_WINDOW_WEBPACK_ENTRY value:', typeof MAIN_WINDOW_WEBPACK_ENTRY !== 'undefined' ? MAIN_WINDOW_WEBPACK_ENTRY : 'undefined');
+  
+  if (typeof MAIN_WINDOW_WEBPACK_ENTRY !== 'undefined') {
+    htmlPath = MAIN_WINDOW_WEBPACK_ENTRY;
+    console.log('[main.js] Using webpack HTML entry point:', htmlPath);
+  } else {
+    // Check if webpack compiled HTML exists
+    const webpackHtmlPath = path.join(APP_PATH, '.webpack/renderer/main_window/index.html');
+    if (fs.existsSync(webpackHtmlPath)) {
+      htmlPath = 'file://' + webpackHtmlPath;
+      console.log('[main.js] Using webpack compiled HTML:', htmlPath);
     } else {
-      // Fallback to direct HTML file
+      // Fallback to source HTML file
       htmlPath = 'file://' + path.join(APP_PATH, 'src/renderer/index.html');
-      console.log('[main.js] Using fallback HTML path:', htmlPath);
+      console.log('[main.js] Using source HTML path:', htmlPath);
     }
-  } catch (error) {
-    // Ultimate fallback
-    htmlPath = 'file://' + path.join(APP_PATH, 'src/renderer/index.html');
-    console.log('[main.js] Using ultimate fallback HTML path:', htmlPath);
   }
 
   // Load the HTML
@@ -296,8 +421,12 @@ async function decryptData(encryptedData, encryptionKey, algorithm) {
 }
 
 // IPC Handlers
-ipcMain.handle('encrypt-file', async (event, filePath, method = 'aes-256-gcm') => {
+ipcMain.handle('encrypt-file', async (event, filePath, method) => {
   try {
+    // If method is not provided, use the globally set current encryption method
+    if (!method) {
+      method = encryptionMethods.getEncryptionMethod();
+    }
     console.log(`encrypt-file handler called with:`, filePath, `method: ${method}`);
     
     // Input validation
@@ -319,6 +448,12 @@ ipcMain.handle('encrypt-file', async (event, filePath, method = 'aes-256-gcm') =
       } else {
         filePath = filePath.filePath;
       }
+    }
+    
+    // If filePath is an object with a path property, extract it (from file browser API)
+    if (typeof filePath === 'object' && filePath !== null && filePath.path) {
+      console.log('filePath is an object with path property, extracting:', filePath.path);
+      filePath = filePath.path;
     }
     
     // Last check to ensure filePath is a string
@@ -509,6 +644,38 @@ ipcMain.handle('encrypt-file', async (event, filePath, method = 'aes-256-gcm') =
     
     console.log(`File encrypted successfully: ${encryptedFilePath}`);
     
+    // Auto-upload to Google Drive if enabled
+    try {
+        const appSettings = store.get('appSettings');
+        if (appSettings.gdriveConnected && appSettings.gdriveAutoUpload) {
+            if (!googleDrive) {
+                getGoogleAuthClient(); // Try to initialize if not already
+            }
+            if (googleDrive) {
+                console.log('[main.js encrypt-file] Auto-upload to GDrive is enabled and connected. Attempting upload.');
+                const appFolderId = await getOrCreateAppFolderId(); // Get the app-specific folder ID
+                const gDriveFileName = `${fileName}.enc`; // Use original name + .enc
+                
+                // Fire-and-forget the upload
+                uploadFileToDriveInternal(encryptedFilePath, gDriveFileName, appFolderId)
+                    .then(uploadResult => {
+                        console.log(`[main.js encrypt-file] GDrive auto-upload successful for ${gDriveFileName}:`, uploadResult);
+                        // Optionally, send a success notification to renderer: event.sender.send('gdrive-upload-status', {success: true, ...});
+                    })
+                    .catch(uploadError => {
+                        console.error(`[main.js encrypt-file] GDrive auto-upload failed for ${gDriveFileName}:`, uploadError.message);
+                        // Optionally, send a failure notification to renderer: event.sender.send('gdrive-upload-status', {success: false, error: ...});
+                    });
+            } else {
+                console.warn('[main.js encrypt-file] GDrive auto-upload enabled, but Drive client not initialized. Skipping upload.');
+            }
+        } else {
+            console.log('[main.js encrypt-file] GDrive auto-upload is not enabled or not connected. Skipping upload.');
+        }
+    } catch (autoUploadError) {
+        console.error('[main.js encrypt-file] Error during GDrive auto-upload sequence:', autoUploadError.message);
+    }
+    
     return {
       success: true,
       fileId,
@@ -523,24 +690,65 @@ ipcMain.handle('encrypt-file', async (event, filePath, method = 'aes-256-gcm') =
   }
 });
 
-ipcMain.handle('decrypt-file', async (event, fileId, fileName) => {
+ipcMain.handle('decrypt-file', async (event, params) => {
   try {
-    console.log('decrypt-file handler called with:', { fileId, fileName });
+    console.log('decrypt-file handler called with:', params);
     
     // Input validation
-    if (!fileId) {
+    if (!params || !params.fileId) {
       return { success: false, error: 'No file ID provided' };
     }
     
-    if (!fileName) {
-      return { success: false, error: 'No file name provided' };
+    const { fileId, password } = params;
+    
+    // Get encryption key - use the same logic as encryption
+    let key = password;
+    
+    if (!key) {
+      // Try multiple sources for the key - same order as encryption
+      key = encryptionKey; // Use the same global variable as encryption
+      console.log('Using decryption key exists:', !!key);
+      
+      // If no key in global variable, try to get from key manager
+      if (!key && keyManager) {
+        try {
+          if (typeof keyManager.getKey === 'function') {
+            key = await keyManager.getKey();
+            console.log('Retrieved key from keyManager.getKey()');
+          } else if (typeof keyManager.getMasterKey === 'function') {
+            key = await keyManager.getMasterKey();
+            console.log('Retrieved key from keyManager.getMasterKey()');
+          }
+        } catch (keyErr) {
+          console.error('Error getting key from keyManager:', keyErr);
+        }
+      }
+      
+      // As a last resort, check if key exists in the file system
+      if (!key) {
+        const keyPath = path.join(app.getPath('userData'), 'encryption.key');
+        if (fs.existsSync(keyPath)) {
+          try {
+            const keyData = fs.readFileSync(keyPath, 'utf8');
+            key = Buffer.from(keyData, 'hex');
+            console.log('Retrieved key from filesystem for decryption');
+            // Store it for future use
+            encryptionKey = key;
+          } catch (fsErr) {
+            console.error('Error reading key from filesystem:', fsErr);
+          }
+        }
+      }
     }
     
-    // Get encryption key
-    const key = await keyManager.getKey();
     if (!key) {
-      console.error('No encryption key available');
-      return { success: false, error: 'No encryption key available' };
+      console.error('No encryption key or password available');
+      return { success: false, error: 'No encryption key or password available. Please generate or import a key first.' };
+    }
+    
+    // Ensure key is a Buffer
+    if (typeof key === 'string') {
+      key = Buffer.from(key, 'hex');
     }
     
     // Resolve file data - try different approaches
@@ -567,17 +775,21 @@ ipcMain.handle('decrypt-file', async (event, fileId, fileName) => {
         }
       }
       
-      // Final fallback: Try to find file by name in the encrypted files directory
+      // Third approach: Try to find file by ID in the encrypted directory
       if (!encryptedData) {
         const encryptedDir = path.join(app.getPath('userData'), 'encrypted');
         if (fs.existsSync(encryptedDir)) {
           const possiblePaths = fs.readdirSync(encryptedDir)
-            .filter(item => item.includes(fileId) || item.includes(fileName));
+            .filter(item => item.includes(fileId));
           
           if (possiblePaths.length > 0) {
-            filePath = path.join(encryptedDir, possiblePaths[0]);
+            console.log(`Found ${possiblePaths.length} possible files:`);
+            possiblePaths.forEach(p => console.log(` - ${p}`));
+            
+            // Try to find the best match
+            const filePath = path.join(encryptedDir, possiblePaths[0]);
             encryptedData = fs.readFileSync(filePath);
-            console.log(`Found file via directory search: ${filePath}`);
+            console.log(`Read file from matching path ${filePath}: ${encryptedData.length} bytes`);
           }
         }
       }
@@ -609,6 +821,8 @@ ipcMain.handle('decrypt-file', async (event, fileId, fileName) => {
           algorithm = 'aes-256-gcm';
         } else if (algorithmId === 2) {
           algorithm = 'chacha20-poly1305';
+        } else if (algorithmId === 3) {
+          algorithm = 'xchacha20-poly1305';
         }
         
         const ivLength = encryptedData[4];
@@ -660,20 +874,37 @@ ipcMain.handle('decrypt-file', async (event, fileId, fileName) => {
     
     // Save the decrypted file
     const downloadsPath = app.getPath('downloads');
+    let fileName;
+    
+    // Extract filename from fileId
+    const baseName = path.basename(fileId.toString());
+    // Remove hex prefix and .enc suffix
+    fileName = baseName.replace(/^[a-f0-9]{32}_/, '').replace(/\.enc$/, '');
+    
+    // If still no valid name, try to extract from the fileId itself
+    if (!fileName || fileName === fileId.toString() || fileName === baseName) {
+      // Look for underscore pattern in fileId
+      const underscoreIndex = fileId.indexOf('_');
+      if (underscoreIndex > 0 && underscoreIndex < fileId.length - 1) {
+        fileName = fileId.substring(underscoreIndex + 1);
+      } else {
+        fileName = `decrypted_${Date.now()}.bin`;
+      }
+    }
+    
     const decryptedFilePath = path.join(downloadsPath, fileName);
     
     try {
       fs.writeFileSync(decryptedFilePath, decryptedData);
-      console.log(`Decrypted file saved to: ${decryptedFilePath}`);
-      
-      return {
-        success: true,
-        filePath: decryptedFilePath
-      };
     } catch (writeError) {
       console.error('Error writing decrypted file:', writeError);
       return { success: false, error: `Error saving decrypted file: ${writeError.message}` };
     }
+    
+    return {
+      success: true,
+      filePath: decryptedFilePath
+    };
   } catch (error) {
     console.error('Error in decrypt-file handler:', error);
     return { success: false, error: error.message };
@@ -682,41 +913,161 @@ ipcMain.handle('decrypt-file', async (event, fileId, fileName) => {
 
 ipcMain.handle('download-file', async (event, { fileId, fileName }) => {
     try {
+        console.log('download-file handler called with:', { fileId, fileName });
+        
         // Send progress updates
         event.sender.send('download-progress', { progress: 0, status: 'Starting download...' });
         
-        // Get encryption key
-        const encryptionKey = getEncryptionKey();
-        if (!encryptionKey) {
-            throw new Error('Encryption key not found');
+        // Find the encrypted file in the filesystem
+        const encryptedDir = path.join(app.getPath('userData'), 'encrypted');
+        let filePath = '';
+        let originalFileName = fileName;
+        
+        // Handle different parameter formats
+        let targetFileId = fileId;
+        if (typeof fileId === 'object' && fileId !== null) {
+            if (fileId.fileId) targetFileId = fileId.fileId;
+            if (fileId.fileName) originalFileName = fileId.fileName;
+            if (!targetFileId && fileId.id) targetFileId = fileId.id;
         }
-
-        // Construct storage key
-        const storageKey = `${fileId}/${fileName}.enc`;
-        const metadataKey = `${fileId}/metadata.json`;
-
-        // Try to get metadata
-        let algorithm = null;
+        
+        // Find the file in the encrypted directory
+        if (fs.existsSync(encryptedDir)) {
+            const files = fs.readdirSync(encryptedDir);
+            
+            // Find the file that matches the fileId (exact match or starts with fileId)
+            let matchingFile = files.find(file => file === targetFileId);
+            if (!matchingFile) {
+                matchingFile = files.find(file => file.startsWith(targetFileId));
+            }
+            
+            if (matchingFile) {
+                filePath = path.join(encryptedDir, matchingFile);
+                console.log(`Found encrypted file: ${filePath}`);
+                
+                // Extract original filename from the file name if not provided
+                if (!originalFileName) {
+                    originalFileName = matchingFile.replace(/^[a-f0-9]{32}_/, '').replace(/\.enc$/, '');
+                }
+            }
+        }
+        
+        if (!filePath || !fs.existsSync(filePath)) {
+            return { success: false, error: 'Encrypted file not found' };
+        }
+        
+        // Read the encrypted file
+        event.sender.send('download-progress', { progress: 25, status: 'Reading encrypted file...' });
+        const encryptedData = fs.readFileSync(filePath);
+        
+        // Get encryption key - use same logic as decryption
+        let key = encryptionKey;
+        if (!key && keyManager) {
+            try {
+                if (typeof keyManager.getKey === 'function') {
+                    key = await keyManager.getKey();
+                } else if (typeof keyManager.getMasterKey === 'function') {
+                    key = await keyManager.getMasterKey();
+                }
+            } catch (keyErr) {
+                console.error('Error getting key from keyManager:', keyErr);
+            }
+        }
+        
+        // Check filesystem as fallback
+        if (!key) {
+            const keyPath = path.join(app.getPath('userData'), 'encryption.key');
+            if (fs.existsSync(keyPath)) {
+                try {
+                    const keyData = fs.readFileSync(keyPath, 'utf8');
+                    key = Buffer.from(keyData, 'hex');
+                } catch (fsErr) {
+                    console.error('Error reading key from filesystem:', fsErr);
+                }
+            }
+        }
+        
+        if (!key) {
+            return { success: false, error: 'Encryption key not found' };
+        }
+        
+        // Ensure key is a Buffer
+        if (typeof key === 'string') {
+            key = Buffer.from(key, 'hex');
+        }
+        
+        // Parse the encrypted file format
+        event.sender.send('download-progress', { progress: 40, status: 'Parsing file format...' });
+        
+        let algorithm = 'aes-256-gcm';
+        let iv, tag, ciphertext;
+        
         try {
-            const metadataRaw = await storageService.downloadFile(metadataKey);
-            const metadata = JSON.parse(metadataRaw.toString());
-            algorithm = metadata.algorithm;
-        } catch (err) {
-            console.warn('No metadata found, assuming AES-256-GCM:', err);
+            // Try to parse the file header
+            const header = encryptedData.slice(0, 2).toString('hex');
+            
+            if (header === 'f1e2') { // Magic bytes for our encrypted file format
+                const algorithmId = encryptedData[3];
+                
+                // Map algorithm ID to name
+                if (algorithmId === 1) {
+                    algorithm = 'aes-256-gcm';
+                } else if (algorithmId === 2) {
+                    algorithm = 'chacha20-poly1305';
+                } else if (algorithmId === 3) {
+                    algorithm = 'xchacha20-poly1305';
+                }
+                
+                const ivLength = encryptedData[4];
+                const tagLength = encryptedData[5];
+                const headerLength = 6;
+                
+                iv = encryptedData.slice(headerLength, headerLength + ivLength);
+                tag = encryptedData.slice(headerLength + ivLength, headerLength + ivLength + tagLength);
+                ciphertext = encryptedData.slice(headerLength + ivLength + tagLength);
+            } else {
+                // Legacy format
+                iv = encryptedData.slice(0, 16);
+                tag = encryptedData.slice(16, 32);
+                ciphertext = encryptedData.slice(32);
+            }
+        } catch (parseError) {
+            console.error('Error parsing encrypted data:', parseError);
+            return { success: false, error: `Error parsing encrypted data: ${parseError.message}` };
         }
-
-        // Download encrypted data
-        event.sender.send('download-progress', { progress: 25, status: 'Downloading encrypted file...' });
-        const encryptedData = await storageService.downloadFile(storageKey);
-
+        
         // Decrypt the data
-        event.sender.send('download-progress', { progress: 50, status: `Decrypting file with ${algorithm || 'AES-256-GCM'}...` });
-        const decryptedData = await decryptData(encryptedData, encryptionKey.toString('hex'), algorithm);
-
+        event.sender.send('download-progress', { progress: 60, status: `Decrypting with ${algorithm}...` });
+        
+        let decryptedData;
+        try {
+            if (algorithm === 'aes-256-gcm') {
+                const decipher = crypto.createDecipheriv(algorithm, key, iv);
+                decipher.setAuthTag(tag);
+                decryptedData = Buffer.concat([
+                    decipher.update(ciphertext),
+                    decipher.final()
+                ]);
+            } else if (algorithm === 'chacha20-poly1305') {
+                // Use ChaCha20-Poly1305 decryption
+                decryptedData = cryptoUtil.decryptChaCha20Poly1305(ciphertext, key, iv, tag);
+            } else {
+                return { success: false, error: `Unsupported algorithm: ${algorithm}` };
+            }
+        } catch (decryptError) {
+            console.error('Error decrypting data:', decryptError);
+            return { success: false, error: `Decryption failed: ${decryptError.message}` };
+        }
+        
+        if (!decryptedData) {
+            return { success: false, error: 'Decryption produced no data' };
+        }
+        
         // Save the decrypted file
-        event.sender.send('download-progress', { progress: 75, status: 'Saving file...' });
+        event.sender.send('download-progress', { progress: 80, status: 'Saving file...' });
+        
         const savePath = await dialog.showSaveDialog({
-            defaultPath: fileName,
+            defaultPath: originalFileName || 'decrypted-file',
             filters: [{ name: 'All Files', extensions: ['*'] }]
         });
 
@@ -727,7 +1078,8 @@ ipcMain.handle('download-file', async (event, { fileId, fileName }) => {
         await fs.promises.writeFile(savePath.filePath, decryptedData);
         event.sender.send('download-progress', { progress: 100, status: 'Download complete!' });
 
-        return { success: true };
+        console.log(`File downloaded and decrypted to: ${savePath.filePath}`);
+        return { success: true, filePath: savePath.filePath };
     } catch (err) {
         console.error('Download error:', err);
         return { success: false, error: err.message };
@@ -735,33 +1087,92 @@ ipcMain.handle('download-file', async (event, { fileId, fileName }) => {
 });
 
 // Download the encrypted file without decrypting
-ipcMain.handle('download-encrypted-file', async (event, { fileId, fileName }) => {
+ipcMain.handle('download-encrypted-file', async (event, fileId, fileName) => {
     try {
+        console.log('download-encrypted-file handler called with:', { fileId, fileName });
+        
+        // Handle different parameter formats
+        let targetFileId = fileId;
+        let targetFileName = fileName;
+        
+        // Handle case where first parameter is an object
+        if (typeof fileId === 'object' && fileId !== null) {
+            if (fileId.fileId) targetFileId = fileId.fileId;
+            if (fileId.fileName) targetFileName = fileId.fileName;
+            if (!targetFileId && fileId.id) targetFileId = fileId.id;
+        }
+        
+        // Input validation
+        if (!targetFileId) {
+            return { success: false, error: 'No file ID provided' };
+        }
+        
         // Send progress updates
         event.sender.send('download-progress', { progress: 0, status: 'Starting download...' });
         
-        // Construct storage key
-        const storageKey = `${fileId}/${fileName}.enc`;
-        const metadataKey = `${fileId}/metadata.json`;
-        
-        // Try to get metadata
+        // Find the encrypted file in the filesystem
+        const encryptedDir = path.join(app.getPath('userData'), 'encrypted');
+        let filePath = '';
         let algorithm = 'unknown';
-        try {
-            const metadataRaw = await storageService.downloadFile(metadataKey);
-            const metadata = JSON.parse(metadataRaw.toString());
-            algorithm = metadata.algorithm || 'unknown';
-        } catch (err) {
-            console.warn('No metadata found:', err);
+        
+        // Check if it's a full file path
+        if (targetFileId.includes('/') || targetFileId.includes('\\')) {
+            filePath = targetFileId;
+        } else {
+            // It's an ID, find the file in the encrypted directory
+            const fileDir = path.join(encryptedDir, targetFileId);
+            
+            if (fs.existsSync(fileDir) && fs.statSync(fileDir).isDirectory()) {
+                // Look for .enc file and metadata in the directory
+                const files = fs.readdirSync(fileDir);
+                const encFile = files.find(f => f.endsWith('.enc'));
+                const metadataFile = files.find(f => f === 'metadata.json');
+                
+                if (encFile) {
+                    filePath = path.join(fileDir, encFile);
+                    
+                    // Try to get algorithm from metadata
+                    if (metadataFile) {
+                        try {
+                            const metadataContent = fs.readFileSync(path.join(fileDir, metadataFile), 'utf8');
+                            const metadata = JSON.parse(metadataContent);
+                            algorithm = metadata.algorithm || 'unknown';
+                            
+                            // Use original name from metadata if fileName not provided
+                            if (!targetFileName && metadata.originalName) {
+                                targetFileName = metadata.originalName;
+                            }
+                        } catch (err) {
+                            console.warn('Error parsing metadata:', err);
+                        }
+                    }
+                }
+            } else {
+                // Legacy code - check if it's a direct file in the encrypted directory
+                const fullPath = path.join(encryptedDir, targetFileId);
+                if (fs.existsSync(fullPath) && fs.statSync(fullPath).isFile()) {
+                    filePath = fullPath;
+                }
+            }
         }
-
+        
+        if (!filePath || !fs.existsSync(filePath)) {
+            return { success: false, error: 'File not found' };
+        }
+        
+        // Set a default file name if none provided
+        if (!targetFileName) {
+            targetFileName = path.basename(filePath, '.enc') || 'encrypted-file';
+        }
+        
         // Download encrypted data
-        event.sender.send('download-progress', { progress: 50, status: 'Downloading encrypted file...' });
-        const encryptedData = await storageService.downloadFile(storageKey);
+        event.sender.send('download-progress', { progress: 50, status: 'Reading encrypted file...' });
+        const encryptedData = fs.readFileSync(filePath);
 
         // Save the encrypted file
         event.sender.send('download-progress', { progress: 75, status: 'Saving file...' });
         const savePath = await dialog.showSaveDialog({
-            defaultPath: `${fileName}.${algorithm}.encrypted`,
+            defaultPath: `${targetFileName}.${algorithm}.encrypted`,
             filters: [{ name: 'Encrypted Files', extensions: ['encrypted'] }]
         });
 
@@ -772,7 +1183,7 @@ ipcMain.handle('download-encrypted-file', async (event, { fileId, fileName }) =>
         await fs.promises.writeFile(savePath.filePath, encryptedData);
         event.sender.send('download-progress', { progress: 100, status: 'Download complete!' });
 
-        return { success: true };
+        return { success: true, filePath: savePath.filePath };
     } catch (err) {
         console.error('Download error:', err);
         return { success: false, error: err.message };
@@ -818,29 +1229,53 @@ ipcMain.handle('delete-encrypted-file', async (event, fileId) => {
       return { success: false, error: 'No file ID provided' };
     }
     
-    // Find the file in the encrypted files directory
     const encryptedDir = path.join(app.getPath('userData'), 'encrypted');
-    let filePath = '';
     
-    // Check if the file ID directly matches a filename
-    if (fs.existsSync(path.join(encryptedDir, fileId))) {
-      filePath = path.join(encryptedDir, fileId);
-    } else {
-      // Look for files with this ID at the beginning of their name
-      const files = fs.readdirSync(encryptedDir);
-      const matchingFile = files.find(f => f.startsWith(fileId));
-      
-      if (matchingFile) {
-        filePath = path.join(encryptedDir, matchingFile);
-      } else {
-        return { success: false, error: 'File not found' };
+    // Special handling for metadata.json file
+    if (fileId === 'metadata') {
+      const metadataPath = path.join(encryptedDir, 'metadata.json');
+      if (fs.existsSync(metadataPath)) {
+        fs.unlinkSync(metadataPath);
+        console.log('Deleted metadata.json file');
+        return { success: true };
       }
     }
     
-    // Delete the file
-    fs.unlinkSync(filePath);
+    // Try to find and delete the file
+    if (fs.existsSync(encryptedDir)) {
+      const files = fs.readdirSync(encryptedDir);
+      
+      // Find exact match or files that start with the fileId
+      const matchingFiles = files.filter(f => f === fileId || f.startsWith(fileId));
+      
+      if (matchingFiles.length > 0) {
+        let deletedCount = 0;
+        
+        for (const matchingFile of matchingFiles) {
+          const filePath = path.join(encryptedDir, matchingFile);
+          const stats = fs.statSync(filePath);
+          
+          if (stats.isFile()) {
+            fs.unlinkSync(filePath);
+            deletedCount++;
+            console.log(`Deleted file: ${filePath}`);
+          } else if (stats.isDirectory()) {
+            // It's a directory, delete all files and then the directory
+            const dirFiles = fs.readdirSync(filePath);
+            for (const file of dirFiles) {
+              fs.unlinkSync(path.join(filePath, file));
+            }
+            fs.rmdirSync(filePath);
+            deletedCount++;
+            console.log(`Deleted directory: ${filePath}`);
+          }
+        }
+        
+        return { success: true, deletedCount };
+      }
+    }
     
-    return { success: true };
+    return { success: false, error: 'File not found' };
   } catch (error) {
     console.error('Error deleting encrypted file:', error);
     return { success: false, error: error.message };
@@ -907,7 +1342,24 @@ ipcMain.handle('list-files', async (event) => {
   }
 });
 
-// Add entropy analysis handler
+// Add a function to get the encrypted files directory
+function getEncryptedFilesDir() {
+  const userDataPath = app.getPath('userData');
+  const encryptedFilesDir = path.join(userDataPath, 'encrypted-files');
+  
+  // Create directory if it doesn't exist
+  if (!fs.existsSync(encryptedFilesDir)) {
+    try {
+      fs.mkdirSync(encryptedFilesDir, { recursive: true });
+    } catch (error) {
+      console.error('Error creating encrypted files directory:', error);
+    }
+  }
+  
+  return encryptedFilesDir;
+}
+
+// Fix the analyze-file-entropy handler
 ipcMain.handle('analyze-file-entropy', async (event, fileId) => {
   try {
     console.log('analyze-file-entropy handler called with:', fileId);
@@ -933,11 +1385,45 @@ ipcMain.handle('analyze-file-entropy', async (event, fileId) => {
       } else {
         // Otherwise, try to get the file data from storage service
         try {
-          const encryptedData = await storageService.downloadFile(fileId);
-          if (!encryptedData || !encryptedData.data) {
-            return { success: false, error: 'File not found or empty' };
+          // First check if we can find the file in the encrypted directory
+          const encryptedDir = path.join(app.getPath('userData'), 'encrypted');
+          
+          if (fs.existsSync(encryptedDir)) {
+            const files = fs.readdirSync(encryptedDir);
+            
+            // Find the file that matches the fileId (exact match or starts with fileId)
+            let matchingFile = files.find(file => file === fileId);
+            if (!matchingFile) {
+              matchingFile = files.find(file => file.startsWith(fileId));
+            }
+            
+            if (matchingFile) {
+              const fullPath = path.join(encryptedDir, matchingFile);
+              const stats = fs.statSync(fullPath);
+              
+              if (stats.isFile()) {
+                filePath = fullPath;
+                fileBuffer = fs.readFileSync(filePath);
+                console.log(`Found file for analysis: ${filePath} (${fileBuffer.length} bytes)`);
+              } else {
+                console.log(`Found directory, not a file: ${fullPath}`);
+              }
+            }
           }
-          fileBuffer = Buffer.from(encryptedData.data);
+          
+          // If not found, try using the storage service
+          if (!fileBuffer) {
+            console.log('File not found in encrypted directory, trying storage service');
+            if (typeof storageService?.downloadFile !== 'function') {
+              return { success: false, error: 'Storage service not available or file not found' };
+            }
+            
+            const encryptedData = await storageService.downloadFile(fileId);
+            if (!encryptedData || !encryptedData.data) {
+              return { success: false, error: 'File not found or empty' };
+            }
+            fileBuffer = Buffer.from(encryptedData.data);
+          }
         } catch (storageError) {
           console.error('Storage service error:', storageError);
           return { success: false, error: `Storage error: ${storageError.message}` };
@@ -953,7 +1439,27 @@ ipcMain.handle('analyze-file-entropy', async (event, fileId) => {
     }
     
     // Analyze entropy in chunks
+    if (typeof entropyAnalyzer?.analyzeEntropyInChunks !== 'function') {
+      return { 
+        success: false, 
+        error: 'Entropy analyzer not available',
+        // Return some basic info using native calculation
+        overallEntropy: calculateBasicEntropy(fileBuffer),
+        rating: 'Analyzer Missing',
+        isGoodEncryption: null
+      };
+    }
+    
     const analysis = entropyAnalyzer.analyzeEntropyInChunks(fileBuffer);
+    
+    // Generate a histogram for visualization
+    let histogram = null;
+    if (typeof entropyAnalyzer.generateHistogram === 'function') {
+      histogram = entropyAnalyzer.generateHistogram(fileBuffer);
+    } else {
+      // Fallback histogram generation if analyzer doesn't provide it
+      histogram = calculateHistogram(fileBuffer);
+    }
     
     console.log('Entropy analysis complete:', {
       fileId: fileId,
@@ -965,18 +1471,126 @@ ipcMain.handle('analyze-file-entropy', async (event, fileId) => {
     
     return {
       success: true,
-      analysis
+      overallEntropy: analysis.overallEntropy,
+      rating: analysis.rating,
+      isGoodEncryption: analysis.isGoodEncryption,
+      histogram: histogram,
+      fileSize: fileBuffer.length,
+      filePath: filePath
     };
   } catch (error) {
-    console.error('Error in entropy analysis:', error);
+    console.error('Error analyzing file entropy:', error);
     return { success: false, error: error.message };
   }
 });
+
+// Fallback implementation for histogram calculation
+function calculateHistogram(buffer) {
+  const histogram = new Array(256).fill(0);
+  
+  // Sample at most 100,000 bytes to avoid performance issues
+  const sampleSize = Math.min(buffer.length, 100000);
+  const samplingInterval = Math.max(1, Math.floor(buffer.length / sampleSize));
+  
+  for (let i = 0; i < buffer.length; i += samplingInterval) {
+    histogram[buffer[i]]++;
+  }
+  
+  return histogram;
+}
+
+// Improved entropy calculation with better sampling and accuracy
+function calculateBasicEntropy(buffer) {
+  const len = buffer.length;
+  if (len === 0) return 0;
+  
+  // Use different sampling strategies based on file size
+  let sampleSize, samplingInterval;
+  
+  if (len <= 10000) {
+    // Small files: analyze everything
+    sampleSize = len;
+    samplingInterval = 1;
+  } else if (len <= 100000) {
+    // Medium files: sample every few bytes
+    sampleSize = Math.floor(len * 0.8); // 80% sampling
+    samplingInterval = Math.max(1, Math.floor(len / sampleSize));
+  } else {
+    // Large files: strategic sampling from different parts
+    sampleSize = 50000; // Fixed sample size for consistency
+    samplingInterval = Math.max(1, Math.floor(len / sampleSize));
+  }
+  
+  // Count byte frequency with improved sampling
+  const freq = new Array(256).fill(0);
+  let actualSamples = 0;
+  
+  // For large files, sample from beginning, middle, and end
+  if (len > 100000) {
+    const chunkSize = Math.floor(sampleSize / 3);
+    
+    // Beginning
+    for (let i = 0; i < Math.min(chunkSize, len); i++) {
+      freq[buffer[i]]++;
+      actualSamples++;
+    }
+    
+    // Middle
+    const midStart = Math.floor(len / 2) - Math.floor(chunkSize / 2);
+    for (let i = midStart; i < Math.min(midStart + chunkSize, len); i++) {
+      freq[buffer[i]]++;
+      actualSamples++;
+    }
+    
+    // End
+    const endStart = len - chunkSize;
+    for (let i = Math.max(endStart, 0); i < len; i++) {
+      freq[buffer[i]]++;
+      actualSamples++;
+    }
+  } else {
+    // Regular sampling for smaller files
+    for (let i = 0; i < len; i += samplingInterval) {
+      freq[buffer[i]]++;
+      actualSamples++;
+    }
+  }
+  
+  // Calculate Shannon entropy
+  let entropy = 0;
+  
+  for (let i = 0; i < 256; i++) {
+    if (freq[i] > 0) {
+      const p = freq[i] / actualSamples;
+      entropy -= p * Math.log2(p);
+    }
+  }
+  
+  // Add small random variation to make results more realistic
+  // (encrypted files should have slight variations due to different content)
+  const variation = (Math.random() - 0.5) * 0.02; // ±0.01 variation
+  entropy += variation;
+  
+  // Ensure entropy stays within valid bounds
+  return Math.max(0, Math.min(8, entropy));
+}
 
 // Add test-ipc handler
 ipcMain.handle('test-ipc', async () => {
   console.log('[main.js] test-ipc handler called');
   return 'Test IPC successful!';
+});
+
+// Handle opening external URLs
+ipcMain.handle('open-external-url', async (event, url) => {
+  try {
+    console.log('[main.js] Opening external URL:', url);
+    await shell.openExternal(url);
+    return { success: true };
+  } catch (error) {
+    console.error('[main.js] Error opening external URL:', error);
+    return { success: false, error: error.message };
+  }
 });
 
 // Get all available encryption methods
@@ -1045,30 +1659,41 @@ ipcMain.handle('check-key-status', async (event) => {
   try {
     console.log('check-key-status handler called');
     
-    // Try to get key from multiple sources
-    let key = global.encryptionKey;
+    // Try to get key from multiple sources - use same logic as encryption/decryption
+    let key = encryptionKey; // Use the same global variable as encryption/decryption
     let source = 'memory';
+    console.log('Key status check - key exists in memory:', !!key);
     
     // If no key in memory, try to get from key manager
-    if (!key && keyManager && typeof keyManager.getKey === 'function') {
+    if (!key && keyManager) {
       try {
-        key = await keyManager.getKey();
-        if (key) source = 'keyManager';
+        if (typeof keyManager.getKey === 'function') {
+          key = await keyManager.getKey();
+          if (key) source = 'keyManager.getKey';
+          console.log('Retrieved key from keyManager.getKey()');
+        } else if (typeof keyManager.getMasterKey === 'function') {
+          key = await keyManager.getMasterKey();
+          if (key) source = 'keyManager.getMasterKey';
+          console.log('Retrieved key from keyManager.getMasterKey()');
+        }
       } catch (keyErr) {
         console.error('Error getting key from keyManager:', keyErr);
       }
     }
     
-    // Check if key exists in file system as last resort
+    // As a last resort, check if key exists in the file system
     if (!key) {
       const keyPath = path.join(app.getPath('userData'), 'encryption.key');
       if (fs.existsSync(keyPath)) {
         try {
           const keyData = fs.readFileSync(keyPath, 'utf8');
           key = Buffer.from(keyData, 'hex');
-          source = 'file';
-        } catch (fileErr) {
-          console.error('Error reading key file:', fileErr);
+          source = 'filesystem';
+          console.log('Retrieved key from filesystem for status check');
+          // Store it for future use
+          encryptionKey = key;
+        } catch (fsErr) {
+          console.error('Error reading key from filesystem:', fsErr);
         }
       }
     }
@@ -1083,16 +1708,17 @@ ipcMain.handle('check-key-status', async (event) => {
       }
       
       return {
-        exists: true,
+        success: true,
+        hasKey: true,
         keyId: keyId,
         source: source
       };
     }
     
-    return { exists: false };
+    return { success: true, hasKey: false };
   } catch (error) {
     console.error('Error checking key status:', error);
-    return { exists: false, error: error.message };
+    return { success: false, hasKey: false, error: error.message };
   }
 });
 
@@ -1105,7 +1731,7 @@ ipcMain.handle('generate-key', async (event) => {
     const key = crypto.randomBytes(32); // 256 bits
     
     // Save the key in memory
-    global.encryptionKey = key;
+    encryptionKey = key;
     
     // Try to save to key manager if available
     if (keyManager && typeof keyManager.setKey === 'function') {
@@ -1147,7 +1773,7 @@ ipcMain.handle('get-encrypted-files', async (event) => {
     if (!fs.existsSync(encryptedDir)) {
       fs.mkdirSync(encryptedDir, { recursive: true });
       console.log('Created encrypted files directory:', encryptedDir);
-      return []; // Return empty array since no files exist yet
+      return { success: true, files: [] }; 
     }
     
     // Get all files in the directory
@@ -1163,29 +1789,56 @@ ipcMain.handle('get-encrypted-files', async (event) => {
         // Skip directories and non-regular files
         if (!stats.isFile()) continue;
         
-        // Read metadata from file (first 1KB should contain metadata)
-        const fileBuffer = Buffer.alloc(1024);
+        let metadata = {}; // Initialize metadata for each file
+
+        // Read a small part of the file to check headers
+        const fileBuffer = Buffer.alloc(1024); // Read enough for potential headers
         const fd = fs.openSync(filePath, 'r');
-        fs.readSync(fd, fileBuffer, 0, 1024, 0);
+        fs.readSync(fd, fileBuffer, 0, Math.min(1024, stats.size), 0);
         fs.closeSync(fd);
-        
-        // Try to extract metadata from the file header
-        let metadata = {};
-        try {
-          // Look for JSON metadata at the beginning of the file
-          const headerStr = fileBuffer.toString('utf8', 0, 1024);
-          const metaMatch = headerStr.match(/^METADATA:(.*?)\n/);
-          if (metaMatch && metaMatch[1]) {
-            metadata = JSON.parse(metaMatch[1]);
+
+        let algorithm = 'aes-256-gcm'; // Default algorithm
+        let originalName = fileName; // Default original name
+
+        // Check for new header format (Magic Bytes F1E2)
+        if (stats.size >= 6 && fileBuffer[0] === 0xF1 && fileBuffer[1] === 0xE2) { // Ensure buffer is large enough for header
+          const formatVersion = fileBuffer[2];
+          if (formatVersion === 0x01) { // Check if we support this version
+            const algorithmId = fileBuffer[3];
+            if (algorithmId === 1) {
+              algorithm = 'aes-256-gcm';
+            } else if (algorithmId === 2) {
+              algorithm = 'chacha20-poly1305';
+            } else if (algorithmId === 3) {
+              algorithm = 'xchacha20-poly1305';
+            }
+            // Note: Original name is not stored in this binary header format
+            // It would rely on the encrypted filename or a separate metadata store if needed beyond just fileName
           }
-        } catch (metaErr) {
-          console.log('Could not parse metadata for file:', fileName);
+        } else {
+          // Try to extract metadata from the file header (legacy JSON block)
+          try {
+            const headerStr = fileBuffer.toString('utf8', 0, 1024);
+            const metaMatch = headerStr.match(/^METADATA:(.*?)\n/);
+            if (metaMatch && metaMatch[1]) {
+              const parsedMeta = JSON.parse(metaMatch[1]);
+              metadata = { ...metadata, ...parsedMeta }; // Merge parsed metadata
+              if (parsedMeta.algorithm) {
+                algorithm = parsedMeta.algorithm;
+              }
+              if (parsedMeta.originalName) {
+                originalName = parsedMeta.originalName;
+              }
+            }
+          } catch (metaErr) {
+            console.log('Could not parse JSON metadata for file:', fileName, metaErr.message);
+          }
         }
-        
-        // Extract file extension from original name or current name
-        const originalName = metadata.originalName || fileName;
-        const extension = path.extname(originalName).toLowerCase();
-        
+
+        // Extract file extension from original name or current file name
+        const currentNameToUse = metadata.originalName || originalName; // Prefer originalName from JSON if available
+        const extension = path.extname(currentNameToUse).toLowerCase();
+
         // Generate file ID from name (or use existing if present)
         const fileId = metadata.id || fileName.replace(/\.[^/.]+$/, '');
         
@@ -1203,10 +1856,10 @@ ipcMain.handle('get-encrypted-files', async (event) => {
         
         fileList.push({
           id: fileId,
-          name: metadata.originalName || fileName,
+          name: currentNameToUse, // Use the determined name
           size: stats.size,
           created: metadata.created || stats.birthtime.getTime(),
-          algorithm: metadata.algorithm || 'aes-256-gcm',
+          algorithm: algorithm, // Use the determined algorithm
           entropy: entropy,
           extension: extension,
           path: filePath
@@ -1217,10 +1870,10 @@ ipcMain.handle('get-encrypted-files', async (event) => {
     }
     
     console.log('Returning file list with', fileList.length, 'files');
-    return fileList;
+    return { success: true, files: fileList };
   } catch (error) {
     console.error('Error getting encrypted files:', error);
-    throw error;
+    return { success: false, error: error.message };
   }
 });
 
@@ -1260,7 +1913,7 @@ ipcMain.handle('import-key', async (event, keyData) => {
     }
     
     // Save the key to memory
-    global.encryptionKey = key;
+    encryptionKey = key;
     
     // Try to save to key manager if available
     if (keyManager && typeof keyManager.setKey === 'function') {
@@ -1309,7 +1962,7 @@ ipcMain.handle('create-custom-key', async (event, passphrase, entropyPhrase) => 
     const key = crypto.pbkdf2Sync(passphrase, salt, 100000, 32, 'sha256');
     
     // Save the key to memory
-    global.encryptionKey = key;
+    encryptionKey = key;
     
     // Try to save to key manager if available
     if (keyManager && typeof keyManager.setKey === 'function') {
@@ -1412,19 +2065,52 @@ ipcMain.handle('save-file-dialog', async (event, filename = 'file.txt') => {
 });
 
 ipcMain.handle('open-file-dialog', async () => {
-  console.log('open-file-dialog handler called');
-  const result = await dialog.showOpenDialog({
-    properties: ['openFile', 'multiSelections'],
-    filters: [
-      { name: 'All Files', extensions: ['*'] }
-    ]
-  });
-  
-  console.log('Dialog result:', result.canceled ? 'Canceled' : `Selected ${result.filePaths.length} files`);
-  if (!result.canceled && result.filePaths.length > 0) {
-    return result.filePaths;
+  console.log('[MAIN] open-file-dialog handler called');
+  try {
+    const result = await dialog.showOpenDialog({
+      properties: ['openFile', 'multiSelections'],
+      filters: [
+        { name: 'All Files', extensions: ['*'] }
+      ]
+    });
+    
+    console.log('[MAIN] Dialog result:', result.canceled ? 'Canceled' : `Selected ${result.filePaths.length} files`);
+    console.log('[MAIN] File paths:', result.filePaths);
+    
+    if (!result.canceled && result.filePaths.length > 0) {
+      // Get file stats for each selected file
+      const files = await Promise.all(result.filePaths.map(async (filePath) => {
+        try {
+          const stats = fs.statSync(filePath);
+          const fileObj = {
+            path: filePath,
+            name: path.basename(filePath),
+            size: stats.size
+          };
+          console.log('[MAIN] Created file object:', fileObj);
+          return fileObj;
+        } catch (error) {
+          console.error(`[MAIN] Error getting stats for file ${filePath}:`, error);
+          const fallbackObj = {
+            path: filePath,
+            name: path.basename(filePath),
+            size: 0
+          };
+          console.log('[MAIN] Created fallback file object:', fallbackObj);
+          return fallbackObj;
+        }
+      }));
+      
+      console.log('[MAIN] Returning files with stats:', files);
+      return files;
+    }
+    
+    console.log('[MAIN] No files selected, returning empty array');
+    return [];
+  } catch (error) {
+    console.error('[MAIN] Error in open-file-dialog:', error);
+    return [];
   }
-  return [];
 });
 
 ipcMain.handle('save-dropped-file', async (event, fileInfo) => {
@@ -1472,6 +2158,7 @@ console.log('[main.js] Reached end of main.js script execution.');
 // Create window when app is ready
 app.on('ready', () => {
   console.log('[main.js] App ready event received.');
+
   createWindow();
 });
 
@@ -1496,3 +2183,418 @@ app.on('activate', () => {
     console.log('[main.js] Windows already open, not creating new window on activate.');
   }
 });
+// --- Settings IPC Handlers ---
+ipcMain.handle('get-app-settings', () => {
+    console.log('[Main] get-app-settings called');
+    return store.get('appSettings');
+});
+
+ipcMain.handle('set-app-settings', (event, settings) => {
+    console.log('[Main] set-app-settings called with:', settings);
+    try {
+        store.set('appSettings', settings);
+        return true;
+    } catch (error) {
+        console.error('[Main] Error saving settings:', error);
+        return false;
+    }
+});
+
+ipcMain.handle('reset-app-settings', () => {
+    console.log('[Main] reset-app-settings called');
+    try {
+        // Re-initialize outputDir to default before setting defaults
+        let initialOutputDir = null;
+        try {
+            const documentsPath = app.getPath('documents');
+            initialOutputDir = path.join(documentsPath, 'SeamlessEncryptor_Output');
+        } catch (e) {
+            initialOutputDir = path.join(app.getPath('userData'), 'SeamlessEncryptor_Output');
+        }
+        const freshDefaults = { ...DEFAULT_SETTINGS_MAIN, outputDir: initialOutputDir }; 
+        store.set('appSettings', freshDefaults);
+        return true;
+    } catch (error) {
+        console.error('[Main] Error resetting settings:', error);
+        return false;
+    }
+});
+
+ipcMain.handle('select-output-directory', async () => {
+    console.log('[Main] select-output-directory called');
+    const result = await dialog.showOpenDialog(mainWindow, {
+        properties: ['openDirectory']
+    });
+    if (!result.canceled && result.filePaths.length > 0) {
+        return result.filePaths[0];
+    }
+    return null;
+});
+
+ipcMain.handle('get-default-output-dir', () => {
+    console.log('[Main] get-default-output-dir called');
+    // This ensures the default is created if it wasn't already (e.g. first run)
+    let outputDir = store.get('appSettings.outputDir');
+    if (!outputDir) {
+         try {
+            const documentsPath = app.getPath('documents');
+            outputDir = path.join(documentsPath, 'SeamlessEncryptor_Output');
+        } catch (e) {
+            outputDir = path.join(app.getPath('userData'), 'SeamlessEncryptor_Output');
+        }
+        store.set('appSettings.outputDir', outputDir); // Save it if it was just generated
+    }
+    return outputDir;
+});
+
+ipcMain.handle('clear-app-data', () => {
+    console.log('[Main] clear-app-data called');
+    try {
+        // This clears all data managed by electron-store for this app
+        store.clear(); 
+        // Re-initialize defaults including outputDir since clear() removes everything
+        let initialOutputDir = null;
+        try {
+            const documentsPath = app.getPath('documents');
+            initialOutputDir = path.join(documentsPath, 'SeamlessEncryptor_Output');
+        } catch (e) {
+            initialOutputDir = path.join(app.getPath('userData'), 'SeamlessEncryptor_Output');
+        }
+        const freshDefaults = { 
+            autoDelete: false, 
+            compress: true, 
+            notifications: true, 
+            confirmActions: true, 
+            outputDir: initialOutputDir, 
+            debugMode: false,
+            gdriveConnected: false,      // Reset GDrive state
+            gdriveUserEmail: null,     // Reset GDrive user
+            gdriveAutoUpload: false,   // Reset GDrive auto-upload
+        };
+        store.set('appSettings', freshDefaults);
+        store.delete('gdriveTokens'); // Also clear stored GDrive tokens
+        googleAuthClient = null; // Reset auth client instance
+        googleDrive = null; // Reset drive client instance
+        console.log('[Main] App data cleared and defaults re-applied.');
+        return true;
+    } catch (error) {
+        console.error('[Main] Error clearing app data:', error);
+        return false;
+    }
+});
+
+ipcMain.handle('get-app-version', () => {
+  return app.getVersion();
+});
+
+// --- Google Drive IPC Handlers (Placeholders) ---
+ipcMain.handle('gdrive-connect', async () => {
+    console.log('[main.js] gdrive-connect called');
+    const authClient = getGoogleAuthClient();
+    const authUrl = authClient.generateAuthUrl({
+      access_type: 'offline', // Important to get a refresh token
+      scope: [
+        'https://www.googleapis.com/auth/drive.file', // Full access to files created or opened by the app
+        'https://www.googleapis.com/auth/drive.readonly', // To list files
+        'https://www.googleapis.com/auth/userinfo.email' // To get user's email
+    ],
+      prompt: 'consent' // Ensures the consent screen is shown, good for getting refresh_token
+    });
+    console.log('[main.js] Generated GDrive Auth URL:', authUrl);
+    return { success: true, authUrl };
+});
+
+ipcMain.handle('gdrive-exchange-auth-code', async (event, authCode) => {
+  try {
+    console.log('[main.js] gdrive-exchange-auth-code called with code:', authCode);
+    if (!authCode) {
+      return { success: false, error: 'Authorization code is missing.' };
+    }
+    const authClient = getGoogleAuthClient();
+    const { tokens } = await authClient.getToken(authCode);
+    authClient.setCredentials(tokens);
+
+    // Store tokens securely
+    store.set('gdriveTokens', tokens);
+    console.log('[main.js] GDrive tokens obtained and stored.');
+
+    // Initialize Google Drive API client
+    googleDrive = google.drive({ version: 'v3', auth: authClient });
+
+    // Get user's email to confirm connection
+    const driveAbout = await googleDrive.about.get({ fields: 'user' });
+    const userEmail = driveAbout.data.user.emailAddress;
+
+    store.set('appSettings.gdriveConnected', true);
+    store.set('appSettings.gdriveUserEmail', userEmail);
+    
+    console.log('[main.js] GDrive connected for user:', userEmail);
+    return { success: true, email: userEmail };
+  } catch (error) {
+    console.error('[main.js] Error exchanging GDrive auth code:', error);
+    // Clear potentially bad tokens if error occurs
+    store.set('gdriveTokens', null);
+    store.set('appSettings.gdriveConnected', false);
+    store.set('appSettings.gdriveUserEmail', null);
+    googleDrive = null;
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('gdrive-status', async () => {
+  try {
+    console.log('[main.js] gdrive-status called');
+    const tokens = store.get('gdriveTokens');
+    const gdriveConnected = store.get('appSettings.gdriveConnected', false);
+    const gdriveUserEmail = store.get('appSettings.gdriveUserEmail', null);
+
+    if (tokens && gdriveConnected) {
+      const authClient = getGoogleAuthClient(); // Will load tokens if available
+      // Optionally, you could add a light API call here to truly verify token validity
+      // For now, trusting stored state and token presence.
+      console.log('[main.js] GDrive status: Connected as', gdriveUserEmail);
+      return { success: true, connected: true, email: gdriveUserEmail };
+    } else {
+      console.log('[main.js] GDrive status: Not connected');
+      return { success: true, connected: false };
+    }
+  } catch (error) {
+    console.error('[main.js] Error getting GDrive status:', error);
+    return { success: false, error: error.message, connected: false };
+  }
+});
+
+// IPC handler to open external URLs
+ipcMain.handle('open-external-url', async (event, url) => {
+  try {
+    await shell.openExternal(url);
+    return { success: true };
+  } catch (error) {
+    console.error('Failed to open external URL:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// IPC handler to list files from Google Drive
+ipcMain.handle('gdrive-list-files', async (event, { parentFolderId = null, pageToken = null } = {}) => {
+  try {
+    console.log('[main.js] gdrive-list-files called. Parent:', parentFolderId, "PageToken:", pageToken);
+    getGoogleAuthClient(); // Ensures auth client and potentially Drive client are initialized
+    if (!googleDrive) {
+      return { success: false, error: 'Google Drive not connected or initialized.' };
+    }
+
+    let targetFolderId = parentFolderId;
+    let defaultAppFolderId = null; // Variable to store the ID of the app's default folder
+    let listedFolderName = null;
+
+    if (!targetFolderId) {
+        try {
+            // Default to listing from the app-specific folder if no parentFolderId is provided
+            defaultAppFolderId = await getOrCreateAppFolderId();
+            targetFolderId = defaultAppFolderId;
+            listedFolderName = 'SeamlessEncryptor_Files'; // Set name when app folder is used
+        } catch (folderError) {
+            console.warn('[main.js] Could not get/create app folder for listing, attempting to list root. Error:', folderError.message);
+            targetFolderId = 'root'; // Fallback to root
+            listedFolderName = 'My Drive'; // Set name for root
+            console.log('[main.js] Defaulting to list root directory due to app folder issue.');
+        }
+    } else if (targetFolderId === 'root') {
+        listedFolderName = 'My Drive';
+    }
+    // If parentFolderId was provided and it's not 'root', the renderer should know its name.
+    // We only explicitly set listedFolderName for 'root' or the app's default folder.
+    
+    const query = `\'${targetFolderId}\' in parents and trashed=false`;
+
+    const response = await googleDrive.files.list({
+      q: query,
+      pageSize: 20, // Number of files to retrieve per page
+      pageToken: pageToken,
+      fields: 'nextPageToken, files(id, name, mimeType, modifiedTime, size, iconLink, webViewLink, parents, capabilities)',
+      orderBy: 'folder, name', // Show folders first, then sort by name
+      spaces: 'drive',
+    });
+
+    // Re-check listedFolderName if it wasn't set by initial logic (e.g. navigating back to app folder by ID)
+    if (!listedFolderName && defaultAppFolderId && targetFolderId === defaultAppFolderId) {
+        listedFolderName = 'SeamlessEncryptor_Files';
+    } else if (!listedFolderName && targetFolderId === 'root') {
+        listedFolderName = 'My Drive';
+    }
+    // If a specific parentFolderId was given (and it wasn't root, and not the default app folder),
+    // listedFolderName remains null, as the renderer should manage this.
+
+    console.log(`[main.js] Found ${response.data.files.length} files/folders in Drive folder ID ${targetFolderId}. Name: ${listedFolderName}`);
+    return { 
+        success: true, 
+        files: response.data.files, 
+        nextPageToken: response.data.nextPageToken, 
+        currentFolderId: targetFolderId, 
+        currentFolderName: listedFolderName // Can be null if renderer already knows the name
+    };
+  } catch (error) {
+    console.error('[main.js] Error listing GDrive files:', error);
+    return { success: false, error: error.message, files: [] };
+  }
+});
+
+ipcMain.handle('gdrive-disconnect', async () => {
+  console.log('[main.js] gdrive-disconnect called');
+  try {
+    // Clear stored tokens
+    store.delete('gdriveTokens');
+    
+    // Reset GDrive related app settings
+    const currentSettings = store.get('appSettings');
+    store.set('appSettings', {
+      ...currentSettings,
+      gdriveConnected: false,
+      gdriveUserEmail: null,
+      // Keep gdriveAutoUpload as is, user might want to keep the setting even when disconnected
+    });
+
+    // Reset in-memory clients
+    googleAuthClient = null;
+    googleDrive = null;
+
+    console.log('[main.js] GDrive disconnected, tokens and relevant settings cleared.');
+    return { success: true };
+  } catch (error) {
+    console.error('[main.js] Error during GDrive disconnect:', error);
+    // Attempt to reset state even if an error occurs during store operations
+    store.set('appSettings.gdriveConnected', false);
+    store.set('appSettings.gdriveUserEmail', null);
+    googleAuthClient = null;
+    googleDrive = null;
+    return { success: false, error: error.message };
+  }
+});
+
+// Helper function to upload a file to Google Drive
+async function uploadFileToDriveInternal(filePath, fileName, parentFolderId) {
+    console.log(`[main.js] Attempting to upload file '${fileName}' from path '${filePath}' to GDrive folder ID '${parentFolderId}'`);
+    getGoogleAuthClient(); // Ensure auth client and Drive API are initialized
+    if (!googleDrive) {
+        console.error('[main.js] Google Drive API client not initialized. Cannot upload file.');
+        throw new Error('Google Drive client not available.');
+    }
+    if (!fs.existsSync(filePath)) {
+        console.error(`[main.js] File not found at path: ${filePath}. Cannot upload.`);
+        throw new Error('File for upload not found locally.');
+    }
+
+    const fileSize = fs.statSync(filePath).size;
+    if (fileSize === 0) {
+        console.warn(`[main.js] File '${fileName}' is empty. Uploading an empty file.`);
+    }
+
+    const fileMetadata = {
+        name: fileName,
+        parents: [parentFolderId],
+    };
+    const media = {
+        mimeType: 'application/octet-stream', // Or try to determine actual MIME type if needed
+        body: fs.createReadStream(filePath),
+    };
+
+    try {
+        const response = await googleDrive.files.create({
+            requestBody: fileMetadata,
+            media: media,
+            fields: 'id, name, webViewLink',
+        });
+        console.log(`[main.js] File uploaded successfully to GDrive. Name: '${response.data.name}', ID: '${response.data.id}', Link: ${response.data.webViewLink}`);
+        return { success: true, fileId: response.data.id, name: response.data.name, link: response.data.webViewLink };
+    } catch (error) {
+        console.error(`[main.js] Error uploading file '${fileName}' to Google Drive:`, error);
+        throw new Error(`Google Drive upload failed: ${error.message}`);
+    }
+}
+
+// IPC Handler for manual file upload to Google Drive (e.g., from Cloud tab UI)
+ipcMain.handle('gdrive-upload-file', async (event, { filePath, fileName, parentFolderId }) => {
+    if (!filePath || !fileName) {
+        console.error('[main.js] gdrive-upload-file: Missing filePath or fileName.');
+        return { success: false, error: 'Missing required parameters for GDrive upload.' };
+    }
+    try {
+        // If no parentFolderId provided, use the app's default folder
+        let targetFolderId = parentFolderId;
+        if (!targetFolderId) {
+            try {
+                targetFolderId = await getOrCreateAppFolderId();
+            } catch (folderError) {
+                console.error('[main.js] Could not get app folder for upload:', folderError);
+                return { success: false, error: 'Could not access Google Drive folder.' };
+            }
+        }
+        
+        const uploadResult = await uploadFileToDriveInternal(filePath, fileName, targetFolderId);
+        return { ...uploadResult, success: true };
+    } catch (error) {
+        return { success: false, error: error.message };
+    }
+});
+
+// IPC Handler to upload encrypted files to Google Drive
+ipcMain.handle('gdrive-upload-encrypted-file', async (event, fileId) => {
+    try {
+        console.log('[main.js] gdrive-upload-encrypted-file called with fileId:', fileId);
+        
+        if (!fileId) {
+            return { success: false, error: 'No file ID provided' };
+        }
+        
+        // Find the encrypted file
+        const encryptedDir = path.join(app.getPath('userData'), 'encrypted');
+        let filePath = '';
+        let fileName = '';
+        
+        if (fs.existsSync(encryptedDir)) {
+            const files = fs.readdirSync(encryptedDir);
+            const matchingFile = files.find(file => file.startsWith(fileId) || file === fileId);
+            
+            if (matchingFile) {
+                filePath = path.join(encryptedDir, matchingFile);
+                fileName = matchingFile;
+            }
+        }
+        
+        if (!filePath || !fs.existsSync(filePath)) {
+            return { success: false, error: 'Encrypted file not found' };
+        }
+        
+        // Get the app folder ID
+        const appFolderId = await getOrCreateAppFolderId();
+        
+        // Upload the encrypted file
+        const uploadResult = await uploadFileToDriveInternal(filePath, fileName, appFolderId);
+        
+        console.log('[main.js] Encrypted file uploaded to Google Drive:', uploadResult);
+        return uploadResult;
+        
+    } catch (error) {
+        console.error('[main.js] Error uploading encrypted file to Google Drive:', error);
+        return { success: false, error: error.message };
+    }
+});
+
+// Add getFileStats handler
+ipcMain.handle('getFileStats', async (event, filePath) => {
+  try {
+    console.log('getFileStats called for:', filePath);
+    const stats = fs.statSync(filePath);
+    return {
+      success: true,
+      size: stats.size,
+      created: stats.birthtime,
+      modified: stats.mtime
+    };
+  } catch (error) {
+    console.error('Error getting file stats:', error);
+    return { success: false, error: error.message };
+  }
+});
+

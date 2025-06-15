@@ -12,11 +12,20 @@ export function updateKeyStatus(isAvailable, keyId = null) {
     
     // Find all key status elements
     const elements = {
+        // Main page elements
         keyIndicator: document.getElementById('key-indicator'),
         keyStatus: document.getElementById('key-status'),
+        
+        // Settings page elements
         settingsKeyIndicator: document.getElementById('settings-key-indicator'),
         settingsKeyStatus: document.getElementById('settings-key-status'),
-        noKeyWarning: document.getElementById('no-key-warning')
+        
+        // Key management page elements
+        keyInfoIndicator: document.getElementById('key-info-indicator'),
+        keyInfoStatus: document.getElementById('key-info-status'),
+        noKeyWarning: document.getElementById('no-key-warning'),
+        keyDetails: document.getElementById('key-details'),
+        currentKeyId: document.getElementById('current-key-id')
     };
     
     if (isAvailable) {
@@ -38,9 +47,24 @@ export function updateKeyStatus(isAvailable, keyId = null) {
             elements.settingsKeyStatus.textContent = keyId ? `Active (${keyId})` : 'Active';
         }
         
-        // Hide warning
+        // Key Management page indicator
+        if (elements.keyInfoIndicator) {
+            elements.keyInfoIndicator.className = 'status-dot active';
+        }
+        if (elements.keyInfoStatus) {
+            elements.keyInfoStatus.className = 'status-text active';
+            elements.keyInfoStatus.textContent = keyId ? `Key Active (ID: ${keyId})` : 'Key Active';
+        }
+        
+        // Show key details & hide warning
+        if (elements.keyDetails) {
+            elements.keyDetails.style.display = 'grid';
+        }
+        if (elements.currentKeyId && keyId) {
+            elements.currentKeyId.textContent = keyId;
+        }
         if (elements.noKeyWarning) {
-            elements.noKeyWarning.classList.add('hidden');
+            elements.noKeyWarning.style.display = 'none';
         }
     } else {
         // Main indicator
@@ -61,9 +85,21 @@ export function updateKeyStatus(isAvailable, keyId = null) {
             elements.settingsKeyStatus.textContent = 'Not Set';
         }
         
-        // Show warning
+        // Key Management page indicator
+        if (elements.keyInfoIndicator) {
+            elements.keyInfoIndicator.className = 'status-dot inactive';
+        }
+        if (elements.keyInfoStatus) {
+            elements.keyInfoStatus.className = 'status-text inactive';
+            elements.keyInfoStatus.textContent = 'No Key Available';
+        }
+        
+        // Hide key details & show warning
+        if (elements.keyDetails) {
+            elements.keyDetails.style.display = 'none';
+        }
         if (elements.noKeyWarning) {
-            elements.noKeyWarning.classList.remove('hidden');
+            elements.noKeyWarning.style.display = 'flex';
         }
     }
 }

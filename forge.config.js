@@ -30,10 +30,6 @@ module.exports = {
       name: '@electron-forge/plugin-webpack',
       config: {
         mainConfig: './webpack.main.config.js',
-        preload: {
-          entry: './preload.js',
-          config: './webpack.preload.config.js'
-        },
         renderer: {
           config: './webpack.renderer.config.js',
           entryPoints: [
@@ -41,11 +37,13 @@ module.exports = {
               html: './src/renderer/index.html',
               js: './src/renderer/renderer.js',
               name: 'main_window',
-              nodeIntegration: false,
+              preload: {
+                js: './src/preload/preload.js',
+              },
             },
           ],
         },
-        devContentSecurityPolicy: "default-src 'self' 'unsafe-inline' 'unsafe-eval'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline';",
+        devContentSecurityPolicy: "default-src 'self' 'unsafe-inline' 'unsafe-eval'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com;",
         port: 5000,
         loggerPort: 7000,
       },

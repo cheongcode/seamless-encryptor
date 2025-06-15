@@ -546,6 +546,21 @@
     
     <script src="js/crypto/keyManagement.js" type="module"></script>
     <script>
+        // Direct test of API methods to diagnose issues
+        console.log('[key-management.html] Script loaded');
+        setTimeout(() => {
+            // Give a moment for the module to load
+            console.log('[key-management.html] Running direct API test after timeout');
+            if (window.api) {
+                console.log('[key-management.html] Checking key status directly');
+                window.api.checkKeyStatus().then(result => {
+                    console.log('[key-management.html] Direct key status check result:', result);
+                }).catch(err => {
+                    console.error('[key-management.html] Direct key status check error:', err);
+                });
+            }
+        }, 1000);
+
         // Mobile menu toggle
         document.addEventListener('DOMContentLoaded', function() {
             const menuToggle = document.querySelector('.menu-toggle');
@@ -569,6 +584,468 @@
                     }
                 });
             }
+            
+            // Debug API availability - helpful for troubleshooting
+            console.log('[key-management.html] DOMContentLoaded triggered');
+            console.log('[key-management.html] API available?', !!window.api);
+            if (window.api) {
+                console.log('[key-management.html] API methods:', Object.keys(window.api));
+            } else {
+                console.log('[key-management.html] Searching for API in other places...');
+                console.log('[key-management.html] window.appApi?', !!window.appApi);
+                console.log('[key-management.html] window.electron?', !!window.electron);
+                console.log('[key-management.html] window.electron?.api?', !!(window.electron && window.electron.api));
+            }
+            
+            // Test API communication
+            if (window.api && window.api.testIPC) {
+                window.api.testIPC().then(result => {
+                    console.log('[key-management.html] API test result:', result);
+                }).catch(err => {
+                    console.error('[key-management.html] API test error:', err);
+                });
+            }
+        });
+    </script>
+    <script>
+        // FALLBACK: Direct key management without ES modules
+        // This is a fallback in case the module version fails to load or initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('[key-management-fallback] Setting up direct key management');
+            
+            // Get API 
+            const api = window.api || window.appApi || (window.electron && window.electron.api);
+            if (!api) {
+                console.error('[key-management-fallback] No API found');
+                return;
+            }
+            
+            // Check key status
+            function checkKeyStatus() {
+                console.log('[key-management-fallback] Checking key status');
+                if (api.checkKeyStatus) {
+                    api.checkKeyStatus().then(result => {
+                        console.log('[key-management-fallback] Key status result:', result);
+                        updateKeyStatusUI(result.exists, result.keyId);
+                    }).catch(err => {
+                        console.error('[key-management-fallback] Key status error:', err);
+                        updateKeyStatusUI(false);
+                    });
+                } else {
+                    console.warn('[key-management-fallback] No checkKeyStatus method found');
+                    updateKeyStatusUI(false);
+                }
+            }
+            
+            // Update UI
+            function updateKeyStatusUI(exists, keyId) {
+                console.log('[key-management-fallback] Updating UI:', exists, keyId);
+                
+                // Get elements
+                const indicator = document.getElementById('key-info-indicator');
+                const status = document.getElementById('key-info-status');
+                const warning = document.getElementById('no-key-warning');
+                const details = document.getElementById('key-details');
+                const idElement = document.getElementById('current-key-id');
+                
+                if (exists) {
+                    // Key exists
+                    if (indicator) indicator.className = 'status-dot active';
+                    if (status) {
+                        status.className = 'status-text active';
+                        status.textContent = keyId ? `Key Active (ID: ${keyId})` : 'Key Active';
+                    }
+                    if (warning) warning.style.display = 'none';
+                    if (details) details.style.display = 'grid';
+                    if (idElement && keyId) idElement.textContent = keyId;
+                } else {
+                    // No key
+                    if (indicator) indicator.className = 'status-dot inactive';
+                    if (status) {
+                        status.className = 'status-text inactive';
+                        status.textContent = 'No Key Available';
+                    }
+                    if (warning) warning.style.display = 'flex';
+                    if (details) details.style.display = 'none';
+                }
+            }
+            
+            // Wire up buttons
+            const genKeyBtn = document.getElementById('generate-key-btn');
+            if (genKeyBtn && api.generateKey) {
+                genKeyBtn.addEventListener('click', function() {
+                    console.log('[key-management-fallback] Generate key clicked');
+                    genKeyBtn.disabled = true;
+                    
+                    api.generateKey().then(result => {
+                        console.log('[key-management-fallback] Generate key result:', result);
+                        if (result && result.success) {
+                            updateKeyStatusUI(true, result.keyId);
+                            showToast('Key generated successfully!', 'success');
+                        } else {
+                            updateKeyStatusUI(false);
+                            showToast('Failed to generate key', 'error');
+                        }
+                    }).catch(err => {
+                        console.error('[key-management-fallback] Generate key error:', err);
+                        updateKeyStatusUI(false);
+                        showToast('Error generating key: ' + err.message, 'error');
+                    }).finally(() => {
+                        genKeyBtn.disabled = false;
+                    });
+                });
+            }
+            
+            const importKeyBtn = document.getElementById('import-key-btn');
+            if (importKeyBtn && api.importKey) {
+                importKeyBtn.addEventListener('click', function() {
+                    console.log('[key-management-fallback] Import key clicked');
+                    
+                    // Create a better import dialog instead of using prompt()
+                    createImportKeyDialog().then(keyData => {
+                        if (!keyData) {
+                            console.log('[key-management-fallback] Import canceled');
+                            return;
+                        }
+                        
+                        // Clean and validate the key
+                        const cleanedKey = keyData.replace(/\s+/g, '');
+                        if (!/^[0-9a-fA-F]{64}$/.test(cleanedKey)) {
+                            showToast('Invalid key format. Must be 64 hex characters (0-9, A-F).', 'error');
+                            return;
+                        }
+                        
+                        importKeyBtn.disabled = true;
+                        
+                        api.importKey(cleanedKey).then(result => {
+                            console.log('[key-management-fallback] Import key result:', result);
+                            if (result && result.success) {
+                                updateKeyStatusUI(true, result.keyId);
+                                showToast('Key imported successfully!', 'success');
+                            } else {
+                                updateKeyStatusUI(false);
+                                showToast('Failed to import key', 'error');
+                            }
+                        }).catch(err => {
+                            console.error('[key-management-fallback] Import key error:', err);
+                            updateKeyStatusUI(false);
+                            showToast('Error importing key: ' + err.message, 'error');
+                        }).finally(() => {
+                            importKeyBtn.disabled = false;
+                        });
+                    });
+                });
+            }
+            
+            /**
+             * Creates a dialog for key import with validation
+             * @returns {Promise<string|null>} The key data or null if cancelled
+             */
+            function createImportKeyDialog() {
+                return new Promise((resolve) => {
+                    // Create modal overlay
+                    const overlay = document.createElement('div');
+                    overlay.style.position = 'fixed';
+                    overlay.style.top = '0';
+                    overlay.style.left = '0';
+                    overlay.style.width = '100%';
+                    overlay.style.height = '100%';
+                    overlay.style.backgroundColor = 'rgba(0, 0, 0, 0.75)';
+                    overlay.style.zIndex = '1000';
+                    overlay.style.display = 'flex';
+                    overlay.style.alignItems = 'center';
+                    overlay.style.justifyContent = 'center';
+                    
+                    // Create modal content
+                    const modal = document.createElement('div');
+                    modal.style.backgroundColor = 'var(--bg-card, #1e232d)';
+                    modal.style.borderRadius = '8px';
+                    modal.style.padding = '20px';
+                    modal.style.width = '500px';
+                    modal.style.maxWidth = '90%';
+                    modal.style.border = '1px solid var(--border-color, rgba(255, 255, 255, 0.1))';
+                    modal.style.boxShadow = '0 4px 20px rgba(0, 0, 0, 0.3)';
+                    
+                    // Create title
+                    const title = document.createElement('h3');
+                    title.textContent = 'Import Encryption Key';
+                    title.style.fontSize = '1.2rem';
+                    title.style.marginBottom = '15px';
+                    title.style.fontWeight = '500';
+                    
+                    // Create description
+                    const desc = document.createElement('p');
+                    desc.textContent = 'Paste your 64-character hex key (0-9, A-F)';
+                    desc.style.fontSize = '0.9rem';
+                    desc.style.marginBottom = '15px';
+                    desc.style.color = 'var(--text-secondary, rgba(255, 255, 255, 0.6))';
+                    
+                    // Create input
+                    const input = document.createElement('textarea');
+                    input.placeholder = 'Paste your key here...';
+                    input.style.width = '100%';
+                    input.style.padding = '10px';
+                    input.style.height = '100px';
+                    input.style.backgroundColor = 'rgba(0, 0, 0, 0.2)';
+                    input.style.border = '1px solid var(--border-color, rgba(255, 255, 255, 0.1))';
+                    input.style.borderRadius = '4px';
+                    input.style.color = 'var(--text-primary, rgba(255, 255, 255, 0.9))';
+                    input.style.fontSize = '0.9rem';
+                    input.style.fontFamily = 'monospace';
+                    input.style.resize = 'none';
+                    input.style.marginBottom = '15px';
+                    
+                    // Create validation message
+                    const validation = document.createElement('p');
+                    validation.style.fontSize = '0.85rem';
+                    validation.style.marginBottom = '15px';
+                    validation.style.color = 'var(--accent-danger, #e64a4a)';
+                    validation.style.display = 'none';
+                    
+                    // Create button container
+                    const buttonContainer = document.createElement('div');
+                    buttonContainer.style.display = 'flex';
+                    buttonContainer.style.justifyContent = 'flex-end';
+                    buttonContainer.style.gap = '10px';
+                    
+                    // Create cancel button
+                    const cancelBtn = document.createElement('button');
+                    cancelBtn.textContent = 'Cancel';
+                    cancelBtn.style.padding = '8px 16px';
+                    cancelBtn.style.borderRadius = '6px';
+                    cancelBtn.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
+                    cancelBtn.style.color = 'var(--text-primary, rgba(255, 255, 255, 0.9))';
+                    cancelBtn.style.border = 'none';
+                    cancelBtn.style.cursor = 'pointer';
+                    
+                    // Create import button
+                    const importBtn = document.createElement('button');
+                    importBtn.textContent = 'Import';
+                    importBtn.style.padding = '8px 16px';
+                    importBtn.style.borderRadius = '6px';
+                    importBtn.style.backgroundColor = 'var(--accent-blue, #3e8ae6)';
+                    importBtn.style.color = 'white';
+                    importBtn.style.border = 'none';
+                    importBtn.style.cursor = 'pointer';
+                    importBtn.disabled = true;
+                    importBtn.style.opacity = '0.5';
+                    
+                    // Add input validation
+                    input.addEventListener('input', () => {
+                        const value = input.value.replace(/\s+/g, '');
+                        
+                        if (value.length === 0) {
+                            validation.style.display = 'none';
+                            importBtn.disabled = true;
+                            importBtn.style.opacity = '0.5';
+                            return;
+                        }
+                        
+                        if (!/^[0-9a-fA-F]+$/.test(value)) {
+                            validation.textContent = 'Key must contain only hexadecimal characters (0-9, A-F)';
+                            validation.style.display = 'block';
+                            importBtn.disabled = true;
+                            importBtn.style.opacity = '0.5';
+                            return;
+                        }
+                        
+                        if (value.length !== 64) {
+                            validation.textContent = `Key must be exactly 64 characters (current: ${value.length})`;
+                            validation.style.display = 'block';
+                            importBtn.disabled = true;
+                            importBtn.style.opacity = '0.5';
+                            return;
+                        }
+                        
+                        validation.style.display = 'none';
+                        importBtn.disabled = false;
+                        importBtn.style.opacity = '1';
+                    });
+                    
+                    // Handle button clicks
+                    cancelBtn.addEventListener('click', () => {
+                        document.body.removeChild(overlay);
+                        resolve(null);
+                    });
+                    
+                    importBtn.addEventListener('click', () => {
+                        const value = input.value.replace(/\s+/g, '');
+                        document.body.removeChild(overlay);
+                        resolve(value);
+                    });
+                    
+                    // Close on escape key
+                    document.addEventListener('keydown', function escHandler(e) {
+                        if (e.key === 'Escape') {
+                            document.body.removeChild(overlay);
+                            document.removeEventListener('keydown', escHandler);
+                            resolve(null);
+                        }
+                    });
+                    
+                    // Assemble modal
+                    buttonContainer.appendChild(cancelBtn);
+                    buttonContainer.appendChild(importBtn);
+                    
+                    modal.appendChild(title);
+                    modal.appendChild(desc);
+                    modal.appendChild(input);
+                    modal.appendChild(validation);
+                    modal.appendChild(buttonContainer);
+                    
+                    overlay.appendChild(modal);
+                    document.body.appendChild(overlay);
+                    
+                    // Focus the input
+                    setTimeout(() => input.focus(), 50);
+                });
+            }
+            
+            const customKeyBtn = document.getElementById('create-custom-key-btn');
+            const customKeyInput = document.getElementById('custom-key-input');
+            if (customKeyBtn && customKeyInput && api.createCustomKey) {
+                // Setup entropy meter
+                customKeyInput.addEventListener('input', function() {
+                    const passphrase = customKeyInput.value;
+                    const entropy = calculateEntropy(passphrase);
+                    updateEntropyMeter(entropy);
+                });
+                
+                customKeyBtn.addEventListener('click', function() {
+                    console.log('[key-management-fallback] Create custom key clicked');
+                    const passphrase = customKeyInput.value;
+                    if (!passphrase || passphrase.length < 8) {
+                        showToast('Enter a strong passphrase (at least 8 characters)', 'error');
+                        return;
+                    }
+                    
+                    customKeyBtn.disabled = true;
+                    
+                    api.createCustomKey(passphrase, passphrase).then(result => {
+                        console.log('[key-management-fallback] Create custom key result:', result);
+                        if (result && result.success) {
+                            updateKeyStatusUI(true, result.keyId);
+                            showToast('Custom key created successfully!', 'success');
+                            customKeyInput.value = '';
+                            updateEntropyMeter(0);
+                        } else {
+                            updateKeyStatusUI(false);
+                            showToast('Failed to create custom key', 'error');
+                        }
+                    }).catch(err => {
+                        console.error('[key-management-fallback] Create custom key error:', err);
+                        updateKeyStatusUI(false);
+                        showToast('Error creating custom key: ' + err.message, 'error');
+                    }).finally(() => {
+                        customKeyBtn.disabled = false;
+                    });
+                });
+            }
+            
+            // Calculate entropy for a password
+            function calculateEntropy(password) {
+                if (!password || password.length === 0) return 0;
+                
+                const length = password.length;
+                const hasLower = /[a-z]/.test(password);
+                const hasUpper = /[A-Z]/.test(password);
+                const hasDigit = /\d/.test(password);
+                const hasSpecial = /[^a-zA-Z0-9]/.test(password);
+                
+                let charSetSize = 0;
+                if (hasLower) charSetSize += 26;
+                if (hasUpper) charSetSize += 26;
+                if (hasDigit) charSetSize += 10;
+                if (hasSpecial) charSetSize += 33;
+                
+                if (charSetSize === 0) charSetSize = 95;
+                
+                const entropy = length * Math.log2(charSetSize);
+                return Math.round(entropy);
+            }
+            
+            // Update entropy meter
+            function updateEntropyMeter(entropyBits) {
+                const entropyFill = document.getElementById('entropy-fill');
+                const entropyStatus = document.getElementById('entropy-status');
+                
+                if (!entropyFill || !entropyStatus) return;
+                
+                let percentage = Math.min(100, (entropyBits / 128) * 100);
+                entropyFill.style.width = `${percentage}%`;
+                
+                let color, strength;
+                if (entropyBits < 40) {
+                    color = 'var(--accent-danger)';
+                    strength = 'Very Weak';
+                    customKeyBtn.disabled = true;
+                } else if (entropyBits < 60) {
+                    color = 'var(--accent-warning)';
+                    strength = 'Weak';
+                    customKeyBtn.disabled = true;
+                } else if (entropyBits < 80) {
+                    color = '#f59e0b';
+                    strength = 'Moderate';
+                    customKeyBtn.disabled = false;
+                } else if (entropyBits < 100) {
+                    color = '#10b981';
+                    strength = 'Strong';
+                    customKeyBtn.disabled = false;
+                } else {
+                    color = 'var(--accent-success)';
+                    strength = 'Very Strong';
+                    customKeyBtn.disabled = false;
+                }
+                
+                entropyFill.style.backgroundColor = color;
+                entropyStatus.textContent = `Strength: ${strength} (${entropyBits} bits)`;
+            }
+            
+            // Simple toast function
+            function showToast(message, type = 'info') {
+                console.log('[key-management-fallback] Showing toast:', message, type);
+                let toastContainer = document.getElementById('toast-container');
+                if (!toastContainer) {
+                    toastContainer = document.createElement('div');
+                    toastContainer.id = 'toast-container';
+                    toastContainer.style.position = 'fixed';
+                    toastContainer.style.bottom = '20px';
+                    toastContainer.style.right = '20px';
+                    toastContainer.style.zIndex = '9999';
+                    document.body.appendChild(toastContainer);
+                }
+                
+                const toast = document.createElement('div');
+                toast.style.minWidth = '250px';
+                toast.style.margin = '10px 0';
+                toast.style.padding = '12px 20px';
+                toast.style.borderRadius = '6px';
+                toast.style.boxShadow = '0 4px 8px rgba(0, 0, 0, 0.2)';
+                toast.style.fontSize = '0.9rem';
+                toast.style.color = 'white';
+                
+                switch (type) {
+                    case 'success': toast.style.backgroundColor = 'var(--accent-success, #4ade80)'; break;
+                    case 'error': toast.style.backgroundColor = 'var(--accent-danger, #e64a4a)'; break;
+                    case 'warning': toast.style.backgroundColor = 'var(--accent-warning, #e6a43e)'; break;
+                    default: toast.style.backgroundColor = 'var(--accent-blue, #3e8ae6)';
+                }
+                
+                toast.textContent = message;
+                toastContainer.appendChild(toast);
+                
+                setTimeout(() => {
+                    if (toast.parentNode) {
+                        toast.parentNode.removeChild(toast);
+                    }
+                    if (toastContainer.children.length === 0 && toastContainer.parentNode) {
+                        toastContainer.parentNode.removeChild(toastContainer);
+                    }
+                }, 4000);
+            }
+            
+            // Initialize
+            checkKeyStatus();
         });
     </script>
 </body>

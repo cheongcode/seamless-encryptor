@@ -34,9 +34,9 @@ try {
       console.log(`[preload.js] encryptFile() called with:`, filePath, `method: ${method}`);
       return safeInvoke('encrypt-file', filePath, method);
     },
-    decryptFile: (fileId, fileName) => {
-      console.log(`preload: decryptFile called with fileId: ${fileId}, fileName: ${fileName}`);
-      return safeInvoke('decrypt-file', fileId, fileName);
+    decryptFile: (fileId, password) => {
+      console.log(`preload: decryptFile called with fileId: ${fileId}, password: ${password ? '***' : 'none'}`);
+      return safeInvoke('decrypt-file', { fileId, password });
     },
     downloadFile: (fileId, fileName) => {
       console.log(`preload: downloadFile called with fileId: ${fileId}, fileName: ${fileName}`);
@@ -99,7 +99,7 @@ try {
       return safeInvoke('set-encryption-method', method);
     },
     
-    // File dialogs
+    // File dialogs and operations
     openFileDialog: () => {
       console.log('preload: openFileDialog called');
       return safeInvoke('open-file-dialog');
@@ -107,6 +107,10 @@ try {
     saveFileDialog: (fileName) => {
       console.log(`preload: saveFileDialog called with fileName: ${fileName}`);
       return safeInvoke('save-file-dialog', fileName);
+    },
+    getFileStats: (filePath) => {
+      console.log(`preload: getFileStats called with path: ${filePath}`);
+      return safeInvoke('getFileStats', filePath);
     },
     
     // Testing IPC (from test-preload.js)
@@ -151,6 +155,28 @@ try {
       };
       ipcRenderer.on('success', listener);
       return () => ipcRenderer.removeListener('success', listener);
+    },
+    
+    // Analyze file entropy for visualization
+    analyzeFileEntropy: (fileId) => {
+      console.log(`preload: analyzeFileEntropy called with fileId: ${fileId}`);
+      return safeInvoke('analyze-file-entropy', fileId);
+    },
+    
+    // List encrypted files
+    getEncryptedFiles: () => {
+      console.log('preload: getEncryptedFiles called');
+      return safeInvoke('get-encrypted-files');
+    },
+    
+    // Delete encrypted file
+    deleteEncryptedFile: (fileId) => {
+      console.log(`preload: deleteEncryptedFile called with fileId: ${fileId}`);
+      return safeInvoke('delete-encrypted-file', fileId);
+    },
+    openExternalUrl: (url) => {
+      console.log(`preload: openExternalUrl called with url: ${url}`);
+      return safeInvoke('open-external-url', url);
     }
   };
   
@@ -182,6 +208,30 @@ try {
   // Final safety check to ensure both APIs are available in all contexts
   console.log('[preload.js] Exposing window.api and window.electronAPI to ensure compatibility');
   
+  // Settings API
+  contextBridge.exposeInMainWorld('settingsApi', {
+    getAppSettings: () => safeInvoke('get-app-settings'),
+    setAppSettings: (settings) => safeInvoke('set-app-settings', settings),
+    resetAppSettings: () => safeInvoke('reset-app-settings'),
+    selectOutputDirectory: () => safeInvoke('select-output-directory'),
+    getDefaultOutputDir: () => safeInvoke('get-default-output-dir'),
+    clearAppData: () => safeInvoke('clear-app-data'),
+    getAppVersion: () => safeInvoke('get-app-version')
+  });
+  console.log('[preload.js] settingsApi successfully exposed.');
+
+  // Cloud API (for Google Drive)
+  contextBridge.exposeInMainWorld('cloudApi', {
+    connectGDrive: () => safeInvoke('gdrive-connect'),
+    exchangeGDriveAuthCode: (authCode) => safeInvoke('gdrive-exchange-auth-code', authCode),
+    getGDriveStatus: () => safeInvoke('gdrive-status'),
+    listGDriveFiles: (options) => safeInvoke('gdrive-list-files', options),
+    disconnectGDrive: () => safeInvoke('gdrive-disconnect'),
+    uploadFileToGDrive: (filePath, fileName, parentFolderId) => safeInvoke('gdrive-upload-file', { filePath, fileName, parentFolderId }),
+    uploadEncryptedFileToGDrive: (fileId) => safeInvoke('gdrive-upload-encrypted-file', fileId)
+  });
+  console.log('[preload.js] cloudApi successfully exposed.');
+
   console.log('[preload.js] Preload script finished execution.');
 } catch (error) {
   console.error('Error in preload script:', error);

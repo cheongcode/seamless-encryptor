@@ -109,24 +109,67 @@ function analyzeEntropyInChunks(buffer, chunkSize = 4096) {
 /**
  * Generate histogram data for entropy visualization
  * @param {Buffer} data - The data to analyze
+ * @param {number} maxSampleSize - Maximum number of bytes to sample for performance
  * @returns {Array<number>} - Frequency counts for each byte value (0-255)
  */
-function generateHistogram(data) {
+function generateHistogram(data, maxSampleSize = 100000) {
   if (!data || data.length === 0) {
     return new Array(256).fill(0);
   }
   
   const histogram = new Array(256).fill(0);
   
-  for (let i = 0; i < data.length; i++) {
-    histogram[data[i]]++;
+  // Determine if we need to sample
+  const useFullData = data.length <= maxSampleSize;
+  const sampleInterval = useFullData ? 1 : Math.max(1, Math.floor(data.length / maxSampleSize));
+  
+  // Count byte frequencies
+  if (useFullData) {
+    // Use all data
+    for (let i = 0; i < data.length; i++) {
+      histogram[data[i]]++;
+    }
+  } else {
+    // Sample data
+    for (let i = 0; i < data.length; i += sampleInterval) {
+      histogram[data[i]]++;
+    }
   }
   
   return histogram;
 }
 
+/**
+ * Analyze a specific file for entropy
+ * @param {string} filePath - Path to the file
+ * @returns {Promise<Object>} - Analysis results
+ */
+async function analyzeFileEntropy(filePath) {
+  try {
+    const fs = require('fs').promises;
+    const buffer = await fs.readFile(filePath);
+    const analysis = analyzeEntropyInChunks(buffer);
+    const histogram = generateHistogram(buffer);
+    
+    return {
+      success: true,
+      filePath,
+      fileSize: buffer.length,
+      ...analysis,
+      histogram
+    };
+  } catch (error) {
+    console.error('Error analyzing file:', error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+}
+
 module.exports = {
   calculateEntropy,
   analyzeEntropyInChunks,
-  generateHistogram
+  generateHistogram,
+  analyzeFileEntropy
 };
