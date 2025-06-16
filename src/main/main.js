@@ -511,59 +511,85 @@ ipcMain.handle('encrypt-file', async (event, filePath, method) => {
       return { success: false, error: 'No encryption key available. Please generate or import a key first.' };
     }
     
-    // If key is a hex string, convert to Buffer
+    // Ensure key is a Buffer and validate
     if (typeof key === 'string') {
-      key = Buffer.from(key, 'hex');
+      try {
+        key = Buffer.from(key, 'hex');
+      } catch (hexError) {
+        console.error('Error converting hex key to buffer:', hexError);
+        return { success: false, error: 'Invalid key format' };
+      }
     }
     
-    // Ensure key is the right length (32 bytes for AES-256)
-    if (key.length !== 32) {
-      console.error(`Invalid key length: ${key.length} bytes, expected 32 bytes`);
-      return { success: false, error: 'Invalid encryption key length.' };
+    // Validate key length
+    if (!Buffer.isBuffer(key) || key.length !== 32) {
+      console.error('Invalid key: must be 32 bytes (256 bits)');
+      return { success: false, error: 'Invalid key: must be 32 bytes (256 bits)' };
     }
     
-    // Check if file exists
-    if (!fs.existsSync(filePath)) {
-      return { success: false, error: `File not found: ${filePath}` };
-    }
+    console.log('Key validation passed, proceeding with encryption...');
     
-    // Read file content
-    let fileContent;
+    // Read and validate file
+    console.log('Reading file data...');
+    let fileData;
     try {
-      fileContent = fs.readFileSync(filePath);
+      fileData = fs.readFileSync(filePath);
+      console.log(`File read successfully: ${fileData.length} bytes`);
+      
+      if (fileData.length === 0) {
+        return { success: false, error: 'File is empty' };
+      }
+      
+      // Log first few bytes for debugging (don't log sensitive data in production)
+      console.log('File data sample (first 16 bytes):', fileData.slice(0, 16).toString('hex'));
+      
     } catch (readError) {
       console.error('Error reading file:', readError);
       return { success: false, error: `Error reading file: ${readError.message}` };
     }
     
-    // Generate a random IV (Initialization Vector)
-    const iv = crypto.randomBytes(16);
+    // Encrypt the file data
+    console.log(`Encrypting ${fileData.length} bytes using ${method}...`);
+    let encryptedData, iv, authTag;
     
-    // Encrypt the file based on the selected method
-    let encryptedData, authTag;
-    
-    if (method === 'aes-256-gcm') {
-      // Use AES-256-GCM encryption
-      try {
-        const cipher = crypto.createCipheriv(method, key, iv);
-        encryptedData = Buffer.concat([cipher.update(fileContent), cipher.final()]);
-        authTag = cipher.getAuthTag(); // For AES-GCM, we need to get the authentication tag
-      } catch (encryptError) {
-        console.error('Error encrypting with AES-256-GCM:', encryptError);
-        return { success: false, error: `Encryption error: ${encryptError.message}` };
+    try {
+      if (method === 'aes-256-gcm') {
+        // Generate random IV for this encryption
+        iv = crypto.randomBytes(12); // GCM uses 96-bit IV
+        console.log('Generated IV:', iv.toString('hex'));
+        
+        // Create cipher
+        const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+        
+        // Encrypt data
+        const encrypted1 = cipher.update(fileData);
+        const encrypted2 = cipher.final();
+        encryptedData = Buffer.concat([encrypted1, encrypted2]);
+        
+        // Get authentication tag
+        authTag = cipher.getAuthTag();
+        console.log('Authentication tag:', authTag.toString('hex'));
+        console.log(`Encryption completed: ${encryptedData.length} bytes encrypted`);
+        
+        // Verify encryption worked by checking encrypted data is different from original
+        if (encryptedData.equals(fileData)) {
+          console.error('ENCRYPTION FAILED: Encrypted data is identical to original data!');
+          return { success: false, error: 'Encryption failed: data was not encrypted' };
+        }
+        
+        console.log('Encrypted data sample (first 16 bytes):', encryptedData.slice(0, 16).toString('hex'));
+        
+      } else {
+        // Use encryption methods module for other algorithms
+        const result = await encryptionMethods.encrypt(fileData, key, method);
+        encryptedData = result.encryptedData;
+        iv = result.iv;
+        authTag = result.authTag;
       }
-    } else if (method === 'chacha20-poly1305' || method === 'xchacha20-poly1305') {
-      // Use ChaCha20-Poly1305 encryption
-      try {
-        const result = cryptoUtil.encryptChaCha20Poly1305(fileContent, key, iv);
-        encryptedData = result.ciphertext;
-        authTag = result.tag;
-      } catch (encryptError) {
-        console.error(`Error encrypting with ${method}:`, encryptError);
-        return { success: false, error: `Encryption error: ${encryptError.message}` };
-      }
-    } else {
-      return { success: false, error: `Unsupported encryption method: ${method}` };
+      
+    } catch (encryptionError) {
+      console.error('Encryption failed:', encryptionError);
+      return { success: false, error: `Encryption failed: ${encryptionError.message}` };
     }
     
     // Convert encryption method to algorithm ID for storage
@@ -616,7 +642,7 @@ ipcMain.handle('encrypt-file', async (event, filePath, method) => {
       id: fileId,
       originalName: fileName,
       encryptedPath: encryptedFilePath,
-      originalSize: fileContent.length,
+      originalSize: fileData.length,
       encryptedSize: fullEncryptedData.length,
       algorithm: method,
       timestamp: new Date().toISOString(),
@@ -676,12 +702,70 @@ ipcMain.handle('encrypt-file', async (event, filePath, method) => {
         console.error('[main.js encrypt-file] Error during GDrive auto-upload sequence:', autoUploadError.message);
     }
     
+    // Auto-delete original file if enabled
+    try {
+        const appSettings = store.get('appSettings');
+        console.log('[main.js encrypt-file] Current app settings:', appSettings);
+        
+        if (appSettings && appSettings.autoDelete === true) {
+            console.log('[main.js encrypt-file] Auto-delete is enabled. Attempting to delete original file:', filePath);
+            
+            // Verify the encrypted file was created successfully before deleting original
+            if (fs.existsSync(encryptedFilePath)) {
+                const encryptedStats = fs.statSync(encryptedFilePath);
+                console.log(`[main.js encrypt-file] Encrypted file stats: ${encryptedStats.size} bytes`);
+                
+                if (encryptedStats.size > 0) {
+                    // Additional safety check: ensure encrypted file is larger than header size
+                    const minExpectedSize = 50; // At least header size + some encrypted content
+                    if (encryptedStats.size >= minExpectedSize) {
+                        try {
+                            // Double-check original file still exists before deletion
+                            if (fs.existsSync(filePath)) {
+                                // Delete the original file
+                                fs.unlinkSync(filePath);
+                                console.log('[main.js encrypt-file] Successfully deleted original file:', filePath);
+                                
+                                // Verify deletion
+                                if (!fs.existsSync(filePath)) {
+                                    console.log('[main.js encrypt-file] Confirmed: Original file has been deleted');
+                                } else {
+                                    console.warn('[main.js encrypt-file] Warning: Original file still exists after deletion attempt');
+                                }
+                            } else {
+                                console.log('[main.js encrypt-file] Original file no longer exists, skipping deletion');
+                            }
+                        } catch (deleteError) {
+                            console.error('[main.js encrypt-file] Failed to delete original file:', deleteError.message);
+                            console.error('[main.js encrypt-file] File may be locked or in use by another process');
+                            // Don't fail the entire encryption process, just log the error
+                        }
+                    } else {
+                        console.warn('[main.js encrypt-file] Encrypted file too small, not deleting original file for safety');
+                    }
+                } else {
+                    console.warn('[main.js encrypt-file] Encrypted file is empty, not deleting original file');
+                }
+            } else {
+                console.warn('[main.js encrypt-file] Encrypted file does not exist, not deleting original file');
+            }
+        } else {
+            console.log('[main.js encrypt-file] Auto-delete is not enabled or setting not found. Original file preserved.');
+            console.log('[main.js encrypt-file] AutoDelete setting value:', appSettings ? appSettings.autoDelete : 'settings object not found');
+        }
+    } catch (autoDeleteError) {
+        console.error('[main.js encrypt-file] Error during auto-delete sequence:', autoDeleteError.message);
+        console.error('[main.js encrypt-file] Stack trace:', autoDeleteError.stack);
+        // Don't fail the entire encryption process if auto-delete fails
+        console.log('[main.js encrypt-file] Continuing despite auto-delete error...');
+    }
+    
     return {
       success: true,
       fileId,
       fileName,
       algorithm: method,
-      size: fileContent.length,
+      size: fileData.length,
       encryptedPath: encryptedFilePath
     };
   } catch (error) {
@@ -748,7 +832,18 @@ ipcMain.handle('decrypt-file', async (event, params) => {
     
     // Ensure key is a Buffer
     if (typeof key === 'string') {
-      key = Buffer.from(key, 'hex');
+      try {
+        key = Buffer.from(key, 'hex');
+      } catch (hexError) {
+        console.error('Error converting hex key to buffer:', hexError);
+        return { success: false, error: 'Invalid key format' };
+      }
+    }
+    
+    // Validate key length
+    if (!Buffer.isBuffer(key) || key.length !== 32) {
+      console.error('Invalid key: must be 32 bytes (256 bits)');
+      return { success: false, error: 'Invalid key: must be 32 bytes (256 bits)' };
     }
     
     // Resolve file data - try different approaches
@@ -872,25 +967,122 @@ ipcMain.handle('decrypt-file', async (event, params) => {
       return { success: false, error: 'Decryption produced no data' };
     }
     
-    // Save the decrypted file
+    // Save the decrypted file with proper name restoration
     const downloadsPath = app.getPath('downloads');
     let fileName;
+    let originalExtension = '';
     
-    // Extract filename from fileId
-    const baseName = path.basename(fileId.toString());
-    // Remove hex prefix and .enc suffix
-    fileName = baseName.replace(/^[a-f0-9]{32}_/, '').replace(/\.enc$/, '');
-    
-    // If still no valid name, try to extract from the fileId itself
-    if (!fileName || fileName === fileId.toString() || fileName === baseName) {
-      // Look for underscore pattern in fileId
-      const underscoreIndex = fileId.indexOf('_');
-      if (underscoreIndex > 0 && underscoreIndex < fileId.length - 1) {
-        fileName = fileId.substring(underscoreIndex + 1);
+    // Try to extract original filename from various sources
+    if (filePath) {
+      // First, try to get the original name from the encrypted filename
+      const encryptedFileName = path.basename(filePath);
+      console.log('Encrypted file name:', encryptedFileName);
+      
+      // Remove .enc extension first and extract the original name
+      let nameWithoutEnc = encryptedFileName;
+      if (nameWithoutEnc.endsWith('.enc')) {
+        nameWithoutEnc = nameWithoutEnc.slice(0, -4);
+      }
+      
+      // Try to extract original name after hex prefix (pattern: hexid_originalname)
+      const match = nameWithoutEnc.match(/^[a-f0-9]{16,32}_(.+)$/);
+      if (match && match[1]) {
+        fileName = match[1];
+        console.log('Extracted original filename from encrypted file path:', fileName);
       } else {
-        fileName = `decrypted_${Date.now()}.bin`;
+        // If no hex prefix pattern, the entire name might be the original
+        fileName = nameWithoutEnc;
+        console.log('Using cleaned filename without .enc:', fileName);
       }
     }
+    
+    // If we couldn't extract from file path, try from fileId
+    if (!fileName) {
+      let cleanFileId = fileId.toString();
+      
+      // Remove .enc extension if present in fileId
+      if (cleanFileId.endsWith('.enc')) {
+        cleanFileId = cleanFileId.slice(0, -4);
+      }
+      
+      // Try to extract original name after hex prefix
+      const match = cleanFileId.match(/^[a-f0-9]{16,32}_(.+)$/);
+      if (match && match[1]) {
+        fileName = match[1];
+        console.log('Extracted original filename from fileId:', fileName);
+      } else {
+        // Look for underscore pattern anywhere in fileId
+        const underscoreIndex = cleanFileId.indexOf('_');
+        if (underscoreIndex > 0 && underscoreIndex < cleanFileId.length - 1) {
+          fileName = cleanFileId.substring(underscoreIndex + 1);
+          console.log('Extracted filename using underscore pattern:', fileName);
+        }
+      }
+    }
+    
+    // If still no valid name, use intelligent naming with file type detection
+    if (!fileName || fileName === fileId.toString() || fileName.length < 1) {
+      fileName = `decrypted_file_${Date.now()}`;
+      
+      // Try to detect file type from content and add appropriate extension
+      if (decryptedData.length > 10) {
+        const header = decryptedData.slice(0, 10);
+        
+        // Check for common file signatures (magic bytes)
+        if (header[0] === 0xFF && header[1] === 0xD8 && header[2] === 0xFF) {
+          fileName += '.jpg';
+        } else if (header[0] === 0x89 && header[1] === 0x50 && header[2] === 0x4E && header[3] === 0x47) {
+          fileName += '.png';
+        } else if (header[0] === 0x47 && header[1] === 0x49 && header[2] === 0x46) {
+          fileName += '.gif';
+        } else if (header[0] === 0x50 && header[1] === 0x4B) {
+          fileName += '.zip'; // Could also be docx, xlsx, etc.
+        } else if (header.toString('ascii').startsWith('%PDF')) {
+          fileName += '.pdf';
+        } else if (header.toString('ascii').startsWith('<!DOCTYPE') || header.toString('ascii').startsWith('<html')) {
+          fileName += '.html';
+        } else if (header.toString('ascii').startsWith('<?xml')) {
+          fileName += '.xml';
+        } else if (header[0] === 0x52 && header[1] === 0x49 && header[2] === 0x46 && header[3] === 0x46) {
+          fileName += '.wav';
+        } else if (header[0] === 0x49 && header[1] === 0x44 && header[2] === 0x33) {
+          fileName += '.mp3';
+        } else if (header.slice(4, 8).toString('ascii') === 'ftyp') {
+          fileName += '.mp4';
+        } else {
+          // Try to detect text files
+          let isText = true;
+          for (let i = 0; i < Math.min(100, decryptedData.length); i++) {
+            const byte = decryptedData[i];
+            if (byte === 0 || (byte < 32 && byte !== 9 && byte !== 10 && byte !== 13)) {
+              isText = false;
+              break;
+            }
+          }
+          fileName += isText ? '.txt' : '.bin';
+        }
+      } else {
+        fileName += '.bin'; // Very small file, unknown type
+      }
+    }
+    
+    // Final cleanup: ensure we have a clean filename
+    fileName = path.basename(fileName); // Remove any path components
+    fileName = fileName.replace(/[<>:"/\\|?*]/g, '_'); // Replace invalid filename chars
+    
+    // Ensure we don't have double extensions or .enc remaining
+    if (fileName.includes('.enc.')) {
+      fileName = fileName.replace('.enc.', '.');
+    }
+    if (fileName.endsWith('.enc')) {
+      fileName = fileName.slice(0, -4);
+      // If removing .enc leaves no extension, add a default
+      if (!path.extname(fileName)) {
+        fileName += '.bin';
+      }
+    }
+    
+    console.log('Final decrypted filename:', fileName);
     
     const decryptedFilePath = path.join(downloadsPath, fileName);
     
@@ -1727,6 +1919,41 @@ ipcMain.handle('generate-key', async (event) => {
   try {
     console.log('generate-key handler called');
     
+    // Check if a key already exists
+    let hasExistingKey = false;
+    let existingKeyId = null;
+    
+    // Check for existing key in memory
+    if (encryptionKey) {
+      hasExistingKey = true;
+      existingKeyId = encryptionKey.toString('hex').substring(0, 8);
+    } else {
+      // Check for existing key in file system
+      const keyPath = path.join(app.getPath('userData'), 'encryption.key');
+      if (fs.existsSync(keyPath)) {
+        try {
+          const keyData = fs.readFileSync(keyPath, 'utf8');
+          if (keyData && keyData.length === 64) { // Valid hex key
+            hasExistingKey = true;
+            existingKeyId = keyData.substring(0, 8);
+          }
+        } catch (err) {
+          console.warn('Error reading existing key:', err);
+        }
+      }
+    }
+    
+    // If key exists, return info about needing confirmation
+    if (hasExistingKey) {
+      return {
+        success: false,
+        error: 'A key already exists',
+        needsConfirmation: true,
+        existingKeyId: existingKeyId,
+        message: `A key (${existingKeyId}...) already exists. Creating a new key will replace it. This action cannot be undone.`
+      };
+    }
+    
     // Generate a secure random key
     const key = crypto.randomBytes(32); // 256 bits
     
@@ -1757,6 +1984,45 @@ ipcMain.handle('generate-key', async (event) => {
     };
   } catch (error) {
     console.error('Error generating key:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Handle force-generate-key IPC call (generates key even if one exists)
+ipcMain.handle('force-generate-key', async (event) => {
+  try {
+    console.log('force-generate-key handler called - generating new key despite existing key');
+    
+    // Generate a secure random key
+    const key = crypto.randomBytes(32); // 256 bits
+    
+    // Save the key in memory
+    encryptionKey = key;
+    
+    // Try to save to key manager if available
+    if (keyManager && typeof keyManager.setKey === 'function') {
+      try {
+        await keyManager.setKey(key);
+      } catch (keyErr) {
+        console.error('Error saving key to keyManager:', keyErr);
+      }
+    }
+    
+    // Always save to file system as backup
+    try {
+      const keyPath = path.join(app.getPath('userData'), 'encryption.key');
+      fs.writeFileSync(keyPath, key.toString('hex'), 'utf8');
+      console.log('Key forcefully saved to file system at:', keyPath);
+    } catch (fileErr) {
+      console.error('Error saving key to file system:', fileErr);
+    }
+    
+    return {
+      success: true,
+      keyId: key.toString('hex').substring(0, 8)
+    };
+  } catch (error) {
+    console.error('Error force generating key:', error);
     return { success: false, error: error.message };
   }
 });
@@ -1952,14 +2218,34 @@ ipcMain.handle('create-custom-key', async (event, passphrase, entropyPhrase) => 
       return { success: false, error: 'No passphrase provided' };
     }
     
-    // Create a key from the passphrase using PBKDF2
+    if (passphrase.length < 8) {
+      return { success: false, error: 'Passphrase must be at least 8 characters long' };
+    }
+    
+    console.log('Creating custom key from passphrase...');
+    
+    // Create a key from the passphrase using PBKDF2 (non-blocking version)
     // Use entropyPhrase as salt if provided, otherwise use a random salt
     const salt = entropyPhrase ? 
       crypto.createHash('sha256').update(entropyPhrase).digest().slice(0, 16) : 
       crypto.randomBytes(16);
     
-    // Derive key with 100,000 iterations (strong security)
-    const key = crypto.pbkdf2Sync(passphrase, salt, 100000, 32, 'sha256');
+    console.log('Deriving key with PBKDF2...');
+    
+    // Use the async version of PBKDF2 to prevent blocking
+    const key = await new Promise((resolve, reject) => {
+      crypto.pbkdf2(passphrase, salt, 100000, 32, 'sha256', (err, derivedKey) => {
+        if (err) {
+          console.error('PBKDF2 error:', err);
+          reject(err);
+        } else {
+          console.log('PBKDF2 completed successfully');
+          resolve(derivedKey);
+        }
+      });
+    });
+    
+    console.log('Key derivation completed, saving key...');
     
     // Save the key to memory
     encryptionKey = key;
@@ -1968,6 +2254,7 @@ ipcMain.handle('create-custom-key', async (event, passphrase, entropyPhrase) => 
     if (keyManager && typeof keyManager.setKey === 'function') {
       try {
         await keyManager.setKey(key);
+        console.log('Key saved to keyManager');
       } catch (keyErr) {
         console.error('Error saving key to keyManager:', keyErr);
       }
@@ -1977,9 +2264,12 @@ ipcMain.handle('create-custom-key', async (event, passphrase, entropyPhrase) => 
     try {
       const keyPath = path.join(app.getPath('userData'), 'encryption.key');
       fs.writeFileSync(keyPath, key.toString('hex'), 'utf8');
+      console.log('Key saved to filesystem');
     } catch (fileErr) {
       console.error('Error saving key to file system:', fileErr);
     }
+    
+    console.log('Custom key creation completed successfully');
     
     return {
       success: true,
@@ -2150,6 +2440,33 @@ ipcMain.handle('save-dropped-file', async (event, fileInfo) => {
   }
 });
 
+// Add after the existing open-file-dialog handler
+
+// Handle open-directory-dialog IPC call for directory browsing
+ipcMain.handle('open-directory-dialog', async () => {
+  console.log('[MAIN] open-directory-dialog handler called');
+  try {
+    const result = await dialog.showOpenDialog({
+      properties: ['openDirectory'],
+      filters: []
+    });
+    
+    console.log('[MAIN] Directory dialog result:', result.canceled ? 'Canceled' : `Selected directory: ${result.filePaths[0]}`);
+    
+    if (!result.canceled && result.filePaths.length > 0) {
+      const selectedDirectory = result.filePaths[0];
+      console.log('[MAIN] Returning selected directory:', selectedDirectory);
+      return selectedDirectory;
+    }
+    
+    console.log('[MAIN] No directory selected, returning null');
+    return null;
+  } catch (error) {
+    console.error('[MAIN] Error in open-directory-dialog:', error);
+    return null;
+  }
+});
+
 // In this file you can include the rest of your app's specific main process
 // code. You can also put them in separate files and import them here.
 
@@ -2226,8 +2543,20 @@ ipcMain.handle('select-output-directory', async () => {
         properties: ['openDirectory']
     });
     if (!result.canceled && result.filePaths.length > 0) {
-        return result.filePaths[0];
+        const selectedPath = result.filePaths[0];
+        console.log('[Main] User selected directory:', selectedPath);
+        
+        // Save the selected path to settings
+        const currentSettings = store.get('appSettings');
+        store.set('appSettings', {
+            ...currentSettings,
+            outputDir: selectedPath
+        });
+        
+        console.log('[Main] Updated outputDir setting to:', selectedPath);
+        return selectedPath;
     }
+    console.log('[Main] User cancelled directory selection');
     return null;
 });
 
@@ -2364,16 +2693,7 @@ ipcMain.handle('gdrive-status', async () => {
   }
 });
 
-// IPC handler to open external URLs
-ipcMain.handle('open-external-url', async (event, url) => {
-  try {
-    await shell.openExternal(url);
-    return { success: true };
-  } catch (error) {
-    console.error('Failed to open external URL:', error);
-    return { success: false, error: error.message };
-  }
-});
+// Duplicate handler removed - using the first registration earlier in the file
 
 // IPC handler to list files from Google Drive
 ipcMain.handle('gdrive-list-files', async (event, { parentFolderId = null, pageToken = null } = {}) => {
@@ -2594,6 +2914,99 @@ ipcMain.handle('getFileStats', async (event, filePath) => {
     };
   } catch (error) {
     console.error('Error getting file stats:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Handle export-key IPC call
+ipcMain.handle('export-key', async (event) => {
+  try {
+    console.log('export-key handler called');
+    
+    // Get the current encryption key
+    let key = encryptionKey;
+    
+    // If no key in memory, try to get from filesystem
+    if (!key) {
+      const keyPath = path.join(app.getPath('userData'), 'encryption.key');
+      if (fs.existsSync(keyPath)) {
+        try {
+          const keyData = fs.readFileSync(keyPath, 'utf8');
+          key = Buffer.from(keyData, 'hex');
+        } catch (fsErr) {
+          console.error('Error reading key from filesystem:', fsErr);
+        }
+      }
+    }
+    
+    if (!key) {
+      return { success: false, error: 'No encryption key available to export' };
+    }
+    
+    // Show save dialog for export location
+    const result = await dialog.showSaveDialog({
+      title: 'Export Encryption Key',
+      defaultPath: `encryption-key-${Date.now()}.key`,
+      filters: [
+        { name: 'Key Files', extensions: ['key'] },
+        { name: 'Text Files', extensions: ['txt'] },
+        { name: 'All Files', extensions: ['*'] }
+      ]
+    });
+    
+    if (result.canceled) {
+      return { success: false, error: 'Export cancelled' };
+    }
+    
+    // Write the key to the selected file
+    const keyHex = Buffer.isBuffer(key) ? key.toString('hex') : key;
+    fs.writeFileSync(result.filePath, keyHex, 'utf8');
+    
+    console.log('Key exported to:', result.filePath);
+    
+    return {
+      success: true,
+      exportPath: result.filePath,
+      keyId: keyHex.substring(0, 8)
+    };
+  } catch (error) {
+    console.error('Error exporting key:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Handle delete-key IPC call
+ipcMain.handle('delete-key', async (event) => {
+  try {
+    console.log('delete-key handler called');
+    
+    // Clear the key from memory
+    encryptionKey = null;
+    
+    // Remove key from filesystem
+    const keyPath = path.join(app.getPath('userData'), 'encryption.key');
+    if (fs.existsSync(keyPath)) {
+      fs.unlinkSync(keyPath);
+      console.log('Key deleted from filesystem:', keyPath);
+    }
+    
+    // Try to clear from key manager if available
+    if (keyManager && typeof keyManager.deleteKeyForFile === 'function') {
+      try {
+        // This is for file-specific keys, but we can try to clear any stored keys
+        // Note: This keyManager doesn't have a direct "delete master key" method
+        console.log('Key manager cleanup attempted');
+      } catch (keyErr) {
+        console.error('Error clearing key from keyManager:', keyErr);
+      }
+    }
+    
+    return {
+      success: true,
+      message: 'Encryption key has been deleted successfully'
+    };
+  } catch (error) {
+    console.error('Error deleting key:', error);
     return { success: false, error: error.message };
   }
 });

@@ -459,17 +459,22 @@ function handleDrop(event) {
 
 // File dialog functionality
 async function openFileDialog() {
+    // Prevent multiple dialogs from opening simultaneously
+    if (window.fileDialogOpen) {
+        console.log('[RENDERER] File dialog already open, ignoring additional requests');
+        return;
+    }
+    
     try {
+        window.fileDialogOpen = true;
+        
         if (appApi?.openFileDialog) {
             console.log('[RENDERER] Calling openFileDialog...');
             const result = await appApi.openFileDialog();
             console.log('[RENDERER] File dialog result:', result);
-            console.log('[RENDERER] Result type:', typeof result);
-            console.log('[RENDERER] Is array:', Array.isArray(result));
             
             if (result && Array.isArray(result) && result.length > 0) {
-                console.log('[RENDERER] First item:', result[0]);
-                console.log('[RENDERER] First item type:', typeof result[0]);
+                console.log('[RENDERER] Processing', result.length, 'selected files');
                 
                 let files;
                 
@@ -477,9 +482,9 @@ async function openFileDialog() {
                 if (typeof result[0] === 'string') {
                     console.log('[RENDERER] Converting path strings to file objects');
                     // Convert path strings to file objects
-                    files = result.map(path => ({
-                        path: path,
-                        name: path.split('/').pop() || path.split('\\').pop() || 'Unknown File',
+                    files = result.map(filePath => ({
+                        path: filePath,
+                        name: filePath.split('/').pop() || filePath.split('\\').pop() || 'Unknown File',
                         size: 0 // Will be determined during encryption
                     }));
                 } else {
@@ -497,6 +502,11 @@ async function openFileDialog() {
     } catch (error) {
         console.error('[RENDERER] Error opening file dialog:', error);
         showToast('Failed to open file dialog', 'error');
+    } finally {
+        // Always clear the flag, even if there was an error
+        setTimeout(() => {
+            window.fileDialogOpen = false;
+        }, 500); // Small delay to prevent rapid successive calls
     }
 }
 

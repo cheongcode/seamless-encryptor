@@ -316,46 +316,88 @@
 
                 <!-- Key Management Section -->
                 <div id="keys-section" class="section hidden">
-                    <div class="max-w-2xl mx-auto">
+                    <div class="max-w-4xl mx-auto space-y-6">
+                        <!-- Current Status Banner -->
+                        <div id="current-key-status" class="p-4 bg-green-500/10 border border-green-500/20 rounded-lg">
+                            <div class="flex items-center space-x-3">
+                                <i class="fas fa-check-circle text-green-400"></i>
+                                <div>
+                                    <p class="font-medium text-green-400">Encryption key is active</p>
+                                    <p class="text-sm text-slate-400">Your files can be encrypted securely</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Available Keys List -->
                         <div class="bg-dark-light border border-slate-700 rounded-xl p-6">
-                            <h3 class="text-lg font-semibold mb-6">Encryption Key Management</h3>
+                            <div class="flex items-center justify-between mb-6">
+                                <h3 class="text-lg font-semibold">Available Encryption Keys</h3>
+                                <button id="refresh-keys-btn" class="px-4 py-2 bg-slate-600 hover:bg-slate-500 rounded-lg transition-colors text-sm">
+                                    <i class="fas fa-sync-alt mr-2"></i>
+                                    Refresh List
+                                </button>
+                            </div>
                             
-                            <div class="space-y-6">
-                                <!-- Current Key Status -->
-                                <div id="current-key-status" class="p-4 bg-red-500/10 border border-red-500/20 rounded-lg">
-                                    <div class="flex items-center space-x-3">
-                                        <i class="fas fa-exclamation-triangle text-red-400"></i>
-                                        <div>
-                                            <p class="font-medium text-red-400">No encryption key configured</p>
-                                            <p class="text-sm text-slate-400">Generate or import a key to start encrypting files</p>
-                                        </div>
+                            <!-- No Keys Warning -->
+                            <div id="no-keys-warning" class="hidden p-4 bg-orange-500/10 border border-orange-500/20 rounded-lg mb-6">
+                                <div class="flex items-center space-x-3">
+                                    <i class="fas fa-exclamation-triangle text-orange-400"></i>
+                                    <div>
+                                        <p class="font-medium text-orange-400">No Encryption Keys Found</p>
+                                        <p class="text-sm text-slate-400">You need to generate or import a key before you can encrypt or decrypt files. Use the buttons below to create your first key.</p>
                                     </div>
                                 </div>
+                            </div>
 
-                                <!-- Key Actions -->
-                                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                    <button id="generate-key-btn" class="p-4 bg-green-500 hover:bg-green-600 rounded-lg transition-colors text-center">
-                                        <i class="fas fa-plus-circle text-2xl mb-2"></i>
-                                        <p class="font-medium">Generate New Key</p>
-                                        <p class="text-sm opacity-80">Create a secure encryption key</p>
+                            <!-- Keys List Container -->
+                            <div id="keys-list" class="space-y-3 mb-6">
+                                <!-- Keys will be dynamically populated here -->
+                            </div>
+
+                            <!-- Key Management Actions -->
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <button id="generate-key-btn" class="p-4 bg-green-500 hover:bg-green-600 rounded-lg transition-colors text-center">
+                                    <i class="fas fa-plus-circle text-2xl mb-2"></i>
+                                    <p class="font-medium">Generate New Key</p>
+                                    <p class="text-sm opacity-80">Create a secure encryption key</p>
+                                </button>
+                                <button id="create-custom-key-btn" class="p-4 bg-orange-500 hover:bg-orange-600 rounded-lg transition-colors text-center">
+                                    <i class="fas fa-key text-2xl mb-2"></i>
+                                    <p class="font-medium">Create Custom Key</p>
+                                    <p class="text-sm opacity-80">Use your own passphrase</p>
+                                </button>
+                                <button id="import-key-btn" class="p-4 bg-blue-500 hover:bg-blue-600 rounded-lg transition-colors text-center">
+                                    <i class="fas fa-file-import text-2xl mb-2"></i>
+                                    <p class="font-medium">Import Key</p>
+                                    <p class="text-sm opacity-80">Load an existing key file</p>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Create Custom Key Panel -->
+                        <div id="custom-key-panel" class="hidden bg-dark-light border border-slate-700 rounded-xl p-6">
+                            <h4 class="text-lg font-semibold mb-4">Create Custom Key</h4>
+                            <div class="space-y-4">
+                                <div>
+                                    <label class="block text-sm font-medium mb-2">Custom Key Phrase</label>
+                                    <input type="password" id="custom-key-input" class="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary focus:border-transparent" placeholder="Enter a strong, memorable phrase">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium mb-2">Entropy Strength</label>
+                                    <div class="w-full bg-slate-700 rounded-full h-2 mb-2">
+                                        <div id="entropy-fill" class="bg-red-500 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+                                    </div>
+                                    <p id="entropy-status" class="text-sm text-slate-400">Enter a phrase to check strength</p>
+                                </div>
+                                <div class="flex space-x-3">
+                                    <button id="create-custom-key-confirm" class="px-6 py-2 bg-orange-500 hover:bg-orange-600 rounded-lg transition-colors disabled:opacity-50" disabled>
+                                        <i class="fas fa-key mr-2"></i>
+                                        Create Key
                                     </button>
-                                    <button id="create-custom-key-btn" class="p-4 bg-orange-500 hover:bg-orange-600 rounded-lg transition-colors text-center">
-                                        <i class="fas fa-key text-2xl mb-2"></i>
-                                        <p class="font-medium">Create Custom Key</p>
-                                        <p class="text-sm opacity-80">Use your own passphrase</p>
-                                    </button>
-                                    <button id="import-key-btn" class="p-4 bg-blue-500 hover:bg-blue-600 rounded-lg transition-colors text-center">
-                                        <i class="fas fa-file-import text-2xl mb-2"></i>
-                                        <p class="font-medium">Import Key</p>
-                                        <p class="text-sm opacity-80">Load an existing key file</p>
+                                    <button id="cancel-custom-key" class="px-6 py-2 bg-slate-600 hover:bg-slate-500 rounded-lg transition-colors">
+                                        Cancel
                                     </button>
                                 </div>
-
-                                <!-- Export Key (hidden until key exists) -->
-                                <button id="export-key-btn" class="hidden w-full p-4 bg-purple-500 hover:bg-purple-600 rounded-lg transition-colors">
-                                    <i class="fas fa-file-export mr-2"></i>
-                                    Export Current Key
-                                </button>
                             </div>
                         </div>
                     </div>
@@ -472,7 +514,7 @@
             setupEventListeners();
             
             // Check initial states
-            await checkKeyStatus();
+            await loadKeysList(); // This will also update key status
             await checkDriveStatus();
             await loadEncryptedFiles();
             await loadSettings();
@@ -487,7 +529,12 @@
                 settingsApi: !!window.settingsApi,
                 encryptFile: !!window.api?.encryptFile,
                 openFileDialog: !!window.api?.openFileDialog,
-                getEncryptedFiles: !!window.api?.getEncryptedFiles
+                getEncryptedFiles: !!window.api?.getEncryptedFiles,
+                checkKeyStatus: !!window.api?.checkKeyStatus,
+                generateKey: !!window.api?.generateKey,
+                createCustomKey: !!window.api?.createCustomKey,
+                exportKey: !!window.api?.exportKey,
+                deleteKey: !!window.api?.deleteKey
             });
             
             showToast('Application initialized successfully!', 'success');
@@ -516,6 +563,9 @@
             
             // Key management
             setupKeyManagement();
+            
+            // Setup key event delegation for export/delete buttons
+            setupKeyEventDelegation();
             
             // Google Drive
             setupGoogleDrive();
@@ -553,12 +603,24 @@
             const generateKeyBtn = document.getElementById('generate-key-btn');
             const createCustomKeyBtn = document.getElementById('create-custom-key-btn');
             const importKeyBtn = document.getElementById('import-key-btn');
-            const exportKeyBtn = document.getElementById('export-key-btn');
+            const refreshKeysBtn = document.getElementById('refresh-keys-btn');
+            const createCustomKeyConfirmBtn = document.getElementById('create-custom-key-confirm');
+            const cancelCustomKeyBtn = document.getElementById('cancel-custom-key');
 
-            generateKeyBtn?.addEventListener('click', generateEncryptionKey);
+            generateKeyBtn?.addEventListener('click', generateNewKey);
             createCustomKeyBtn?.addEventListener('click', createCustomKey);
-            importKeyBtn?.addEventListener('click', importEncryptionKey);
-            exportKeyBtn?.addEventListener('click', exportEncryptionKey);
+            importKeyBtn?.addEventListener('click', importKey);
+            refreshKeysBtn?.addEventListener('click', refreshKeysList);
+            createCustomKeyConfirmBtn?.addEventListener('click', createCustomKeyConfirm);
+            cancelCustomKeyBtn?.addEventListener('click', cancelCustomKey);
+
+            // Setup entropy meter for custom key input
+            setupCustomKeyEntropy();
+
+            // Load keys list when key management section is initialized
+            if (currentSection === 'keys') {
+                loadKeysList();
+            }
         }
 
         function setupGoogleDrive() {
@@ -688,6 +750,15 @@
             // Update header
             updateHeader(section);
             currentSection = section;
+
+            // Load section-specific data
+            if (section === 'keys') {
+                loadKeysList();
+            } else if (section === 'files') {
+                loadEncryptedFiles();
+            } else if (section === 'cloud') {
+                loadDriveFiles();
+            }
         }
 
         function updateHeader(section) {
@@ -727,17 +798,22 @@
         }
 
         async function openFileDialog() {
+            // Prevent multiple dialogs from opening simultaneously
+            if (window.fileDialogOpen) {
+                console.log('[RENDERER] File dialog already open, ignoring additional requests');
+                return;
+            }
+            
             try {
+                window.fileDialogOpen = true;
+                
                 if (window.api?.openFileDialog) {
                     console.log('[RENDERER] Calling openFileDialog...');
                     const result = await window.api.openFileDialog();
                     console.log('[RENDERER] File dialog result:', result);
-                    console.log('[RENDERER] Result type:', typeof result);
-                    console.log('[RENDERER] Is array:', Array.isArray(result));
                     
                     if (result && Array.isArray(result) && result.length > 0) {
-                        console.log('[RENDERER] First item:', result[0]);
-                        console.log('[RENDERER] First item type:', typeof result[0]);
+                        console.log('[RENDERER] Processing', result.length, 'selected files');
                         
                         let files;
                         
@@ -745,9 +821,9 @@
                         if (typeof result[0] === 'string') {
                             console.log('[RENDERER] Converting path strings to file objects');
                             // Convert path strings to file objects
-                            files = result.map(path => ({
-                                path: path,
-                                name: path.split('/').pop() || path.split('\\').pop() || 'Unknown File',
+                            files = result.map(filePath => ({
+                                path: filePath,
+                                name: filePath.split('/').pop() || filePath.split('\\').pop() || 'Unknown File',
                                 size: 0 // Will be determined during encryption
                             }));
                         } else {
@@ -765,6 +841,11 @@
             } catch (error) {
                 console.error('[RENDERER] Error opening file dialog:', error);
                 showToast('Failed to open file dialog', 'error');
+            } finally {
+                // Always clear the flag, even if there was an error
+                setTimeout(() => {
+                    window.fileDialogOpen = false;
+                }, 500); // Small delay to prevent rapid successive calls
             }
         }
 
@@ -1736,22 +1817,35 @@
 
         async function loadSettings() {
             try {
+                console.log('[Main] Loading settings...');
                 if (window.settingsApi?.getAppSettings) {
                     const settings = await window.settingsApi.getAppSettings();
+                    console.log('[Main] Received settings:', settings);
+                    
                     if (settings) {
-                        // Update UI with settings
+                        // Update output directory display
                         const outputDir = document.getElementById('output-dir');
-                        if (outputDir) outputDir.value = settings.outputDir || '';
+                        if (outputDir) {
+                            const outputPath = settings.outputDir || '';
+                            outputDir.value = outputPath;
+                            console.log('[Main] Updated output directory display to:', outputPath);
+                        }
                         
                         // Update toggles
                         updateToggle('auto-delete', settings.autoDelete);
                         updateToggle('notifications', settings.notifications);
                         updateToggle('confirm-actions', settings.confirmActions);
                         updateToggle('auto-upload', settings.gdriveAutoUpload);
+                        
+                        console.log('[Main] Settings loaded successfully');
+                    } else {
+                        console.warn('[Main] No settings returned from API');
                     }
+                } else {
+                    console.warn('[Main] Settings API not available');
                 }
             } catch (error) {
-                console.error('Error loading settings:', error);
+                console.error('[Main] Error loading settings:', error);
             }
         }
 
@@ -1786,10 +1880,27 @@
             try {
                 if (window.settingsApi?.selectOutputDirectory) {
                     const result = await window.settingsApi.selectOutputDirectory();
-                    if (result?.success && result.path) {
-                        document.getElementById('output-dir').value = result.path;
-                        saveSettings();
-                        showToast('Output directory updated', 'success');
+                    console.log('[Main] Select output directory result:', result);
+                    
+                    if (result && result !== null) {
+                        // Update the display immediately
+                        const outputDirField = document.getElementById('output-dir');
+                        if (outputDirField) {
+                            outputDirField.value = result;
+                            console.log('[Main] Updated output-dir field to:', result);
+                        }
+                        
+                        // Save the settings
+                        await saveSettings();
+                        showToast('Output directory updated successfully!', 'success');
+                        
+                        // Force refresh the settings to ensure UI is in sync
+                        setTimeout(() => {
+                            loadSettings();
+                        }, 100);
+                    } else {
+                        console.log('[Main] Directory selection cancelled');
+                        showToast('Directory selection cancelled', 'info');
                     }
                 }
             } catch (error) {
@@ -1952,6 +2063,566 @@
             }
         }
 
+        // Key Management Functions
+        let availableKeys = [];
+
+        // Event delegation for export and delete buttons
+        function setupKeyEventDelegation() {
+            const keysList = document.getElementById('keys-list');
+            if (keysList) {
+                keysList.addEventListener('click', function(event) {
+                    if (event.target.classList.contains('export-key-btn') || event.target.closest('.export-key-btn')) {
+                        const btn = event.target.classList.contains('export-key-btn') ? event.target : event.target.closest('.export-key-btn');
+                        const keyId = btn.dataset.keyId;
+                        if (keyId) {
+                            console.log('[Keys] Export button clicked for key:', keyId);
+                            exportKey(keyId);
+                        }
+                    } else if (event.target.classList.contains('delete-key-btn') || event.target.closest('.delete-key-btn')) {
+                        const btn = event.target.classList.contains('delete-key-btn') ? event.target : event.target.closest('.delete-key-btn');
+                        const keyId = btn.dataset.keyId;
+                        if (keyId) {
+                            console.log('[Keys] Delete button clicked for key:', keyId);
+                            deleteKey(keyId);
+                        }
+                    }
+                });
+            }
+        }
+
+        async function loadKeysList() {
+            console.log('[Keys] Loading keys list...');
+            try {
+                if (window.api?.checkKeyStatus) {
+                    console.log('[Keys] Calling checkKeyStatus API...');
+                    const result = await window.api.checkKeyStatus();
+                    console.log('[Keys] Key status result:', result);
+                    
+                    const keys = [];
+                    
+                    // Add current key if it exists
+                    if (result && result.hasKey) {
+                        console.log('[Keys] Key found, creating key object...');
+                        
+                        // Determine key type based on source or other indicators
+                        let keyType = 'Generated Key';
+                        let description = 'Currently active encryption key';
+                        
+                        if (result.source === 'filesystem') {
+                            keyType = 'Stored Key';
+                            description = 'Key loaded from filesystem';
+                        } else if (result.source === 'keyManager.getMasterKey') {
+                            keyType = 'Master Key';
+                            description = 'Key from secure key manager';
+                        }
+                        
+                        const keyObj = {
+                            id: result.keyId || 'unknown',
+                            type: keyType,
+                            status: 'Active',
+                            created: new Date().toLocaleDateString(),
+                            isActive: true,
+                            description: description,
+                            source: result.source || 'memory'
+                        };
+                        
+                        keys.push(keyObj);
+                        console.log('[Keys] Created key object:', keyObj);
+                    } else {
+                        console.log('[Keys] No key found or hasKey is false');
+                    }
+                    
+                    console.log('[Keys] Final keys array:', keys);
+                    availableKeys = keys;
+                    
+                    console.log('[Keys] Calling displayKeysList with', keys.length, 'keys');
+                    displayKeysList(keys);
+                    
+                    console.log('[Keys] Calling updateKeyStatus with hasKeys:', keys.length > 0);
+                    updateKeyStatus(keys.length > 0);
+                } else {
+                    console.warn('[Keys] checkKeyStatus API not available');
+                    displayKeysList([]);
+                    updateKeyStatus(false);
+                }
+            } catch (error) {
+                console.error('[Keys] Error loading keys:', error);
+                displayKeysList([]);
+                updateKeyStatus(false);
+            }
+        }
+
+        function displayKeysList(keys) {
+            console.log('[Keys] Displaying keys list:', keys);
+            
+            const keysList = document.getElementById('keys-list');
+            const noKeysWarning = document.getElementById('no-keys-warning');
+            
+            console.log('[Keys] Found elements - keysList:', !!keysList, 'noKeysWarning:', !!noKeysWarning);
+            
+            if (!keysList || !noKeysWarning) {
+                console.error('[Keys] Required elements not found - keysList:', !!keysList, 'noKeysWarning:', !!noKeysWarning);
+                return;
+            }
+            
+            if (keys.length === 0) {
+                // No keys found
+                console.log('[Keys] No keys to display, showing warning');
+                keysList.style.display = 'none';
+                noKeysWarning.style.display = 'block';
+                return;
+            }
+            
+            // Show keys list, hide warning
+            console.log('[Keys] Showing keys list, hiding warning');
+            keysList.style.display = 'block';
+            noKeysWarning.style.display = 'none';
+            
+            // Force reflow to ensure display changes take effect
+            keysList.offsetHeight;
+            
+            // Clear existing content completely
+            while (keysList.firstChild) {
+                keysList.removeChild(keysList.firstChild);
+            }
+            keysList.innerHTML = '';
+            console.log('[Keys] Cleared existing list content');
+            
+            // Create key items
+            console.log('[Keys] Creating', keys.length, 'key items');
+            keys.forEach((key, index) => {
+                console.log(`[Keys] Creating key item ${index + 1}:`, key);
+                const keyItem = createKeyItem(key);
+                keysList.appendChild(keyItem);
+                console.log(`[Keys] Added key item ${index + 1} to list`);
+            });
+            
+            // Force reflow after adding all items
+            keysList.offsetHeight;
+            
+            console.log('[Keys] Finished displaying keys list, final DOM content:', keysList.innerHTML.length, 'characters');
+        }
+
+        function createKeyItem(key) {
+            console.log('[Keys] Creating key item for:', key);
+            const keyItem = document.createElement('div');
+            keyItem.className = `bg-slate-800 border border-slate-600 rounded-lg p-4 hover:border-slate-500 transition-colors ${key.isActive ? 'ring-2 ring-green-500/50' : ''}`;
+            keyItem.dataset.keyId = key.id;
+            
+            keyItem.innerHTML = `
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center space-x-4">
+                        <div class="w-12 h-12 ${key.isActive ? 'bg-green-500/20' : 'bg-slate-700'} rounded-lg flex items-center justify-center">
+                            <i class="fas fa-key ${key.isActive ? 'text-green-400' : 'text-slate-400'} text-lg"></i>
+                        </div>
+                        <div class="flex-1">
+                            <div class="flex items-center space-x-3 mb-2">
+                                <h4 class="font-medium text-white">${key.id}</h4>
+                                <span class="px-2 py-1 text-xs ${key.isActive ? 'bg-green-500/20 text-green-400' : 'bg-slate-700 text-slate-400'} rounded-full">
+                                    ${key.type}
+                                </span>
+                                ${key.isActive ? '<span class="px-2 py-1 text-xs bg-green-500/20 text-green-400 rounded-full">Active</span>' : ''}
+                            </div>
+                            <div class="flex items-center space-x-4 text-sm text-slate-400">
+                                <span>Created: ${key.created}</span>
+                                <span class="text-green-400">●</span>
+                                <span>Status: ${key.status}</span>
+                            </div>
+                            ${key.description ? `<p class="text-xs text-slate-500 mt-1">${key.description}</p>` : ''}
+                        </div>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        ${key.isActive ? `
+                            <button class="export-key-btn px-3 py-1 text-sm bg-purple-500 hover:bg-purple-600 rounded-lg transition-colors" data-key-id="${key.id}">
+                                <i class="fas fa-file-export mr-1"></i>
+                                Export
+                            </button>
+                        ` : ''}
+                        <button class="delete-key-btn px-3 py-1 text-sm bg-red-500 hover:bg-red-600 rounded-lg transition-colors" data-key-id="${key.id}">
+                            <i class="fas fa-trash mr-1"></i>
+                            Delete
+                        </button>
+                    </div>
+                </div>
+            `;
+            
+            return keyItem;
+        }
+
+        function updateKeyStatus(hasKeys) {
+            const statusBanner = document.getElementById('current-key-status');
+            const keyStatusSidebar = document.getElementById('key-status');
+            
+            if (statusBanner) {
+                if (hasKeys) {
+                    statusBanner.className = 'p-4 bg-green-500/10 border border-green-500/20 rounded-lg';
+                    statusBanner.innerHTML = `
+                        <div class="flex items-center space-x-3">
+                            <i class="fas fa-check-circle text-green-400"></i>
+                            <div>
+                                <p class="font-medium text-green-400">Encryption key is active</p>
+                                <p class="text-sm text-slate-400">Your files can be encrypted securely</p>
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    statusBanner.className = 'p-4 bg-red-500/10 border border-red-500/20 rounded-lg';
+                    statusBanner.innerHTML = `
+                        <div class="flex items-center space-x-3">
+                            <i class="fas fa-exclamation-triangle text-red-400"></i>
+                            <div>
+                                <p class="font-medium text-red-400">No encryption key configured</p>
+                                <p class="text-sm text-slate-400">Generate or import a key to start encrypting files</p>
+                            </div>
+                        </div>
+                    `;
+                }
+            }
+            
+            // Update sidebar status
+            if (keyStatusSidebar) {
+                if (hasKeys) {
+                    keyStatusSidebar.className = 'flex items-center space-x-3 p-3 bg-green-500/20 border border-green-500/30 rounded-lg';
+                    keyStatusSidebar.innerHTML = `
+                        <div class="w-3 h-3 bg-green-500 rounded-full"></div>
+                        <div>
+                            <p class="text-sm font-medium text-green-400">Encryption Key Active</p>
+                            <p class="text-xs text-slate-400">Ready to encrypt files</p>
+                        </div>
+                    `;
+                } else {
+                    keyStatusSidebar.className = 'flex items-center space-x-3 p-3 bg-red-500/20 border border-red-500/30 rounded-lg';
+                    keyStatusSidebar.innerHTML = `
+                        <div class="w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>
+                        <div>
+                            <p class="text-sm font-medium">No Encryption Key</p>
+                            <p class="text-xs text-slate-400">Generate or import a key</p>
+                        </div>
+                    `;
+                }
+            }
+
+            // Update global state
+            isKeyGenerated = hasKeys;
+            currentStats.securityLevel = hasKeys ? 'High' : 'Low';
+            updateDashboard();
+        }
+
+        async function generateNewKey() {
+            try {
+                showProgressModal('Generating Key', 'Creating a new secure encryption key...');
+                
+                if (window.api?.generateKey) {
+                    const result = await window.api.generateKey();
+                    hideProgressModal();
+                    
+                    if (result && result.success) {
+                        showToast('New encryption key generated successfully!', 'success');
+                        loadKeysList();
+                    } else if (result && result.needsConfirmation) {
+                        // Key already exists, ask for confirmation
+                        const message = result.message || `A key (${result.existingKeyId}...) already exists. Creating a new key will replace it. This action cannot be undone.`;
+                        
+                        if (confirm(message + '\n\nDo you want to continue and replace the existing key?')) {
+                            // User confirmed, force generate new key
+                            try {
+                                showProgressModal('Replacing Key', 'Replacing the existing encryption key...');
+                                
+                                if (window.api?.forceGenerateKey) {
+                                    const forceResult = await window.api.forceGenerateKey();
+                                    hideProgressModal();
+                                    
+                                    if (forceResult && forceResult.success) {
+                                        showToast('Encryption key replaced successfully!', 'success');
+                                        loadKeysList();
+                                    } else {
+                                        showToast('Failed to replace key: ' + (forceResult?.error || 'Unknown error'), 'error');
+                                    }
+                                } else {
+                                    hideProgressModal();
+                                    showToast('Force key generation not available', 'error');
+                                }
+                            } catch (forceError) {
+                                hideProgressModal();
+                                console.error('Error force generating key:', forceError);
+                                showToast('Error replacing key: ' + forceError.message, 'error');
+                            }
+                        } else {
+                            showToast('Key generation cancelled', 'info');
+                        }
+                    } else {
+                        showToast('Failed to generate key: ' + (result?.error || 'Unknown error'), 'error');
+                    }
+                } else {
+                    hideProgressModal();
+                    showToast('Key generation not available', 'error');
+                }
+            } catch (error) {
+                hideProgressModal();
+                console.error('Error generating key:', error);
+                showToast('Error generating key: ' + error.message, 'error');
+            }
+        }
+
+        async function createCustomKey() {
+            const customKeyPanel = document.getElementById('custom-key-panel');
+            if (customKeyPanel) {
+                customKeyPanel.classList.toggle('hidden');
+            }
+        }
+
+        async function createCustomKeyConfirm() {
+            const passphraseInput = document.getElementById('custom-key-input');
+            if (!passphraseInput) return;
+            
+            const passphrase = passphraseInput.value;
+            if (!passphrase || passphrase.length < 8) {
+                showToast('Enter a strong passphrase (at least 8 characters)', 'error');
+                return;
+            }
+            
+            // Check if there's an existing key and warn user
+            if (availableKeys.length > 0) {
+                const existingKey = availableKeys.find(k => k.isActive);
+                if (existingKey) {
+                    const confirmMessage = `A key (${existingKey.id}) already exists. Creating a custom key will replace it. This action cannot be undone.\n\nDo you want to continue?`;
+                    if (!confirm(confirmMessage)) {
+                        showToast('Custom key creation cancelled', 'info');
+                        return;
+                    }
+                }
+            }
+            
+            try {
+                showProgressModal('Creating Custom Key', 'Deriving key from your passphrase...');
+                
+                if (window.api?.createCustomKey) {
+                    const result = await window.api.createCustomKey(passphrase, passphrase);
+                    hideProgressModal();
+                    
+                    if (result && result.success) {
+                        showToast('Custom key created successfully!', 'success');
+                        passphraseInput.value = '';
+                        document.getElementById('custom-key-panel').classList.add('hidden');
+                        loadKeysList();
+                    } else {
+                        showToast('Failed to create custom key: ' + (result?.error || 'Unknown error'), 'error');
+                    }
+                } else {
+                    hideProgressModal();
+                    showToast('Custom key creation not available', 'error');
+                }
+            } catch (error) {
+                hideProgressModal();
+                console.error('Error creating custom key:', error);
+                showToast('Error creating custom key: ' + error.message, 'error');
+            }
+        }
+
+        function cancelCustomKey() {
+            const customKeyPanel = document.getElementById('custom-key-panel');
+            const passphraseInput = document.getElementById('custom-key-input');
+            
+            if (customKeyPanel) customKeyPanel.classList.add('hidden');
+            if (passphraseInput) passphraseInput.value = '';
+        }
+
+        async function importKey() {
+            try {
+                if (window.api?.importKey) {
+                    // Check if there's an existing key and warn user
+                    if (availableKeys.length > 0) {
+                        const existingKey = availableKeys.find(k => k.isActive);
+                        if (existingKey) {
+                            const confirmMessage = `A key (${existingKey.id}) already exists. Importing a new key will replace it. This action cannot be undone.\n\nDo you want to continue?`;
+                            if (!confirm(confirmMessage)) {
+                                showToast('Key import cancelled', 'info');
+                                return;
+                            }
+                        }
+                    }
+                    
+                    // For now, show a simple prompt - this could be enhanced with a proper file picker
+                    const keyData = prompt('Enter your encryption key (64 hex characters):');
+                    if (!keyData) return;
+                    
+                    const cleanedKey = keyData.replace(/\s+/g, '');
+                    if (!/^[0-9a-fA-F]{64}$/.test(cleanedKey)) {
+                        showToast('Invalid key format. Must be 64 hex characters (0-9, A-F).', 'error');
+                        return;
+                    }
+                    
+                    showProgressModal('Importing Key', 'Loading your encryption key...');
+                    
+                    const result = await window.api.importKey(cleanedKey);
+                    hideProgressModal();
+                    
+                    if (result && result.success) {
+                        showToast('Key imported successfully!', 'success');
+                        loadKeysList();
+                    } else {
+                        showToast('Failed to import key: ' + (result?.error || 'Unknown error'), 'error');
+                    }
+                } else {
+                    showToast('Key import not available', 'error');
+                }
+            } catch (error) {
+                hideProgressModal();
+                console.error('Error importing key:', error);
+                showToast('Error importing key: ' + error.message, 'error');
+            }
+        }
+
+        async function exportKey(keyId) {
+            console.log('[Keys] Exporting key with ID:', keyId);
+            try {
+                if (window.api?.exportKey) {
+                    showProgressModal('Exporting Key', 'Preparing key file for export...');
+                    const result = await window.api.exportKey(keyId);
+                    hideProgressModal();
+                    
+                    if (result && result.success) {
+                        showToast(`Key exported successfully to: ${result.exportPath || result.filePath || 'Downloads'}`, 'success');
+                        console.log('[Keys] Key exported to:', result.exportPath || result.filePath);
+                    } else {
+                        showToast('Failed to export key: ' + (result?.error || 'Unknown error'), 'error');
+                        console.error('[Keys] Export failed:', result.error);
+                    }
+                } else {
+                    showToast('Key export not available', 'error');
+                    console.error('[Keys] Export API not available');
+                }
+            } catch (error) {
+                hideProgressModal();
+                console.error('[Keys] Export error:', error);
+                showToast('Error exporting key: ' + error.message, 'error');
+            }
+        }
+
+        async function deleteKey(keyId) {
+            console.log('[Keys] Deleting key with ID:', keyId);
+            
+            const confirmMessage = `Are you sure you want to delete the encryption key "${keyId}"?\n\nThis action cannot be undone. Any files encrypted with this key will become inaccessible unless you have a backup of the key.`;
+            if (!confirm(confirmMessage)) {
+                console.log('[Keys] Key deletion cancelled by user');
+                return;
+            }
+            
+            try {
+                if (window.api?.deleteKey) {
+                    showProgressModal('Deleting Key', 'Removing encryption key...');
+                    const result = await window.api.deleteKey(keyId);
+                    hideProgressModal();
+                    
+                    if (result && result.success) {
+                        showToast('Encryption key deleted successfully!', 'success');
+                        console.log('[Keys] Key deleted successfully');
+                        
+                        // Refresh the keys list to show the updated state
+                        await loadKeysList();
+                    } else {
+                        showToast('Failed to delete key: ' + (result?.error || 'Unknown error'), 'error');
+                        console.error('[Keys] Delete failed:', result.error);
+                    }
+                } else {
+                    showToast('Key deletion not available', 'error');
+                    console.error('[Keys] Delete API not available');
+                }
+            } catch (error) {
+                hideProgressModal();
+                console.error('[Keys] Delete error:', error);
+                showToast('Error deleting key: ' + error.message, 'error');
+            }
+        }
+
+        async function refreshKeysList() {
+            const refreshBtn = document.getElementById('refresh-keys-btn');
+            if (refreshBtn) {
+                refreshBtn.disabled = true;
+                refreshBtn.innerHTML = '<i class="fas fa-spin fa-sync-alt mr-2"></i>Refreshing...';
+            }
+            
+            await loadKeysList();
+            showToast('Keys list refreshed!', 'info');
+            
+            if (refreshBtn) {
+                setTimeout(() => {
+                    refreshBtn.disabled = false;
+                    refreshBtn.innerHTML = '<i class="fas fa-sync-alt mr-2"></i>Refresh List';
+                }, 1000);
+            }
+        }
+
+        // Setup custom key entropy meter
+        function setupCustomKeyEntropy() {
+            const customKeyInput = document.getElementById('custom-key-input');
+            const createBtn = document.getElementById('create-custom-key-confirm');
+            const entropyFill = document.getElementById('entropy-fill');
+            const entropyStatus = document.getElementById('entropy-status');
+            
+            if (customKeyInput) {
+                customKeyInput.addEventListener('input', function() {
+                    const passphrase = customKeyInput.value;
+                    const entropy = calculateEntropy(passphrase);
+                    
+                    if (entropyFill && entropyStatus) {
+                        updateEntropyMeter(entropy, entropyFill, entropyStatus);
+                    }
+                    
+                    if (createBtn) {
+                        createBtn.disabled = entropy < 60 || passphrase.length < 8;
+                    }
+                });
+            }
+        }
+
+        function calculateEntropy(password) {
+            if (!password || password.length === 0) return 0;
+            
+            const length = password.length;
+            const hasLower = /[a-z]/.test(password);
+            const hasUpper = /[A-Z]/.test(password);
+            const hasDigit = /\d/.test(password);
+            const hasSpecial = /[^a-zA-Z0-9]/.test(password);
+            
+            let charSetSize = 0;
+            if (hasLower) charSetSize += 26;
+            if (hasUpper) charSetSize += 26;
+            if (hasDigit) charSetSize += 10;
+            if (hasSpecial) charSetSize += 33;
+            
+            if (charSetSize === 0) charSetSize = 95;
+            
+            const entropy = length * Math.log2(charSetSize);
+            return Math.round(entropy);
+        }
+
+        function updateEntropyMeter(entropyBits, entropyFill, entropyStatus) {
+            let percentage = Math.min(100, (entropyBits / 128) * 100);
+            entropyFill.style.width = `${percentage}%`;
+            
+            let color, strength;
+            if (entropyBits < 40) {
+                color = 'bg-red-500';
+                strength = 'Very Weak';
+            } else if (entropyBits < 60) {
+                color = 'bg-orange-500';
+                strength = 'Weak';
+            } else if (entropyBits < 80) {
+                color = 'bg-yellow-500';
+                strength = 'Moderate';
+            } else if (entropyBits < 100) {
+                color = 'bg-green-500';
+                strength = 'Strong';
+            } else {
+                color = 'bg-green-600';
+                strength = 'Very Strong';
+            }
+            
+            entropyFill.className = `${color} h-2 rounded-full transition-all duration-300`;
+            entropyStatus.textContent = `Strength: ${strength} (${entropyBits} bits)`;
+        }
+
         // Global functions for onclick handlers
         window.removeFromQueue = removeFromQueue;
         window.downloadFromDrive = downloadFromDrive;
@@ -1963,6 +2634,8 @@
         window.testFileDialog = testFileDialog;
         window.testKeyStatus = testKeyStatus;
         window.testEncryptedFiles = testEncryptedFiles;
+        window.exportKey = exportKey;
+        window.deleteKey = deleteKey;
     </script>
 </body>
 </html>

@@ -351,6 +351,98 @@
             gap: 0.75rem;
         }
         
+        /* Key list styles */
+        .key-item {
+            background-color: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 1rem;
+            margin-bottom: 0.75rem;
+            transition: all 0.2s;
+        }
+        
+        .key-item:hover {
+            background-color: rgba(255, 255, 255, 0.06);
+            border-color: var(--accent-blue);
+        }
+        
+        .key-item.active {
+            border-color: var(--accent-success);
+            background-color: rgba(76, 222, 128, 0.05);
+        }
+        
+        .key-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 0.75rem;
+        }
+        
+        .key-title {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .key-id {
+            font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+        
+        .key-type {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            background-color: rgba(255, 255, 255, 0.1);
+            padding: 0.25rem 0.5rem;
+            border-radius: 12px;
+        }
+        
+        .key-status {
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+            font-size: 0.8rem;
+        }
+        
+        .key-actions {
+            display: flex;
+            gap: 0.5rem;
+        }
+        
+        .key-actions .btn {
+            padding: 0.4rem 0.8rem;
+            font-size: 0.8rem;
+        }
+        
+        .key-details {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 0.75rem;
+            margin-bottom: 0.75rem;
+            padding-top: 0.75rem;
+            border-top: 1px solid var(--border-color);
+        }
+        
+        .key-detail {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .key-detail-label {
+            font-size: 0.7rem;
+            color: var(--text-tertiary);
+            margin-bottom: 0.25rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        
+        .key-detail-value {
+            font-size: 0.8rem;
+            font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+            word-break: break-all;
+        }
+        
         /* Mobile adjustments */
         @media (max-width: 768px) {
             .sidebar {
@@ -382,6 +474,21 @@
             
             .info-grid {
                 grid-template-columns: 1fr;
+            }
+            
+            .key-details {
+                grid-template-columns: 1fr;
+            }
+            
+            .key-header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 0.5rem;
+            }
+            
+            .key-actions {
+                width: 100%;
+                justify-content: flex-end;
             }
         }
     </style>
@@ -442,22 +549,17 @@
         <main class="main-content">
             <h1 class="page-title" style="margin-bottom: 1.5rem; font-size: 1.5rem; font-weight: 500;">Key Management</h1>
             
+            <!-- Active Keys List -->
             <div class="card">
                 <div class="card-content">
                     <h2 class="card-title">
                         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="card-icon">
-                            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-                            <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                            <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"></path>
                         </svg>
-                        Encryption Key Status
+                        Available Encryption Keys
                     </h2>
                     
-                    <div class="status-indicator">
-                        <div id="key-info-indicator" class="status-dot inactive"></div>
-                        <span id="key-info-status" class="status-text inactive">Checking Key Status...</span>
-                    </div>
-                    
-                    <div id="no-key-warning" class="warning-card">
+                    <div id="no-keys-warning" class="warning-card">
                         <div class="warning-icon">
                             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                 <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
@@ -466,23 +568,18 @@
                             </svg>
                         </div>
                         <div class="warning-content">
-                            <h3>No Encryption Key Available</h3>
-                            <p>You need to generate or import a key before you can encrypt or decrypt files.</p>
+                            <h3>No Encryption Keys Found</h3>
+                            <p>You need to generate or import a key before you can encrypt or decrypt files. Use the buttons below to create your first key.</p>
                         </div>
                     </div>
                     
-                    <div id="key-details" class="info-grid" style="display: none;">
-                        <div class="info-item">
-                            <span class="info-label">Key ID</span>
-                            <span id="current-key-id" class="info-value">-</span>
-                        </div>
-                        <div class="info-item">
-                            <span class="info-label">Created</span>
-                            <span id="key-created-date" class="info-value">-</span>
-                        </div>
+                    <!-- Keys List Container -->
+                    <div id="keys-list" style="display: none;">
+                        <!-- Keys will be dynamically populated here -->
                     </div>
                     
-                    <div class="btn-row">
+                    <!-- Key Management Actions -->
+                    <div class="btn-row" style="margin-top: 1.5rem;">
                         <button id="generate-key-btn" class="btn btn-primary">
                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="btn-icon">
                                 <circle cx="8" cy="15" r="4"></circle>
@@ -500,6 +597,15 @@
                                 <line x1="12" y1="3" x2="12" y2="15"></line>
                             </svg>
                             Import Key
+                        </button>
+                        
+                        <button id="refresh-keys-btn" class="btn" style="background-color: rgba(255, 255, 255, 0.1); color: var(--text-primary);">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="btn-icon">
+                                <polyline points="23 4 23 10 17 10"></polyline>
+                                <polyline points="1 20 1 14 7 14"></polyline>
+                                <path d="m3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+                            </svg>
+                            Refresh List
                         </button>
                     </div>
                 </div>
@@ -620,54 +726,141 @@
                 return;
             }
             
-            // Check key status
-            function checkKeyStatus() {
-                console.log('[key-management-fallback] Checking key status');
-                if (api.checkKeyStatus) {
-                    api.checkKeyStatus().then(result => {
-                        console.log('[key-management-fallback] Key status result:', result);
-                        updateKeyStatusUI(result.exists, result.keyId);
-                    }).catch(err => {
-                        console.error('[key-management-fallback] Key status error:', err);
-                        updateKeyStatusUI(false);
-                    });
-                } else {
-                    console.warn('[key-management-fallback] No checkKeyStatus method found');
-                    updateKeyStatusUI(false);
-                }
+            // Load and display all available keys
+            function loadKeysList() {
+                console.log('[key-management-fallback] Loading keys list');
+                
+                const keysList = document.getElementById('keys-list');
+                const noKeysWarning = document.getElementById('no-keys-warning');
+                
+                // For now, simulate getting keys from different sources
+                Promise.all([
+                    api.checkKeyStatus ? api.checkKeyStatus() : Promise.resolve({ exists: false }),
+                    // We can add more key sources here in the future
+                ]).then(results => {
+                    const [currentKeyStatus] = results;
+                    const keys = [];
+                    
+                    // Add current key if it exists
+                    if (currentKeyStatus && currentKeyStatus.exists) {
+                        // Try to determine key type based on available information
+                        let keyType = 'Generated Key';
+                        
+                        // If we had a way to detect custom keys, we could check here
+                        // For now, we'll use 'Generated Key' as default but could be enhanced
+                        
+                        keys.push({
+                            id: currentKeyStatus.keyId || 'unknown',
+                            type: keyType,
+                            status: 'Active',
+                            created: new Date().toLocaleDateString(),
+                            isActive: true,
+                            description: 'Currently active encryption key'
+                        });
+                    }
+                    
+                    console.log('[key-management-fallback] Found keys:', keys);
+                    displayKeysList(keys);
+                }).catch(err => {
+                    console.error('[key-management-fallback] Error loading keys:', err);
+                    displayKeysList([]);
+                });
             }
             
-            // Update UI
-            function updateKeyStatusUI(exists, keyId) {
-                console.log('[key-management-fallback] Updating UI:', exists, keyId);
+            // Display the keys list in the UI
+            function displayKeysList(keys) {
+                console.log('[key-management-fallback] Displaying keys list:', keys);
                 
-                // Get elements
-                const indicator = document.getElementById('key-info-indicator');
-                const status = document.getElementById('key-info-status');
-                const warning = document.getElementById('no-key-warning');
-                const details = document.getElementById('key-details');
-                const idElement = document.getElementById('current-key-id');
+                const keysList = document.getElementById('keys-list');
+                const noKeysWarning = document.getElementById('no-keys-warning');
                 
-                if (exists) {
-                    // Key exists
-                    if (indicator) indicator.className = 'status-dot active';
-                    if (status) {
-                        status.className = 'status-text active';
-                        status.textContent = keyId ? `Key Active (ID: ${keyId})` : 'Key Active';
-                    }
-                    if (warning) warning.style.display = 'none';
-                    if (details) details.style.display = 'grid';
-                    if (idElement && keyId) idElement.textContent = keyId;
-                } else {
-                    // No key
-                    if (indicator) indicator.className = 'status-dot inactive';
-                    if (status) {
-                        status.className = 'status-text inactive';
-                        status.textContent = 'No Key Available';
-                    }
-                    if (warning) warning.style.display = 'flex';
-                    if (details) details.style.display = 'none';
+                if (!keysList || !noKeysWarning) {
+                    console.error('[key-management-fallback] Required elements not found');
+                    return;
                 }
+                
+                if (keys.length === 0) {
+                    // No keys found
+                    keysList.style.display = 'none';
+                    noKeysWarning.style.display = 'flex';
+                    return;
+                }
+                
+                // Show keys list, hide warning
+                keysList.style.display = 'block';
+                noKeysWarning.style.display = 'none';
+                
+                // Clear existing content
+                keysList.innerHTML = '';
+                
+                // Create key items
+                keys.forEach(key => {
+                    const keyItem = createKeyItem(key);
+                    keysList.appendChild(keyItem);
+                });
+            }
+            
+            // Create a key item element
+            function createKeyItem(key) {
+                const keyItem = document.createElement('div');
+                keyItem.className = `key-item ${key.isActive ? 'active' : ''}`;
+                keyItem.dataset.keyId = key.id;
+                
+                keyItem.innerHTML = `
+                    <div class="key-header">
+                        <div class="key-title">
+                            <span class="key-id">${key.id}</span>
+                            <span class="key-type">${key.type}</span>
+                        </div>
+                        <div class="key-status ${key.isActive ? 'active' : 'inactive'}">
+                            <div class="status-dot ${key.isActive ? 'active' : 'inactive'}"></div>
+                            <span>${key.status}</span>
+                        </div>
+                    </div>
+                    
+                    <div class="key-details">
+                        <div class="key-detail">
+                            <span class="key-detail-label">Key ID</span>
+                            <span class="key-detail-value">${key.id}</span>
+                        </div>
+                        <div class="key-detail">
+                            <span class="key-detail-label">Type</span>
+                            <span class="key-detail-value">${key.type}</span>
+                        </div>
+                        <div class="key-detail">
+                            <span class="key-detail-label">Created</span>
+                            <span class="key-detail-value">${key.created}</span>
+                        </div>
+                        <div class="key-detail">
+                            <span class="key-detail-label">Status</span>
+                            <span class="key-detail-value">${key.status}</span>
+                        </div>
+                    </div>
+                    
+                    <div class="key-actions">
+                        ${key.isActive ? `
+                            <button class="btn btn-secondary export-key-btn" data-key-id="${key.id}">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="btn-icon">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                    <polyline points="7 10 12 15 17 10"></polyline>
+                                    <line x1="12" y1="15" x2="12" y2="3"></line>
+                                </svg>
+                                Export
+                            </button>
+                        ` : ''}
+                        <button class="btn delete-key-btn" style="background-color: var(--accent-danger); color: white;" data-key-id="${key.id}">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="btn-icon">
+                                <polyline points="3 6 5 6 21 6"></polyline>
+                                <path d="m19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                <line x1="10" y1="11" x2="10" y2="17"></line>
+                                <line x1="14" y1="11" x2="14" y2="17"></line>
+                            </svg>
+                            Delete
+                        </button>
+                    </div>
+                `;
+                
+                return keyItem;
             }
             
             // Wire up buttons
@@ -680,15 +873,13 @@
                     api.generateKey().then(result => {
                         console.log('[key-management-fallback] Generate key result:', result);
                         if (result && result.success) {
-                            updateKeyStatusUI(true, result.keyId);
                             showToast('Key generated successfully!', 'success');
+                            loadKeysList(); // Refresh the keys list
                         } else {
-                            updateKeyStatusUI(false);
-                            showToast('Failed to generate key', 'error');
+                            showToast('Failed to generate key: ' + (result?.error || 'Unknown error'), 'error');
                         }
                     }).catch(err => {
                         console.error('[key-management-fallback] Generate key error:', err);
-                        updateKeyStatusUI(false);
                         showToast('Error generating key: ' + err.message, 'error');
                     }).finally(() => {
                         genKeyBtn.disabled = false;
@@ -720,15 +911,13 @@
                         api.importKey(cleanedKey).then(result => {
                             console.log('[key-management-fallback] Import key result:', result);
                             if (result && result.success) {
-                                updateKeyStatusUI(true, result.keyId);
                                 showToast('Key imported successfully!', 'success');
+                                loadKeysList(); // Refresh the keys list
                             } else {
-                                updateKeyStatusUI(false);
-                                showToast('Failed to import key', 'error');
+                                showToast('Failed to import key: ' + (result?.error || 'Unknown error'), 'error');
                             }
                         }).catch(err => {
                             console.error('[key-management-fallback] Import key error:', err);
-                            updateKeyStatusUI(false);
                             showToast('Error importing key: ' + err.message, 'error');
                         }).finally(() => {
                             importKeyBtn.disabled = false;
@@ -924,23 +1113,104 @@
                     api.createCustomKey(passphrase, passphrase).then(result => {
                         console.log('[key-management-fallback] Create custom key result:', result);
                         if (result && result.success) {
-                            updateKeyStatusUI(true, result.keyId);
                             showToast('Custom key created successfully!', 'success');
                             customKeyInput.value = '';
                             updateEntropyMeter(0);
+                            loadKeysList(); // Refresh the keys list
                         } else {
-                            updateKeyStatusUI(false);
-                            showToast('Failed to create custom key', 'error');
+                            showToast('Failed to create custom key: ' + (result?.error || 'Unknown error'), 'error');
                         }
                     }).catch(err => {
                         console.error('[key-management-fallback] Create custom key error:', err);
-                        updateKeyStatusUI(false);
                         showToast('Error creating custom key: ' + err.message, 'error');
                     }).finally(() => {
                         customKeyBtn.disabled = false;
                     });
                 });
             }
+            
+
+            
+            // Refresh Keys button
+            const refreshKeysBtn = document.getElementById('refresh-keys-btn');
+            if (refreshKeysBtn) {
+                refreshKeysBtn.addEventListener('click', function() {
+                    console.log('[key-management-fallback] Refresh keys clicked');
+                    refreshKeysBtn.disabled = true;
+                    
+                    loadKeysList();
+                    showToast('Keys list refreshed!', 'info');
+                    
+                    setTimeout(() => {
+                        refreshKeysBtn.disabled = false;
+                    }, 1000);
+                });
+            }
+            
+            // Event delegation for dynamically created key action buttons
+            document.addEventListener('click', function(e) {
+                // Handle export key buttons
+                if (e.target.closest('.export-key-btn')) {
+                    const keyId = e.target.closest('.export-key-btn').dataset.keyId;
+                    console.log('[key-management-fallback] Export key clicked for:', keyId);
+                    
+                    if (!api.exportKey) {
+                        showToast('Export functionality not available', 'error');
+                        return;
+                    }
+                    
+                    const button = e.target.closest('.export-key-btn');
+                    button.disabled = true;
+                    
+                    api.exportKey().then(result => {
+                        console.log('[key-management-fallback] Export key result:', result);
+                        if (result && result.success) {
+                            showToast(`Key exported to: ${result.exportPath}`, 'success');
+                        } else {
+                            showToast('Failed to export key: ' + (result?.error || 'Unknown error'), 'error');
+                        }
+                    }).catch(err => {
+                        console.error('[key-management-fallback] Export key error:', err);
+                        showToast('Error exporting key: ' + err.message, 'error');
+                    }).finally(() => {
+                        button.disabled = false;
+                    });
+                }
+                
+                // Handle delete key buttons
+                if (e.target.closest('.delete-key-btn')) {
+                    const keyId = e.target.closest('.delete-key-btn').dataset.keyId;
+                    console.log('[key-management-fallback] Delete key clicked for:', keyId);
+                    
+                    // Show confirmation dialog
+                    if (!confirm(`Are you sure you want to delete the encryption key "${keyId}"? This action cannot be undone. Any files encrypted with this key will become inaccessible unless you have a backup of the key.`)) {
+                        return;
+                    }
+                    
+                    if (!api.deleteKey) {
+                        showToast('Delete functionality not available', 'error');
+                        return;
+                    }
+                    
+                    const button = e.target.closest('.delete-key-btn');
+                    button.disabled = true;
+                    
+                    api.deleteKey().then(result => {
+                        console.log('[key-management-fallback] Delete key result:', result);
+                        if (result && result.success) {
+                            showToast('Encryption key deleted successfully!', 'success');
+                            loadKeysList(); // Refresh the keys list
+                        } else {
+                            showToast('Failed to delete key: ' + (result?.error || 'Unknown error'), 'error');
+                        }
+                    }).catch(err => {
+                        console.error('[key-management-fallback] Delete key error:', err);
+                        showToast('Error deleting key: ' + err.message, 'error');
+                    }).finally(() => {
+                        button.disabled = false;
+                    });
+                }
+            });
             
             // Calculate entropy for a password
             function calculateEntropy(password) {
@@ -1045,7 +1315,7 @@
             }
             
             // Initialize
-            checkKeyStatus();
+            loadKeysList();
         });
     </script>
 </body>

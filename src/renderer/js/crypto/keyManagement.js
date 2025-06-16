@@ -229,6 +229,30 @@ function wireUpButtons(api) {
     } else {
         debug('Create custom key button not found!');
     }
+    
+    // Delete Key button
+    const deleteKeyBtn = document.getElementById('delete-key-btn');
+    if (deleteKeyBtn) {
+        debug('Found delete key button:', deleteKeyBtn.id);
+        deleteKeyBtn.addEventListener('click', () => {
+            debug('Delete key button clicked');
+            deleteKey(api, deleteKeyBtn);
+        });
+    } else {
+        debug('Delete key button not found!');
+    }
+    
+    // Export Key button
+    const exportKeyBtn = document.getElementById('export-key-btn');
+    if (exportKeyBtn) {
+        debug('Found export key button:', exportKeyBtn.id);
+        exportKeyBtn.addEventListener('click', () => {
+            debug('Export key button clicked');
+            exportKey(api, exportKeyBtn);
+        });
+    } else {
+        debug('Export key button not found!');
+    }
 }
 
 /**
@@ -303,6 +327,31 @@ export async function generateKey(appApi, buttonElement) {
             updateKeyStatus(true, result.keyId);
             updateUIForKeyStatus(true, result.keyId);
             showToast('New encryption key generated successfully!', 'success');
+        } else if (result && result.needsConfirmation) {
+            debug('Key generation needs confirmation:', result);
+            
+            // Show confirmation dialog for key overwrite
+            const confirmed = await showKeyOverwriteConfirmation(result.message, result.existingKeyId);
+            if (confirmed) {
+                debug('User confirmed key overwrite, calling forceGenerateKey...');
+                const forceResult = await appApi.forceGenerateKey();
+                debug('Force key generation result:', forceResult);
+                
+                if (forceResult && forceResult.success) {
+                    debug('Force key generation successful:', forceResult);
+                    updateKeyStatus(true, forceResult.keyId);
+                    updateUIForKeyStatus(true, forceResult.keyId);
+                    showToast('New encryption key generated successfully!', 'success');
+                } else {
+                    debug('Force key generation failed:', forceResult);
+                    updateKeyStatus(false);
+                    updateUIForKeyStatus(false, null);
+                    showToast(`Failed to generate key: ${forceResult?.error || 'Unknown error'}`, 'error');
+                }
+            } else {
+                debug('User cancelled key overwrite');
+                showToast('Key generation cancelled', 'info');
+            }
         } else {
             debug('Key generation failed:', result);
             updateKeyStatus(false);
@@ -438,6 +487,129 @@ export async function importKey(appApi, buttonElement) {
             buttonElement.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="btn-icon"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg> Import Key';
         }
     }
+}
+
+/**
+ * Shows a confirmation dialog for key overwrite
+ * @param {string} message - The message to display
+ * @param {string} existingKeyId - The existing key ID
+ * @returns {Promise<boolean>} True if user confirms, false otherwise
+ */
+function showKeyOverwriteConfirmation(message, existingKeyId) {
+    return new Promise((resolve) => {
+        // Create modal overlay
+        const overlay = document.createElement('div');
+        overlay.style.position = 'fixed';
+        overlay.style.top = '0';
+        overlay.style.left = '0';
+        overlay.style.width = '100%';
+        overlay.style.height = '100%';
+        overlay.style.backgroundColor = 'rgba(0, 0, 0, 0.75)';
+        overlay.style.zIndex = '1000';
+        overlay.style.display = 'flex';
+        overlay.style.alignItems = 'center';
+        overlay.style.justifyContent = 'center';
+        
+        // Create modal content
+        const modal = document.createElement('div');
+        modal.style.backgroundColor = 'var(--bg-card, #1e232d)';
+        modal.style.borderRadius = '8px';
+        modal.style.padding = '24px';
+        modal.style.width = '450px';
+        modal.style.maxWidth = '90%';
+        modal.style.border = '1px solid var(--border-color, rgba(255, 255, 255, 0.1))';
+        modal.style.boxShadow = '0 4px 20px rgba(0, 0, 0, 0.3)';
+        
+        // Create title
+        const title = document.createElement('h3');
+        title.textContent = 'Replace Existing Key?';
+        title.style.fontSize = '1.2rem';
+        title.style.marginBottom = '15px';
+        title.style.fontWeight = '600';
+        title.style.color = 'var(--accent-warning, #f59e0b)';
+        
+        // Create message
+        const messageEl = document.createElement('p');
+        messageEl.textContent = message;
+        messageEl.style.fontSize = '0.9rem';
+        messageEl.style.marginBottom = '20px';
+        messageEl.style.color = 'var(--text-primary, rgba(255, 255, 255, 0.9))';
+        messageEl.style.lineHeight = '1.5';
+        
+        // Create warning
+        const warning = document.createElement('p');
+        warning.textContent = '⚠️ This action cannot be undone. Any files encrypted with the current key may become inaccessible.';
+        warning.style.fontSize = '0.85rem';
+        warning.style.marginBottom = '20px';
+        warning.style.color = 'var(--accent-danger, #e64a4a)';
+        warning.style.backgroundColor = 'rgba(230, 74, 74, 0.1)';
+        warning.style.padding = '10px';
+        warning.style.borderRadius = '4px';
+        warning.style.border = '1px solid var(--accent-danger, #e64a4a)';
+        
+        // Create button container
+        const buttonContainer = document.createElement('div');
+        buttonContainer.style.display = 'flex';
+        buttonContainer.style.justifyContent = 'flex-end';
+        buttonContainer.style.gap = '10px';
+        
+        // Create cancel button
+        const cancelBtn = document.createElement('button');
+        cancelBtn.textContent = 'Cancel';
+        cancelBtn.style.padding = '10px 20px';
+        cancelBtn.style.borderRadius = '6px';
+        cancelBtn.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
+        cancelBtn.style.color = 'var(--text-primary, rgba(255, 255, 255, 0.9))';
+        cancelBtn.style.border = 'none';
+        cancelBtn.style.cursor = 'pointer';
+        cancelBtn.style.fontSize = '0.9rem';
+        
+        // Create confirm button
+        const confirmBtn = document.createElement('button');
+        confirmBtn.textContent = 'Replace Key';
+        confirmBtn.style.padding = '10px 20px';
+        confirmBtn.style.borderRadius = '6px';
+        confirmBtn.style.backgroundColor = 'var(--accent-danger, #e64a4a)';
+        confirmBtn.style.color = 'white';
+        confirmBtn.style.border = 'none';
+        confirmBtn.style.cursor = 'pointer';
+        confirmBtn.style.fontSize = '0.9rem';
+        confirmBtn.style.fontWeight = '500';
+        
+        // Handle button clicks
+        cancelBtn.addEventListener('click', () => {
+            document.body.removeChild(overlay);
+            resolve(false);
+        });
+        
+        confirmBtn.addEventListener('click', () => {
+            document.body.removeChild(overlay);
+            resolve(true);
+        });
+        
+        // Close on escape key
+        overlay.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                document.body.removeChild(overlay);
+                resolve(false);
+            }
+        });
+        
+        // Assemble modal
+        buttonContainer.appendChild(cancelBtn);
+        buttonContainer.appendChild(confirmBtn);
+        
+        modal.appendChild(title);
+        modal.appendChild(messageEl);
+        modal.appendChild(warning);
+        modal.appendChild(buttonContainer);
+        
+        overlay.appendChild(modal);
+        document.body.appendChild(overlay);
+        
+        // Focus the cancel button (safer default)
+        setTimeout(() => cancelBtn.focus(), 50);
+    });
 }
 
 /**
@@ -621,7 +793,19 @@ export async function createCustomKey(appApi, buttonElement) {
         const passInput = document.getElementById('custom-key-input');
         const passphrase = passInput ? passInput.value : '';
         
-        if (!passphrase || calculateEntropy(passphrase) < 60) {
+        if (!passphrase) {
+            debug('No passphrase provided');
+            showToast('Please enter a passphrase', 'error');
+            return;
+        }
+        
+        if (passphrase.length < 8) {
+            debug('Passphrase too short');
+            showToast('Passphrase must be at least 8 characters long', 'error');
+            return;
+        }
+        
+        if (calculateEntropy(passphrase) < 60) {
             debug('Passphrase too weak');
             showToast('Enter a stronger passphrase (mix of uppercase, lowercase, numbers, and symbols)', 'error');
             return;
@@ -659,6 +843,245 @@ export async function createCustomKey(appApi, buttonElement) {
     } finally {
         if (buttonElement) buttonElement.disabled = false;
     }
+}
+
+/**
+ * Exports the current encryption key
+ * @param {Object} appApi - The electron API for IPC communication
+ * @param {HTMLElement} buttonElement - The button element that triggered the export
+ */
+export async function exportKey(appApi, buttonElement) {
+    debug('Exporting key...');
+    try {
+        if (!appApi || !appApi.exportKey) {
+            debug('API not available or missing exportKey method');
+            showToast('Key export not available', 'error');
+            return;
+        }
+        
+        // Show loading state
+        if (buttonElement) {
+            const originalContent = buttonElement.innerHTML;
+            buttonElement.disabled = true;
+            buttonElement.innerHTML = '<svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Exporting...';
+            
+            // Reset after 10 seconds in case of hanging
+            setTimeout(() => {
+                if (buttonElement.disabled) {
+                    buttonElement.disabled = false;
+                    buttonElement.innerHTML = originalContent;
+                }
+            }, 10000);
+        }
+        
+        // Export the key
+        debug('Calling appApi.exportKey()...');
+        const result = await appApi.exportKey();
+        debug('Key export result:', result);
+        
+        // Update UI based on result
+        if (result && result.success) {
+            debug('Key export successful:', result);
+            showToast(`Key exported successfully to: ${result.exportPath}`, 'success');
+        } else {
+            debug('Key export failed:', result);
+            showToast(`Failed to export key: ${result?.error || 'Unknown error'}`, 'error');
+        }
+    } catch (error) {
+        debug('Error exporting key:', error);
+        showToast(`Error exporting key: ${error.message}`, 'error');
+    } finally {
+        // Reset button state
+        if (buttonElement) {
+            buttonElement.disabled = false;
+            buttonElement.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="btn-icon"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg> Export Key';
+        }
+    }
+}
+
+/**
+ * Deletes the current encryption key after confirmation
+ * @param {Object} appApi - The electron API for IPC communication
+ * @param {HTMLElement} buttonElement - The button element that triggered the deletion
+ */
+export async function deleteKey(appApi, buttonElement) {
+    debug('Delete key requested...');
+    try {
+        if (!appApi || !appApi.deleteKey) {
+            debug('API not available or missing deleteKey method');
+            showToast('Key deletion not available', 'error');
+            return;
+        }
+        
+        // Show confirmation dialog
+        const confirmed = await showKeyDeleteConfirmation();
+        if (!confirmed) {
+            debug('User cancelled key deletion');
+            showToast('Key deletion cancelled', 'info');
+            return;
+        }
+        
+        // Show loading state
+        if (buttonElement) {
+            const originalContent = buttonElement.innerHTML;
+            buttonElement.disabled = true;
+            buttonElement.innerHTML = '<svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Deleting...';
+            
+            // Reset after 10 seconds in case of hanging
+            setTimeout(() => {
+                if (buttonElement.disabled) {
+                    buttonElement.disabled = false;
+                    buttonElement.innerHTML = originalContent;
+                }
+            }, 10000);
+        }
+        
+        // Delete the key
+        debug('Calling appApi.deleteKey()...');
+        const result = await appApi.deleteKey();
+        debug('Key deletion result:', result);
+        
+        // Update UI based on result
+        if (result && result.success) {
+            debug('Key deletion successful:', result);
+            updateKeyStatus(false, null);
+            updateUIForKeyStatus(false, null);
+            showToast('Encryption key deleted successfully!', 'success');
+        } else {
+            debug('Key deletion failed:', result);
+            showToast(`Failed to delete key: ${result?.error || 'Unknown error'}`, 'error');
+        }
+    } catch (error) {
+        debug('Error deleting key:', error);
+        showToast(`Error deleting key: ${error.message}`, 'error');
+    } finally {
+        // Reset button state
+        if (buttonElement) {
+            buttonElement.disabled = false;
+            buttonElement.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="btn-icon"><path d="M3 6h18"></path><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path></svg> Delete Key';
+        }
+    }
+}
+
+/**
+ * Shows a confirmation dialog for key deletion
+ * @returns {Promise<boolean>} True if user confirms, false otherwise
+ */
+function showKeyDeleteConfirmation() {
+    return new Promise((resolve) => {
+        // Create modal overlay
+        const overlay = document.createElement('div');
+        overlay.style.position = 'fixed';
+        overlay.style.top = '0';
+        overlay.style.left = '0';
+        overlay.style.width = '100%';
+        overlay.style.height = '100%';
+        overlay.style.backgroundColor = 'rgba(0, 0, 0, 0.75)';
+        overlay.style.zIndex = '1000';
+        overlay.style.display = 'flex';
+        overlay.style.alignItems = 'center';
+        overlay.style.justifyContent = 'center';
+        
+        // Create modal content
+        const modal = document.createElement('div');
+        modal.style.backgroundColor = 'var(--bg-card, #1e232d)';
+        modal.style.borderRadius = '8px';
+        modal.style.padding = '24px';
+        modal.style.width = '450px';
+        modal.style.maxWidth = '90%';
+        modal.style.border = '1px solid var(--border-color, rgba(255, 255, 255, 0.1))';
+        modal.style.boxShadow = '0 4px 20px rgba(0, 0, 0, 0.3)';
+        
+        // Create title
+        const title = document.createElement('h3');
+        title.textContent = 'Delete Encryption Key?';
+        title.style.fontSize = '1.2rem';
+        title.style.marginBottom = '15px';
+        title.style.fontWeight = '600';
+        title.style.color = 'var(--accent-danger, #e64a4a)';
+        
+        // Create message
+        const message = document.createElement('p');
+        message.textContent = 'Are you sure you want to delete your encryption key? This action cannot be undone.';
+        message.style.fontSize = '0.9rem';
+        message.style.marginBottom = '20px';
+        message.style.color = 'var(--text-primary, rgba(255, 255, 255, 0.9))';
+        message.style.lineHeight = '1.5';
+        
+        // Create warning
+        const warning = document.createElement('p');
+        warning.textContent = '⚠️ All encrypted files will become inaccessible without this key. Make sure you have exported your key if you need to access your files later.';
+        warning.style.fontSize = '0.85rem';
+        warning.style.marginBottom = '20px';
+        warning.style.color = 'var(--accent-danger, #e64a4a)';
+        warning.style.backgroundColor = 'rgba(230, 74, 74, 0.1)';
+        warning.style.padding = '10px';
+        warning.style.borderRadius = '4px';
+        warning.style.border = '1px solid var(--accent-danger, #e64a4a)';
+        
+        // Create button container
+        const buttonContainer = document.createElement('div');
+        buttonContainer.style.display = 'flex';
+        buttonContainer.style.justifyContent = 'flex-end';
+        buttonContainer.style.gap = '10px';
+        
+        // Create cancel button
+        const cancelBtn = document.createElement('button');
+        cancelBtn.textContent = 'Cancel';
+        cancelBtn.style.padding = '10px 20px';
+        cancelBtn.style.borderRadius = '6px';
+        cancelBtn.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
+        cancelBtn.style.color = 'var(--text-primary, rgba(255, 255, 255, 0.9))';
+        cancelBtn.style.border = 'none';
+        cancelBtn.style.cursor = 'pointer';
+        cancelBtn.style.fontSize = '0.9rem';
+        
+        // Create delete button
+        const deleteBtn = document.createElement('button');
+        deleteBtn.textContent = 'Delete Key';
+        deleteBtn.style.padding = '10px 20px';
+        deleteBtn.style.borderRadius = '6px';
+        deleteBtn.style.backgroundColor = 'var(--accent-danger, #e64a4a)';
+        deleteBtn.style.color = 'white';
+        deleteBtn.style.border = 'none';
+        deleteBtn.style.cursor = 'pointer';
+        deleteBtn.style.fontSize = '0.9rem';
+        deleteBtn.style.fontWeight = '500';
+        
+        // Handle button clicks
+        cancelBtn.addEventListener('click', () => {
+            document.body.removeChild(overlay);
+            resolve(false);
+        });
+        
+        deleteBtn.addEventListener('click', () => {
+            document.body.removeChild(overlay);
+            resolve(true);
+        });
+        
+        // Close on escape key
+        overlay.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                document.body.removeChild(overlay);
+                resolve(false);
+            }
+        });
+        
+        // Assemble modal
+        buttonContainer.appendChild(cancelBtn);
+        buttonContainer.appendChild(deleteBtn);
+        
+        modal.appendChild(title);
+        modal.appendChild(message);
+        modal.appendChild(warning);
+        modal.appendChild(buttonContainer);
+        
+        overlay.appendChild(modal);
+        document.body.appendChild(overlay);
+        
+        // Focus the cancel button (safer default)
+        setTimeout(() => cancelBtn.focus(), 50);
+    });
 }
 
 // Immediately-invoked function to set up when script loads

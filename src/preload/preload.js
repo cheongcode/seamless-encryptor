@@ -64,6 +64,14 @@ try {
       console.log('preload: generateKey called');
       return safeInvoke('generate-key');
     },
+    forceGenerateKey: () => {
+      console.log('preload: forceGenerateKey called');
+      return safeInvoke('force-generate-key');
+    },
+    createCustomKey: (passphrase, entropyPhrase) => {
+      console.log('preload: createCustomKey called');
+      return safeInvoke('create-custom-key', passphrase, entropyPhrase);
+    },
     getKey: () => {
       console.log('preload: getKey called');
       return safeInvoke('get-key');
@@ -79,6 +87,10 @@ try {
     exportKey: () => {
       console.log('preload: exportKey called');
       return safeInvoke('export-key');
+    },
+    deleteKey: () => {
+      console.log('preload: deleteKey called');
+      return safeInvoke('delete-key');
     },
     importKey: (keyData) => {
       console.log('preload: importKey called');
@@ -103,6 +115,10 @@ try {
     openFileDialog: () => {
       console.log('preload: openFileDialog called');
       return safeInvoke('open-file-dialog');
+    },
+    openDirectoryDialog: () => {
+      console.log('preload: openDirectoryDialog called');
+      return safeInvoke('open-directory-dialog');
     },
     saveFileDialog: (fileName) => {
       console.log(`preload: saveFileDialog called with fileName: ${fileName}`);
