@@ -1901,14 +1901,15 @@
                     const result = await window.settingsApi.selectOutputDirectory();
                     console.log('[Settings] Select output directory result:', result);
                     
-                    if (result && result.success && result.path) {
-                        console.log('[Settings] Output directory selected:', result.path);
+                    if (result && typeof result === 'string' && result.length > 0) {
+                        // API returns path directly as string
+                        console.log('[Settings] Output directory selected:', result);
                         
                         // Update the display immediately
                         const outputDirField = document.getElementById('output-dir');
                         if (outputDirField) {
-                            outputDirField.value = result.path;
-                            console.log('[Settings] Updated output-dir field to:', result.path);
+                            outputDirField.value = result;
+                            console.log('[Settings] Updated output-dir field to:', result);
                             
                             // Trigger a visual update to ensure the change is visible
                             outputDirField.dispatchEvent(new Event('change'));
@@ -1924,8 +1925,20 @@
                         
                         // Additional verification
                         console.log('[Settings] Final output directory value:', outputDirField?.value);
+                    } else if (result && result.success && result.path) {
+                        // Handle object response format
+                        console.log('[Settings] Output directory selected:', result.path);
+                        
+                        const outputDirField = document.getElementById('output-dir');
+                        if (outputDirField) {
+                            outputDirField.value = result.path;
+                            outputDirField.dispatchEvent(new Event('change'));
+                        }
+                        await saveSettings();
+                        await loadSettings();
+                        showToast('Output directory updated successfully!', 'success');
                     } else if (result && result.path) {
-                        // Handle legacy response format
+                        // Handle legacy object response format
                         const outputDirField = document.getElementById('output-dir');
                         if (outputDirField) {
                             outputDirField.value = result.path;

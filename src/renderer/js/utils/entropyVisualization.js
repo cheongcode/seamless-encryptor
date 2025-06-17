@@ -638,4 +638,4 @@ function addModalStyles() {
     `;
     
     document.head.appendChild(style);
-} 
+}
