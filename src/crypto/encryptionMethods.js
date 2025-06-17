@@ -182,12 +182,17 @@ module.exports = {
    * @returns {Array<string>} - Array of encryption method names
    */
   getAllEncryptionMethods: () => {
-    const methods = ['aes-256-gcm', 'aes-256-cbc'];
+    const methods = [
+      'aes-256-gcm',    // Authenticated encryption, most secure
+      'aes-256-cbc',    // Block cipher, widely compatible
+      'aes-256-ctr',    // Counter mode, good for streaming
+      'aes-256-ofb'     // Output feedback mode, self-synchronizing
+    ];
     
     // Add ChaCha20 methods only if sodium is available
     if (sodium) {
-      methods.push('chacha20-poly1305');
-      methods.push('xchacha20-poly1305');
+      methods.push('chacha20-poly1305');   // Modern stream cipher with authentication
+      methods.push('xchacha20-poly1305');  // Extended nonce ChaCha20
     }
     
     return methods;

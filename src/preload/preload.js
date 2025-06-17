@@ -88,13 +88,23 @@ try {
       console.log('preload: exportKey called');
       return safeInvoke('export-key');
     },
-    deleteKey: () => {
-      console.log('preload: deleteKey called');
-      return safeInvoke('delete-key');
+    deleteKey: (keyId) => {
+      console.log('preload: deleteKey called with keyId:', keyId);
+      return safeInvoke('delete-key', keyId);
     },
     importKey: (keyData) => {
       console.log('preload: importKey called');
       return safeInvoke('import-key', keyData);
+    },
+    
+    // NEW: Multiple key management APIs
+    listKeys: () => {
+      console.log('preload: listKeys called');
+      return safeInvoke('list-keys');
+    },
+    setActiveKey: (keyId) => {
+      console.log('preload: setActiveKey called with keyId:', keyId);
+      return safeInvoke('set-active-key', keyId);
     },
     
     // Encryption methods

@@ -1630,7 +1630,7 @@
                                         <span class="${securityColor}">${securityLevel} Security</span>
                                     </div>
                                     <div class="text-xs text-slate-500 mt-1">
-                                        Encrypted: ${formatDate(file.timestamp || file.dateEncrypted)}
+                                        Encrypted: ${formatDate(file.timestamp || file.dateEncrypted || file.created)} ${file.encryptedBy && file.encryptedBy !== 'Unknown' ? `by key ${file.encryptedBy}` : ''}
                                     </div>
                                 </div>
                             </div>
@@ -1641,8 +1641,11 @@
                                 <button onclick="decryptFile('${file.id}', '${file.name || file.originalName}')" class="p-2 text-blue-400 hover:bg-blue-500/20 rounded-lg transition-colors" title="Decrypt">
                                     <i class="fas fa-unlock"></i>
                                 </button>
-                                <button onclick="downloadFile('${file.id}', '${file.name || file.originalName}')" class="p-2 text-green-400 hover:bg-green-500/20 rounded-lg transition-colors" title="Download">
+                                <button onclick="downloadFile('${file.id}', '${file.name || file.originalName}')" class="p-2 text-green-400 hover:bg-green-500/20 rounded-lg transition-colors" title="Download (Decrypted)">
                                     <i class="fas fa-download"></i>
+                                </button>
+                                <button onclick="downloadEncryptedFileOnly('${file.id}', '${file.name || file.originalName}')" class="p-2 text-orange-400 hover:bg-orange-500/20 rounded-lg transition-colors" title="Download (.enc file)">
+                                    <i class="fas fa-file-archive"></i>
                                 </button>
                                 <button onclick="deleteEncryptedFile('${file.id}')" class="p-2 text-red-400 hover:bg-red-500/20 rounded-lg transition-colors" title="Delete">
                                     <i class="fas fa-trash"></i>
@@ -1785,7 +1788,7 @@
                 if (window.api?.downloadFile) {
                     const result = await window.api.downloadFile(fileId, fileName);
                     if (result?.success) {
-                        showToast(`Downloaded ${fileName}`, 'success');
+                        showToast(`Downloaded decrypted ${fileName}`, 'success');
                     } else {
                         showToast(`Failed to download ${fileName}`, 'error');
                     }
@@ -1793,6 +1796,22 @@
             } catch (error) {
                 console.error('Error downloading file:', error);
                 showToast('Failed to download file', 'error');
+            }
+        }
+
+        async function downloadEncryptedFileOnly(fileId, fileName) {
+            try {
+                if (window.api?.downloadEncryptedFile) {
+                    const result = await window.api.downloadEncryptedFile(fileId, fileName);
+                    if (result?.success) {
+                        showToast(`Downloaded encrypted ${fileName}.enc`, 'success');
+                    } else {
+                        showToast(`Failed to download encrypted ${fileName}`, 'error');
+                    }
+                }
+            } catch (error) {
+                console.error('Error downloading encrypted file:', error);
+                showToast('Failed to download encrypted file', 'error');
             }
         }
 
@@ -1880,32 +1899,56 @@
             try {
                 if (window.settingsApi?.selectOutputDirectory) {
                     const result = await window.settingsApi.selectOutputDirectory();
-                    console.log('[Main] Select output directory result:', result);
+                    console.log('[Settings] Select output directory result:', result);
                     
-                    if (result && result !== null) {
+                    if (result && result.success && result.path) {
+                        console.log('[Settings] Output directory selected:', result.path);
+                        
                         // Update the display immediately
                         const outputDirField = document.getElementById('output-dir');
                         if (outputDirField) {
-                            outputDirField.value = result;
-                            console.log('[Main] Updated output-dir field to:', result);
+                            outputDirField.value = result.path;
+                            console.log('[Settings] Updated output-dir field to:', result.path);
+                            
+                            // Trigger a visual update to ensure the change is visible
+                            outputDirField.dispatchEvent(new Event('change'));
                         }
                         
-                        // Save the settings
+                        // Save the settings first
                         await saveSettings();
+                        
+                        // Force refresh the settings display to ensure UI is in sync
+                        await loadSettings();
+                        
                         showToast('Output directory updated successfully!', 'success');
                         
-                        // Force refresh the settings to ensure UI is in sync
-                        setTimeout(() => {
-                            loadSettings();
-                        }, 100);
+                        // Additional verification
+                        console.log('[Settings] Final output directory value:', outputDirField?.value);
+                    } else if (result && result.path) {
+                        // Handle legacy response format
+                        const outputDirField = document.getElementById('output-dir');
+                        if (outputDirField) {
+                            outputDirField.value = result.path;
+                            outputDirField.dispatchEvent(new Event('change'));
+                        }
+                        await saveSettings();
+                        await loadSettings();
+                        showToast('Output directory updated successfully!', 'success');
                     } else {
-                        console.log('[Main] Directory selection cancelled');
-                        showToast('Directory selection cancelled', 'info');
+                        console.log('[Settings] Directory selection cancelled or failed');
+                        if (!result || result.cancelled) {
+                            showToast('Directory selection cancelled', 'info');
+                        } else {
+                            showToast('Failed to select directory', 'error');
+                        }
                     }
+                } else {
+                    console.error('[Settings] selectOutputDirectory API not available');
+                    showToast('Directory selection not available', 'error');
                 }
             } catch (error) {
-                console.error('Error selecting output directory:', error);
-                showToast('Failed to select output directory', 'error');
+                console.error('[Settings] Error selecting output directory:', error);
+                showToast('Failed to select output directory: ' + error.message, 'error');
             }
         }
 
@@ -2066,7 +2109,7 @@
         // Key Management Functions
         let availableKeys = [];
 
-        // Event delegation for export and delete buttons
+        // Event delegation for export, delete, and set active buttons
         function setupKeyEventDelegation() {
             const keysList = document.getElementById('keys-list');
             if (keysList) {
@@ -2085,6 +2128,23 @@
                             console.log('[Keys] Delete button clicked for key:', keyId);
                             deleteKey(keyId);
                         }
+                    } else if (event.target.classList.contains('set-active-btn') || event.target.closest('.set-active-btn')) {
+                        const btn = event.target.classList.contains('set-active-btn') ? event.target : event.target.closest('.set-active-btn');
+                        const keyId = btn.dataset.keyId;
+                        if (keyId) {
+                            console.log('[Keys] Set active button clicked for key:', keyId);
+                            setActiveKey(keyId);
+                        }
+                    } else if (event.target.closest('.key-item')) {
+                        // NEW: Click on key item to set it as active (for non-active keys)
+                        const keyItem = event.target.closest('.key-item');
+                        const keyId = keyItem.dataset.keyId;
+                        const isActive = keyItem.classList.contains('active');
+                        
+                        if (keyId && !isActive) {
+                            console.log('[Keys] Key item clicked, setting as active:', keyId);
+                            setActiveKey(keyId);
+                        }
                     }
                 });
             }
@@ -2093,8 +2153,37 @@
         async function loadKeysList() {
             console.log('[Keys] Loading keys list...');
             try {
+                // NEW: Use list-keys API for multiple key support
+                if (window.api?.listKeys) {
+                    console.log('[Keys] Calling listKeys API...');
+                    const result = await window.api.listKeys();
+                    console.log('[Keys] List keys result:', result);
+                    
+                    if (result && result.success && result.keys) {
+                        const keys = result.keys.map(key => ({
+                            id: key.keyId,
+                            type: key.type,
+                            status: key.isActive ? 'Active' : 'Inactive',
+                            created: new Date(key.created).toLocaleDateString(),
+                            isActive: key.isActive,
+                            description: key.description
+                        }));
+                        
+                        console.log('[Keys] Processed keys array:', keys);
+                        availableKeys = keys;
+                        
+                        console.log('[Keys] Calling displayKeysList with', keys.length, 'keys');
+                        displayKeysList(keys);
+                        
+                        console.log('[Keys] Calling updateKeyStatus with hasKeys:', keys.length > 0);
+                        updateKeyStatus(keys.length > 0);
+                        return;
+                    }
+                }
+                
+                // FALLBACK: Use legacy checkKeyStatus for backward compatibility
                 if (window.api?.checkKeyStatus) {
-                    console.log('[Keys] Calling checkKeyStatus API...');
+                    console.log('[Keys] Falling back to checkKeyStatus API...');
                     const result = await window.api.checkKeyStatus();
                     console.log('[Keys] Key status result:', result);
                     
@@ -2105,7 +2194,7 @@
                         console.log('[Keys] Key found, creating key object...');
                         
                         // Determine key type based on source or other indicators
-                        let keyType = 'Generated Key';
+                        let keyType = result.type || 'Generated Key';
                         let description = 'Currently active encryption key';
                         
                         if (result.source === 'filesystem') {
@@ -2120,7 +2209,7 @@
                             id: result.keyId || 'unknown',
                             type: keyType,
                             status: 'Active',
-                            created: new Date().toLocaleDateString(),
+                            created: result.created ? new Date(result.created).toLocaleDateString() : new Date().toLocaleDateString(),
                             isActive: true,
                             description: description,
                             source: result.source || 'memory'
@@ -2141,7 +2230,7 @@
                     console.log('[Keys] Calling updateKeyStatus with hasKeys:', keys.length > 0);
                     updateKeyStatus(keys.length > 0);
                 } else {
-                    console.warn('[Keys] checkKeyStatus API not available');
+                    console.warn('[Keys] No key management APIs available');
                     displayKeysList([]);
                     updateKeyStatus(false);
                 }
@@ -2237,7 +2326,12 @@
                                 <i class="fas fa-file-export mr-1"></i>
                                 Export
                             </button>
-                        ` : ''}
+                        ` : `
+                            <button class="set-active-btn px-3 py-1 text-sm bg-green-500 hover:bg-green-600 rounded-lg transition-colors" data-key-id="${key.id}" title="Set as active key">
+                                <i class="fas fa-check mr-1"></i>
+                                Set Active
+                            </button>
+                        `}
                         <button class="delete-key-btn px-3 py-1 text-sm bg-red-500 hover:bg-red-600 rounded-lg transition-colors" data-key-id="${key.id}">
                             <i class="fas fa-trash mr-1"></i>
                             Delete
@@ -2496,6 +2590,37 @@
                 hideProgressModal();
                 console.error('[Keys] Export error:', error);
                 showToast('Error exporting key: ' + error.message, 'error');
+            }
+        }
+
+        // NEW: Set active key function
+        async function setActiveKey(keyId) {
+            console.log('[Keys] Setting active key:', keyId);
+            
+            try {
+                if (window.api?.setActiveKey) {
+                    showProgressModal('Switching Key', 'Setting new active encryption key...');
+                    const result = await window.api.setActiveKey(keyId);
+                    hideProgressModal();
+                    
+                    if (result && result.success) {
+                        showToast(`Key ${keyId} is now active!`, 'success');
+                        console.log('[Keys] Active key set successfully');
+                        
+                        // Refresh the keys list to show the updated state
+                        await loadKeysList();
+                    } else {
+                        showToast('Failed to set active key: ' + (result?.error || 'Unknown error'), 'error');
+                        console.error('[Keys] Set active failed:', result.error);
+                    }
+                } else {
+                    showToast('Key switching not available', 'error');
+                    console.error('[Keys] Set active API not available');
+                }
+            } catch (error) {
+                hideProgressModal();
+                console.error('[Keys] Set active error:', error);
+                showToast('Error setting active key: ' + error.message, 'error');
             }
         }
 

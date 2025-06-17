@@ -1,0 +1,1 @@
+Text file entropy test - this should be properly encrypted now
