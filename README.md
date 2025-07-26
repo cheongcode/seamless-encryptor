@@ -1,177 +1,65 @@
-# 🔐 Seamless Encryptor Pro
+# �� Seamless Encryptor - Cross-Platform Encrypted File Storage System
 
-A professional-grade, cross-platform file encryption application built with Electron, featuring military-grade encryption, Google Drive integration, and advanced cryptographic analysis tools.
+A secure, cross-platform file encryption and cloud storage system compatible with both Windows and macOS, leveraging native keychains, strong cryptography, and cloud APIs.
 
-![Seamless Encryptor Pro](https://img.shields.io/badge/Encryption-AES--256--GCM-blue) ![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey) ![License](https://img.shields.io/badge/License-MIT-green) ![Version](https://img.shields.io/badge/Version-1.0.0-orange)
+![Platform Support](https://img.shields.io/badge/platform-Windows%20%7C%20macOS-blue)
+![License](https://img.shields.io/badge/license-MIT-green)
+![Encryption](https://img.shields.io/badge/encryption-AES%20256%20%7C%20ChaCha20-red)
 
-## ✨ Features
+## 🌟 Key Features
 
-### 🛡️ **Advanced Encryption**
-- **Military-Grade Algorithms**: AES-256-GCM, ChaCha20-Poly1305, XChaCha20-Poly1305
-- **Custom Key Creation**: Generate keys from secure passphrases
-- **Automatic Key Generation**: Cryptographically secure random key generation
-- **Key Import/Export**: Secure key management and backup
-- **Multiple Encryption Methods**: Choose the best algorithm for your needs
+### ✅ Cross-Platform Key Storage (KEK/DEK Architecture)
+- **Windows**: Stores Key Encryption Key (KEK) using `keytar` in Windows Credential Manager
+- **macOS**: Stores KEK using `keytar` in macOS Keychain (with Secure Enclave support)
+- **Advanced Architecture**: Master KEK encrypts individual Data Encryption Keys (DEKs)
+- **Memory Security**: Local DEK caching is memory-only for enhanced security
 
-### 📊 **Cryptographic Analysis**
-- **Entropy Analysis**: Real-time cryptographic quality assessment
-- **Security Rating**: Automatic evaluation of encryption strength
-- **Byte Distribution Visualization**: Histogram analysis of encrypted data
-- **File Integrity Verification**: Ensure your encrypted files are secure
+### ✅ Password-Protected DEK Cloud Backup
+- **User-Controlled Security**: Password supplied by user, never stored on disk or cloud
+- **Strong Key Derivation**: PBKDF2 with 100,000 iterations using SHA-256
+- **AES-256-GCM Encryption**: DEK encrypted before cloud upload as `.key.enc` files
+- **Recovery Capability**: Only user with password can decrypt and recover DEK
 
-### ☁️ **Cloud Integration**
-- **Google Drive Sync**: Automatic backup of encrypted files
-- **OAuth 2.0 Authentication**: Secure Google account integration
-- **Auto-Upload**: Optional automatic cloud backup
-- **File Management**: Browse and manage cloud-stored encrypted files
+### ✅ Advanced File Encryption with Standardized Headers
+- **Primary Algorithm**: AES-256-GCM (Galois/Counter Mode with built-in authentication)
+- **Additional Support**: ChaCha20-Poly1305, XChaCha20-Poly1305, AES-256-CBC
+- **Custom File Format**:
+  ```
+  ┌─────────────────┬─────────────┬──────────────┬─────────────┬──────────────┬─────────────┬────────┬──────────┬─────────────┐
+  │ Magic Bytes     │ Version     │ Algorithm ID │ IV Length   │ Tag Length   │ DEK Hash    │ IV     │ Auth Tag │ Ciphertext  │
+  │ "ETCR" (4)      │ (1 byte)    │ (1 byte)     │ (1 byte)    │ (1 byte)     │ SHA-256 (32)│ (var)  │ (var)    │ (remaining) │
+  └─────────────────┴─────────────┴──────────────┴─────────────┴──────────────┴─────────────┴────────┴──────────┴─────────────┘
+  ```
+- **File Extension**: All encrypted files use `.etcr` extension
+- **Integrity Verification**: DEK hash (SHA-256) included in headers for validation
 
-### 🎨 **Modern User Interface**
-- **Dark Theme**: Professional, eye-friendly interface
-- **Responsive Design**: Optimized for all screen sizes
-- **Real-time Progress**: Live encryption/decryption progress tracking
-- **Drag & Drop**: Intuitive file handling
-- **Toast Notifications**: Clear status updates and feedback
-
-### 🔧 **Advanced Features**
-- **Batch Processing**: Encrypt multiple files simultaneously
-- **File Queue Management**: Organize and prioritize encryption tasks
-- **Settings Persistence**: Customizable application preferences
-- **Cross-Platform**: Windows, macOS, and Linux support
-- **Secure File Deletion**: Optional secure deletion of original files
-
-## 🚀 Quick Start
-
-### Prerequisites
-- **Node.js** (v16 or higher)
-- **npm** or **yarn**
-- **Git**
-
-### Installation
-
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/yourusername/seamless-encryptor.git
-   cd seamless-encryptor
-   ```
-
-2. **Install dependencies**
-   ```bash
-   npm install
-   ```
-
-3. **Set up environment variables**
-   ```bash
-   cp .env.example .env
-   # Edit .env with your Google Drive API credentials (optional)
-   ```
-
-4. **Start the application**
-   ```bash
-   npm start
-   ```
-
-### Building for Production
-
-```bash
-# Build for current platform
-npm run make
-
-# Build for all platforms
-npm run make -- --platform=win32,darwin,linux
+### ✅ Google Drive Vault with Organized Structure
+Creates and manages hierarchical encrypted vault on Google Drive:
+```
+/EncryptedVault/
+  └── /{user-uuid}/
+      ├── /YYYY-MM-DD/           # Date-based organization
+      │   ├── file1.jpg.etcr
+      │   ├── document.pdf.etcr
+      │   └── manifest.json      # Filename mappings & metadata
+      └── /keys/
+          └── {dek-hash}.key.enc # Password-protected DEK backups
 ```
 
-## ⚙️ Configuration
+**Manifest System Features**:
+- **Original → Encrypted Filename Mapping**
+- **DEK Hash Tracking**
+- **Upload Timestamps**
+- **File Metadata Storage**
+- **Automatic Updates**
 
-### Google Drive Integration Setup
-
-1. **Create Google Cloud Project**
-   - Go to [Google Cloud Console](https://console.cloud.google.com/)
-   - Create a new project or select existing one
-   - Enable the Google Drive API
-
-2. **Create OAuth 2.0 Credentials**
-   - Navigate to "Credentials" in the API & Services section
-   - Click "Create Credentials" → "OAuth 2.0 Client ID"
-   - Choose "Desktop Application"
-   - Download the credentials JSON
-
-3. **Configure Environment Variables**
-   ```env
-   GOOGLE_CLIENT_ID=your_google_client_id_here
-   GOOGLE_CLIENT_SECRET=your_google_client_secret_here
-   GOOGLE_REDIRECT_URI=urn:ietf:wg:oauth:2.0:oob
-   ```
-
-### Application Settings
-
-The application supports various customizable settings:
-
-- **Output Directory**: Choose where decrypted files are saved
-- **Auto-Delete**: Automatically delete original files after encryption
-- **Notifications**: Enable/disable system notifications
-- **Confirm Actions**: Require confirmation for destructive operations
-- **Auto-Upload**: Automatically upload encrypted files to Google Drive
-
-## 🏗️ Technical Stack
-
-### Core Technologies
-- **[Electron](https://electronjs.org/)** - Cross-platform desktop framework
-- **[Node.js](https://nodejs.org/)** - JavaScript runtime
-- **[Webpack](https://webpack.js.org/)** - Module bundler
-- **[Tailwind CSS](https://tailwindcss.com/)** - Utility-first CSS framework
-
-### Encryption & Security
-- **Node.js Crypto Module** - Native cryptographic functions
-- **AES-256-GCM** - Advanced Encryption Standard with Galois/Counter Mode
-- **ChaCha20-Poly1305** - Modern stream cipher with authentication
-- **PBKDF2** - Password-Based Key Derivation Function
-- **Secure Random Generation** - Cryptographically secure randomness
-
-### Cloud & APIs
-- **[Google APIs](https://github.com/googleapis/google-api-nodejs-client)** - Google Drive integration
-- **OAuth 2.0** - Secure authentication protocol
-- **[Electron Store](https://github.com/sindresorhus/electron-store)** - Persistent settings storage
-
-### Development Tools
-- **[Electron Forge](https://www.electronforge.io/)** - Build and packaging
-- **[ESLint](https://eslint.org/)** - Code linting
-- **[Prettier](https://prettier.io/)** - Code formatting
-- **[dotenv](https://github.com/motdotla/dotenv)** - Environment variable management
-
-## 📁 Project Structure
-
-```
-seamless-encryptor/
-├── src/
-│   ├── main/                 # Main process (Node.js)
-│   │   └── main.js          # Application entry point
-│   ├── renderer/            # Renderer process (UI)
-│   │   ├── index.html       # Main application UI
-│   │   ├── assets/          # Static assets
-│   │   └── js/              # JavaScript modules
-│   ├── preload/             # Preload scripts
-│   │   └── preload.js       # IPC bridge
-│   ├── config/              # Configuration modules
-│   │   └── keyManager.js    # Key management utilities
-│   └── crypto/              # Cryptographic modules
-│       ├── encryption.js    # Encryption algorithms
-│       ├── entropyAnalyzer.js # Cryptographic analysis
-│       └── encryptionMethods.js # Method implementations
-├── .env                     # Environment variables (create from .env.example)
-├── forge.config.js          # Electron Forge configuration
-├── webpack.*.config.js      # Webpack configurations
-└── package.json             # Project dependencies
-```
-
-## 🔐 Security Features
-
-### Encryption Algorithms
+### ✅ Multi-Algorithm Encryption Support
 
 #### AES-256-GCM (Default)
 - **Key Size**: 256 bits
 - **Mode**: Galois/Counter Mode
 - **Authentication**: Built-in AEAD
-- **Performance**: Excellent on modern hardware
+- **Performance**: Excellent on modern hardware with AES-NI
 
 #### ChaCha20-Poly1305
 - **Key Size**: 256 bits
@@ -185,128 +73,215 @@ seamless-encryptor/
 - **Benefits**: Larger nonce space, enhanced security
 - **Use Case**: High-volume encryption scenarios
 
-### Key Management
-- **Secure Generation**: Cryptographically secure random number generation
-- **Key Derivation**: PBKDF2 with 100,000 iterations
-- **Storage**: Encrypted local storage with OS keychain integration
-- **Backup**: Secure key export/import functionality
+## 🔧 Installation & Setup
 
-### File Format
-```
-Encrypted File Structure:
-┌─────────────────┬──────────────┬─────────────┬──────────────┐
-│ Magic Bytes     │ Algorithm ID │ IV Length   │ Tag Length   │
-│ (2 bytes)       │ (1 byte)     │ (1 byte)    │ (1 byte)     │
-├─────────────────┼──────────────┼─────────────┼──────────────┤
-│ Reserved        │ IV           │ Auth Tag    │ Ciphertext   │
-│ (1 byte)        │ (variable)   │ (variable)  │ (variable)   │
-└─────────────────┴──────────────┴─────────────┴──────────────┘
-```
+### Prerequisites
+- **Node.js**: v16 or higher
+- **Platform**: Windows 10+ or macOS 10.14+
+- **Google Account**: For cloud vault functionality
 
-## 🧪 Testing
-
-### Manual Testing
-1. **File Encryption**: Test with various file types and sizes
-2. **Key Management**: Verify key generation, import, and export
-3. **Google Drive**: Test cloud sync and authentication
-4. **Entropy Analysis**: Verify cryptographic quality assessment
-5. **Cross-Platform**: Test on different operating systems
-
-### Automated Testing
+### Quick Start
 ```bash
-# Run unit tests (when available)
-npm test
+# Clone the repository
+git clone https://github.com/your-repo/seamless-encryptor.git
+cd seamless-encryptor
 
-# Run integration tests
-npm run test:integration
+# Install dependencies
+npm install
 
-# Run security audit
-npm audit
+# Set up environment variables
+cp .env.example .env
+# Edit .env with your Google Drive API credentials
+
+# Start development
+npm run dev
+
+# Build for production
+npm run build
 ```
 
-## 🐛 Troubleshooting
+### Google Drive API Setup
+1. Visit [Google Cloud Console](https://console.cloud.google.com/)
+2. Create a new project or select existing
+3. Enable Google Drive API
+4. Create OAuth 2.0 credentials
+5. Add credentials to `.env` file:
+   ```env
+   GOOGLE_CLIENT_ID=your_client_id_here
+   GOOGLE_CLIENT_SECRET=your_client_secret_here
+   GOOGLE_REDIRECT_URI=urn:ietf:wg:oauth:2.0:oob
+   ```
 
-### Common Issues
+## 🛡️ Security Architecture
 
-#### "Encryption key not found"
-- **Solution**: Generate a new key or import an existing one
-- **Prevention**: Always create a key before encrypting files
-
-#### "Google Drive connection failed"
-- **Solution**: Check your internet connection and API credentials
-- **Prevention**: Ensure `.env` file has correct Google API credentials
-
-#### "Decryption failed"
-- **Solution**: Verify you're using the correct key
-- **Prevention**: Keep secure backups of your encryption keys
-
-#### "File not found" during download
-- **Solution**: Check if the encrypted file still exists
-- **Prevention**: Avoid manually deleting encrypted files
-
-### Debug Mode
-Enable debug mode for detailed logging:
-```bash
-DEBUG=* npm start
+### Key Management Hierarchy
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    USER PASSWORD                             │
+│                         │                                   │
+│                         ▼                                   │
+│              ┌─────────────────────┐                        │
+│              │  OS Keychain/Store  │ ◄── KEK (Master Key)   │
+│              └─────────────────────┘                        │
+│                         │                                   │
+│                         ▼                                   │
+│              ┌─────────────────────┐                        │
+│              │   Encrypted DEKs    │ ◄── Per-file keys      │
+│              └─────────────────────┘                        │
+│                         │                                   │
+│                         ▼                                   │
+│              ┌─────────────────────┐                        │
+│              │  Encrypted Files    │ ◄── Your data          │
+│              └─────────────────────┘                        │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-## 🤝 Contributing
+### Cloud Security Model
+- **Zero-Knowledge**: Cloud provider cannot access your data
+- **Password Independence**: Cloud DEK backups require separate user password
+- **Key Rotation**: Support for DEK rotation without changing master password
+- **Multi-Device**: Secure DEK distribution to trusted devices (future)
 
-We welcome contributions! Please follow these steps:
+## 🚀 Usage Guide
 
-1. **Fork the repository**
-2. **Create a feature branch**: `git checkout -b feature/amazing-feature`
-3. **Commit your changes**: `git commit -m 'Add amazing feature'`
-4. **Push to the branch**: `git push origin feature/amazing-feature`
-5. **Open a Pull Request**
+### Basic File Encryption
+```javascript
+// Encrypt a file
+const result = await window.api.encryptFile('/path/to/file.txt', 'aes-256-gcm');
 
-### Development Guidelines
-- Follow the existing code style
-- Add tests for new features
-- Update documentation as needed
-- Ensure security best practices
+// Upload to secure vault with DEK backup
+await window.api.uploadToVault({
+  fileId: result.fileId,
+  fileName: 'file.txt',
+  password: 'your-backup-password' // Optional DEK backup
+});
+```
+
+### DEK Backup & Recovery
+```javascript
+// Create password-protected DEK backup
+await window.api.createDEKBackup({ password: 'secure-password' });
+
+// Restore DEK from cloud backup
+await window.api.restoreDEKBackup({ 
+  password: 'secure-password',
+  dekHash: 'hash-of-dek'
+});
+```
+
+### Vault Information
+```javascript
+// Get vault structure info
+const vaultInfo = await window.api.getVaultInfo();
+console.log(`Vault path: ${vaultInfo.vaultPath}`);
+console.log(`User UUID: ${vaultInfo.userUUID}`);
+```
+
+## 📁 Project Structure
+
+```
+seamless-encryptor/
+├── src/
+│   ├── main/
+│   │   └── main.js              # Main process with IPC handlers
+│   ├── renderer/
+│   │   ├── index.html           # Main UI
+│   │   ├── cloud.html           # Cloud management UI
+│   │   ├── settings.html        # Application settings
+│   │   └── js/
+│   │       ├── cloud.js         # Cloud integration
+│   │       └── crypto/          # Crypto utilities
+│   ├── config/
+│   │   └── keyManager.js        # Key management system
+│   └── crypto/
+│       ├── encryption.js        # Core encryption
+│       ├── encryptionMethods.js # Algorithm implementations
+│       └── cryptoUtil.js        # Crypto utilities
+├── .env                         # Environment variables
+└── package.json                 # Dependencies & scripts
+```
+
+## 🎯 Advanced Features
+
+### Optional & Future Enhancements
+- **Key Rotation**: Rotate DEKs without changing KEK/password
+- **MFA Integration**: 
+  - macOS: Touch ID biometric unlocking
+  - Windows: Windows Hello integration
+- **Integrity Verification**: GCM tags + separate HMACs
+- **Multi-Device Sync**: Secure DEK distribution to trusted devices
+- **Encrypted Sharing**: Re-wrap DEKs with different keys for sharing
+- **Audit Logging**: Comprehensive security event logging
+
+### Quantum Resistance Preparation
+- ChaCha20 algorithms provide quantum-resistant alternatives
+- Future: Post-quantum cryptography integration
+- Forward secrecy through key rotation capabilities
+
+## 🔍 API Reference
+
+### Main Process APIs
+```javascript
+// File Operations
+ipcMain.handle('encrypt-file', (event, filePath, method) => {})
+ipcMain.handle('decrypt-file', (event, params) => {})
+
+// Cloud Vault Operations  
+ipcMain.handle('upload-to-gdrive', (event, {fileId, fileName, password}) => {})
+ipcMain.handle('get-vault-info', (event) => {})
+
+// DEK Management
+ipcMain.handle('create-dek-backup', (event, {password}) => {})
+ipcMain.handle('restore-dek-backup', (event, {password, dekHash}) => {})
+
+// Google Drive Integration
+ipcMain.handle('gdrive-connect', (event) => {})
+ipcMain.handle('gdrive-list-files', (event, {parentFolderId, pageToken}) => {})
+```
+
+### Key Manager APIs
+```javascript
+// Core Key Operations
+keyManager.getMasterKey()                    // Get KEK from OS keychain
+keyManager.deriveKeyFromPassword(password)   // PBKDF2 key derivation
+keyManager.saveKeyForFile(fileId, key)       // Store DEK for file
+keyManager.getKeyForFile(fileId)             // Retrieve DEK for file
+
+// DEK Backup Operations
+keyManager.createPasswordProtectedDEKBackup(password, dek)  // Create backup
+keyManager.decryptPasswordProtectedDEKBackup(password, data) // Restore backup
+keyManager.getCurrentDEK()                   // Get current DEK
+```
+
+## 🔒 Security Considerations
+
+### Threat Model Protection
+- **Local Attacks**: OS keychain protection, memory-only key storage
+- **Cloud Attacks**: Zero-knowledge encryption, separate password protection
+- **Network Attacks**: TLS transport, authenticated encryption
+- **Physical Access**: Platform-specific hardware security (TPM, Secure Enclave)
+
+### Best Practices
+1. **Strong Passwords**: Use unique, complex passwords for DEK backups
+2. **Regular Backups**: Create DEK backups before key rotation
+3. **Secure Recovery**: Store backup passwords securely (password manager)
+4. **Key Rotation**: Rotate DEKs periodically for forward secrecy
+5. **Audit Reviews**: Monitor vault access and file operations
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+MIT License - see [LICENSE](LICENSE) for details.
 
-## 🙏 Acknowledgments
+## 🤝 Contributing
 
-- **Electron Team** - For the amazing cross-platform framework
-- **Node.js Crypto Team** - For robust cryptographic primitives
-- **Google** - For the Drive API and OAuth infrastructure
-- **Tailwind CSS** - For the beautiful utility-first CSS framework
-- **Open Source Community** - For the countless libraries and tools
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development guidelines.
 
-## 📞 Support
+## 📚 Documentation
 
-- **Issues**: [GitHub Issues](https://github.com/yourusername/seamless-encryptor/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/yourusername/seamless-encryptor/discussions)
-- **Email**: support@seamlessencryptor.com
-
-## 🔮 Roadmap
-
-### Upcoming Features
-- [ ] **Multi-language Support** - Internationalization
-- [ ] **Plugin System** - Extensible architecture
-- [ ] **Command Line Interface** - Headless operation
-- [ ] **Additional Cloud Providers** - Dropbox, OneDrive support
-- [ ] **File Compression** - Built-in compression before encryption
-- [ ] **Secure Messaging** - Encrypted communication features
-- [ ] **Mobile Apps** - iOS and Android companions
-
-### Performance Improvements
-- [ ] **Streaming Encryption** - Handle large files efficiently
-- [ ] **Multi-threading** - Parallel processing
-- [ ] **Memory Optimization** - Reduced memory footprint
-- [ ] **Caching System** - Improved performance
+- **Developer Guide**: [DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md)
+- **User Manual**: [USER_MANUAL.md](USER_MANUAL.md)
+- **Changelog**: [CHANGELOG.md](CHANGELOG.md)
 
 ---
 
-<div align="center">
-
-**Made with ❤️ by the Seamless Encryptor Team**
-
-[⭐ Star this repo](https://github.com/yourusername/seamless-encryptor) | [🐛 Report Bug](https://github.com/yourusername/seamless-encryptor/issues) | [💡 Request Feature](https://github.com/yourusername/seamless-encryptor/issues)
-
-</div> 
+**🔐 Your files. Your keys. Your security.** 

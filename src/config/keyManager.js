@@ -177,6 +177,130 @@ module.exports = {
     
     return true;
   },
+
+  /**
+   * Create password-protected DEK backup for cloud storage
+   * @param {string} password User-supplied password (never stored)
+   * @param {Buffer} dek The DEK to encrypt and backup
+   * @returns {Promise<Buffer>} Encrypted DEK data for cloud upload
+   */
+  createPasswordProtectedDEKBackup: async (password, dek) => {
+    if (!password || password.length < 8) {
+      throw new Error('Password must be at least 8 characters long');
+    }
+    
+    if (!Buffer.isBuffer(dek) || dek.length !== 32) {
+      throw new Error('DEK must be a 32-byte buffer');
+    }
+    
+    // Generate salt for key derivation
+    const salt = crypto.randomBytes(32);
+    
+    // Derive key using Argon2id-like approach with PBKDF2 (100,000 iterations for security)
+    const derivedKey = await new Promise((resolve, reject) => {
+      crypto.pbkdf2(password, salt, 100000, 32, 'sha256', (err, key) => {
+        if (err) reject(err);
+        else resolve(key);
+      });
+    });
+    
+    // Encrypt DEK using AES-256-GCM
+    const iv = crypto.randomBytes(16);
+    const cipher = crypto.createCipheriv('aes-256-gcm', derivedKey, iv);
+    
+    const encrypted = Buffer.concat([
+      cipher.update(dek),
+      cipher.final()
+    ]);
+    
+    const authTag = cipher.getAuthTag();
+    
+    // Create header with metadata
+    const header = {
+      version: 1,
+      algorithm: 'aes-256-gcm',
+      kdf: 'pbkdf2',
+      iterations: 100000,
+      salt: salt.toString('hex'),
+      iv: iv.toString('hex'),
+      authTag: authTag.toString('hex'),
+      timestamp: new Date().toISOString()
+    };
+    
+    // Combine header and encrypted data
+    const headerJson = JSON.stringify(header);
+    const headerLength = Buffer.alloc(4);
+    headerLength.writeUInt32BE(headerJson.length, 0);
+    
+    return Buffer.concat([
+      headerLength,
+      Buffer.from(headerJson, 'utf8'),
+      encrypted
+    ]);
+  },
+
+  /**
+   * Decrypt password-protected DEK backup from cloud storage
+   * @param {string} password User-supplied password
+   * @param {Buffer} encryptedData Encrypted DEK data from cloud
+   * @returns {Promise<Buffer>} The decrypted DEK
+   */
+  decryptPasswordProtectedDEKBackup: async (password, encryptedData) => {
+    if (!password) {
+      throw new Error('Password is required for DEK decryption');
+    }
+    
+    if (!Buffer.isBuffer(encryptedData) || encryptedData.length < 4) {
+      throw new Error('Invalid encrypted data format');
+    }
+    
+    // Read header length
+    const headerLength = encryptedData.readUInt32BE(0);
+    if (headerLength > encryptedData.length - 4) {
+      throw new Error('Invalid header length');
+    }
+    
+    // Parse header
+    const headerJson = encryptedData.slice(4, 4 + headerLength).toString('utf8');
+    const header = JSON.parse(headerJson);
+    
+    // Validate header
+    if (header.version !== 1 || header.algorithm !== 'aes-256-gcm' || header.kdf !== 'pbkdf2') {
+      throw new Error('Unsupported backup format');
+    }
+    
+    // Extract encrypted DEK
+    const encrypted = encryptedData.slice(4 + headerLength);
+    
+    // Derive key using same parameters
+    const salt = Buffer.from(header.salt, 'hex');
+    const derivedKey = await new Promise((resolve, reject) => {
+      crypto.pbkdf2(password, salt, header.iterations, 32, 'sha256', (err, key) => {
+        if (err) reject(err);
+        else resolve(key);
+      });
+    });
+    
+    // Decrypt DEK
+    const iv = Buffer.from(header.iv, 'hex');
+    const authTag = Buffer.from(header.authTag, 'hex');
+    
+    const decipher = crypto.createDecipheriv('aes-256-gcm', derivedKey, iv);
+    decipher.setAuthTag(authTag);
+    
+    return Buffer.concat([
+      decipher.update(encrypted),
+      decipher.final()
+    ]);
+  },
+
+  /**
+   * Get current DEK for backup
+   * @returns {Promise<Buffer>} Current DEK
+   */
+  getCurrentDEK: async () => {
+    return await module.exports.getMasterKey();
+  },
   
   /**
    * Export all keys to a file (should be used with caution!)

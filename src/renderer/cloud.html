@@ -3,100 +3,566 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <!-- CSP should be similar to settings.html, adjusted if needed for this page's specific requirements -->
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' https://drive-thirdparty.googleusercontent.com data: file:; font-src 'self' https://fonts.gstatic.com; connect-src 'self';">
-    <title>Cloud Storage - Seamless Encryptor</title>
-    <link rel="stylesheet" href="styles.css"> <!-- Assuming styles.css is in the same directory -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-</head>
-<body>
-    <div class="container mx-auto max-w-4xl"> <!-- Max width can be larger for a dedicated page -->
-        <header class="flex items-center justify-between mb-6">
-            <a href="index.html" class="flex items-center">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-2 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16l-4-4m0 0l4-4m-4 4h18" />
-                </svg>
-                <h1 class="text-2xl font-bold text-gradient">Cloud Storage</h1>
-            </a>
-        </header>
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' https://drive-thirdparty.googleusercontent.com https://lh3.googleusercontent.com data: file:; font-src 'self' https://fonts.gstatic.com; connect-src 'self';">
+    <title>Google Drive - Seamless Encryptor</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Google+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <style>
+        /* Google Drive-like styling */
+        .gdrive-container {
+            font-family: 'Google Sans', 'Inter', sans-serif;
+            background: #1a1a1a;
+            color: #e8eaed;
+            min-height: 100vh;
+        }
         
-        <div class="glass-card p-6 mb-6">
-            <h2 class="text-xl font-semibold mb-3 text-gradient">Google Drive Management</h2>
-            <div class="space-y-4">
-                <div>
-                    <p class="font-medium">Google Drive Integration</p>
-                    <p id="gdrive-status" class="text-sm text-gray-400 mb-2">Status: Checking...</p>
-                    <button id="connect-gdrive" class="text-sm bg-blue-700 hover:bg-blue-600 px-3 py-1.5 rounded-md transition-colors duration-200">
-                        Connect to Google Drive
-                    </button>
-                    <button id="disconnect-gdrive" class="hidden text-sm bg-red-700 hover:bg-red-600 px-3 py-1.5 rounded-md transition-colors duration-200">
-                        Disconnect Google Drive
-                    </button>
-                    <div id="gdrive-auth-code-section" class="hidden mt-3">
-                        <p class="text-sm text-gray-300 mb-1">Enter the authorization code from your browser:</p>
-                        <input type="text" id="gdrive-auth-code" class="w-full p-2 rounded-md bg-gray-700 border border-gray-600 focus:ring-blue-500 focus:border-blue-500 text-sm" placeholder="Authorization Code">
-                        <button id="submit-gdrive-auth-code" class="mt-2 text-sm bg-green-600 hover:bg-green-500 px-3 py-1.5 rounded-md transition-colors duration-200">
-                            Submit Code & Connect
-                        </button>
+        .gdrive-header {
+            background: #1f1f1f;
+            border-bottom: 1px solid #333;
+            height: 64px;
+            display: flex;
+            align-items: center;
+            padding: 0 24px;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        
+        .gdrive-logo {
+            display: flex;
+            align-items: center;
+            font-size: 22px;
+            font-weight: 500;
+            color: #4285f4;
+        }
+        
+        .gdrive-search {
+            flex: 1;
+            max-width: 720px;
+            margin: 0 40px;
+        }
+        
+        .gdrive-search input {
+            width: 100%;
+            height: 40px;
+            background: #303134;
+            border: 1px solid #5f6368;
+            border-radius: 8px;
+            color: #e8eaed;
+            padding: 0 16px;
+            font-size: 14px;
+        }
+        
+        .gdrive-sidebar {
+            width: 240px;
+            background: #1a1a1a;
+            border-right: 1px solid #333;
+            min-height: calc(100vh - 64px);
+            padding: 16px 0;
+        }
+        
+        .gdrive-main {
+            flex: 1;
+            background: #1a1a1a;
+            min-height: calc(100vh - 64px);
+        }
+        
+        .gdrive-content {
+            display: flex;
+        }
+        
+        .gdrive-toolbar {
+            height: 64px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 24px;
+            border-bottom: 1px solid #333;
+        }
+        
+        .gdrive-breadcrumb {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+        }
+        
+        .gdrive-breadcrumb .material-icons {
+            font-size: 16px;
+            color: #9aa0a6;
+        }
+        
+        .gdrive-breadcrumb-item {
+            color: #9aa0a6;
+            cursor: pointer;
+            padding: 4px 8px;
+            border-radius: 4px;
+            transition: background 0.2s;
+        }
+        
+        .gdrive-breadcrumb-item:hover {
+            background: #333;
+        }
+        
+        .gdrive-breadcrumb-item.current {
+            color: #e8eaed;
+            font-weight: 500;
+        }
+        
+        .gdrive-view-toggle {
+            display: flex;
+            gap: 4px;
+        }
+        
+        .gdrive-view-btn {
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        
+        .gdrive-view-btn:hover {
+            background: #333;
+        }
+        
+        .gdrive-view-btn.active {
+            background: #1a73e8;
+            color: white;
+        }
+        
+        .gdrive-file-area {
+            padding: 16px 24px;
+        }
+        
+        .gdrive-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 16px;
+        }
+        
+        .gdrive-list {
+            display: none;
+        }
+        
+        .gdrive-list.active {
+            display: block;
+        }
+        
+        .gdrive-grid.active {
+            display: grid;
+        }
+        
+        .gdrive-file-card {
+            background: #1f1f1f;
+            border: 1px solid #333;
+            border-radius: 8px;
+            padding: 16px;
+            cursor: pointer;
+            transition: all 0.2s;
+            position: relative;
+        }
+        
+        .gdrive-file-card:hover {
+            background: #2a2a2a;
+            border-color: #5f6368;
+        }
+        
+        .gdrive-file-card.selected {
+            background: #1a4480;
+            border-color: #1a73e8;
+        }
+        
+        .gdrive-file-icon {
+            width: 48px;
+            height: 48px;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .gdrive-file-icon .material-icons {
+            font-size: 48px;
+            color: #4285f4;
+        }
+        
+        .gdrive-file-name {
+            font-size: 14px;
+            font-weight: 500;
+            color: #e8eaed;
+            margin-bottom: 4px;
+            word-break: break-word;
+            line-height: 1.4;
+        }
+        
+        .gdrive-file-meta {
+            font-size: 12px;
+            color: #9aa0a6;
+            display: flex;
+            justify-content: space-between;
+        }
+        
+        .gdrive-list-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        .gdrive-list-table th {
+            background: #1f1f1f;
+            border-bottom: 1px solid #333;
+            padding: 12px 16px;
+            text-align: left;
+            font-size: 12px;
+            font-weight: 500;
+            color: #9aa0a6;
+            position: sticky;
+            top: 0;
+        }
+        
+        .gdrive-list-table td {
+            padding: 8px 16px;
+            border-bottom: 1px solid #333;
+            font-size: 14px;
+        }
+        
+        .gdrive-list-table tr:hover {
+            background: #2a2a2a;
+        }
+        
+        .gdrive-list-table tr.selected {
+            background: #1a4480;
+        }
+        
+        .gdrive-context-menu {
+            position: fixed;
+            background: #333;
+            border: 1px solid #5f6368;
+            border-radius: 8px;
+            padding: 8px 0;
+            z-index: 1000;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+            display: none;
+            min-width: 200px;
+        }
+        
+        .gdrive-context-item {
+            padding: 8px 16px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            color: #e8eaed;
+            font-size: 14px;
+        }
+        
+        .gdrive-context-item:hover {
+            background: #444;
+        }
+        
+        .gdrive-context-item .material-icons {
+            font-size: 20px;
+            color: #9aa0a6;
+        }
+        
+        .gdrive-upload-area {
+            border: 2px dashed #5f6368;
+            border-radius: 8px;
+            padding: 40px 20px;
+            text-align: center;
+            margin: 16px 0;
+            transition: all 0.2s;
+        }
+        
+        .gdrive-upload-area.dragover {
+            border-color: #1a73e8;
+            background: rgba(26, 115, 232, 0.1);
+        }
+        
+        .gdrive-status-bar {
+            height: 48px;
+            background: #1f1f1f;
+            border-top: 1px solid #333;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 24px;
+            font-size: 12px;
+            color: #9aa0a6;
+        }
+        
+        .gdrive-encryption-badge {
+            background: #137333;
+            color: white;
+            font-size: 10px;
+            padding: 2px 6px;
+            border-radius: 12px;
+            position: absolute;
+            top: 8px;
+            right: 8px;
+        }
+        
+        .gdrive-progress {
+            width: 100%;
+            height: 4px;
+            background: #333;
+            border-radius: 2px;
+            overflow: hidden;
+            margin-top: 8px;
+        }
+        
+        .gdrive-progress-bar {
+            height: 100%;
+            background: #1a73e8;
+            border-radius: 2px;
+            transition: width 0.3s;
+            width: 0%;
+        }
+        
+        .connection-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 16px 24px;
+            background: #2d2d2d;
+            border-radius: 8px;
+            margin: 16px 24px;
+        }
+        
+        .connection-status.connected {
+            background: #1e3a1e;
+            border: 1px solid #137333;
+        }
+        
+        .connection-status.disconnected {
+            background: #3c1e1e;
+            border: 1px solid #d93025;
+        }
+        
+        .status-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #d93025;
+        }
+        
+        .status-indicator.connected {
+            background: #137333;
+        }
+    </style>
+</head>
+<body class="gdrive-container">
+    <!-- Google Drive-like Header -->
+    <div class="gdrive-header">
+        <div class="gdrive-logo">
+            <span class="material-icons" style="margin-right: 8px;">lock</span>
+            Secure Drive
+        </div>
+        
+        <div class="gdrive-search">
+            <input type="text" id="gdrive-search-input" placeholder="Search in Drive" />
+        </div>
+        
+        <div style="display: flex; align-items: center; gap: 12px;">
+            <button id="connect-gdrive" class="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded text-sm">
+                Connect Drive
+            </button>
+            <button id="disconnect-gdrive" class="bg-red-600 hover:bg-red-700 px-4 py-2 rounded text-sm hidden">
+                Disconnect
+            </button>
+            <a href="index.html" class="text-gray-400 hover:text-white">
+                <span class="material-icons">home</span>
+            </a>
+        </div>
+    </div>
+
+    <!-- Connection Status -->
+    <div id="connection-status" class="connection-status disconnected">
+        <div class="status-indicator" id="status-indicator"></div>
+        <div>
+            <div id="connection-text">Not connected to Google Drive</div>
+            <div id="connection-subtext" class="text-xs text-gray-400">Connect to access your files</div>
+        </div>
+    </div>
+
+    <!-- Auth Code Section (Hidden by default) -->
+    <div id="gdrive-auth-code-section" class="hidden bg-gray-800 p-4 mx-6 rounded-lg">
+        <div class="text-sm text-gray-300 mb-2">Enter the authorization code from your browser:</div>
+        <div class="flex gap-2">
+            <input type="text" id="gdrive-auth-code" class="flex-1 p-2 bg-gray-700 border border-gray-600 rounded text-white" placeholder="Authorization Code">
+            <button id="submit-gdrive-auth-code" class="bg-green-600 hover:bg-green-700 px-4 py-2 rounded text-sm">
+                Connect
+            </button>
+        </div>
+    </div>
+
+    <!-- Google Drive Content -->
+    <div class="gdrive-content">
+        <!-- Sidebar -->
+        <div class="gdrive-sidebar">
+            <div style="padding: 0 16px;">
+                <button id="new-upload-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg mb-4 flex items-center gap-2">
+                    <span class="material-icons">add</span>
+                    New Upload
+                </button>
+            </div>
+            
+            <div id="sidebar-items">
+                <div class="sidebar-item active" data-type="my-drive">
+                    <span class="material-icons">folder</span>
+                    My Drive
+                </div>
+                <div class="sidebar-item" data-type="encrypted-vault">
+                    <span class="material-icons">enhanced_encryption</span>
+                    Encrypted Vault
+                </div>
+                <div class="sidebar-item" data-type="shared">
+                    <span class="material-icons">people</span>
+                    Shared with me
+                </div>
+                <div class="sidebar-item" data-type="recent">
+                    <span class="material-icons">schedule</span>
+                    Recent
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="gdrive-main">
+            <!-- Toolbar -->
+            <div class="gdrive-toolbar">
+                <div class="gdrive-breadcrumb" id="gdrive-breadcrumb">
+                    <span class="material-icons">folder</span>
+                    <span class="gdrive-breadcrumb-item current" data-id="root">My Drive</span>
+                </div>
+                
+                <div class="gdrive-view-toggle">
+                    <div class="gdrive-view-btn active" id="grid-view-btn" title="Grid view">
+                        <span class="material-icons">grid_view</span>
+                    </div>
+                    <div class="gdrive-view-btn" id="list-view-btn" title="List view">
+                        <span class="material-icons">view_list</span>
                     </div>
                 </div>
-                <!-- Auto-upload toggle might be here or in general app settings, moved to settings for now -->
-            </div>
-        </div>
-
-        <!-- GDrive File Browser Section -->
-        <div id="gdrive-browser-section" class="glass-card p-6 hidden">
-            <div class="flex justify-between items-center mb-3">
-                <h3 class="text-lg font-medium text-gradient">Google Drive Files</h3>
-                <button id="gdrive-refresh-files" class="text-sm bg-gray-600 hover:bg-gray-500 px-3 py-1.5 rounded-md transition-colors duration-200">Refresh</button>
-            </div>
-            <div id="gdrive-current-path" class="text-sm text-gray-400 mb-3 truncate">Current Path: /</div>
-            
-            <!-- File List Table -->
-            <div class="overflow-x-auto bg-gray-800 rounded-md border border-gray-700 mb-3">
-                <table class="min-w-full text-sm text-left text-gray-300">
-                    <thead class="text-xs text-gray-400 uppercase bg-gray-750">
-                        <tr>
-                            <th scope="col" class="px-4 py-2 w-10"></th> <!-- Icon -->
-                            <th scope="col" class="px-4 py-2">Name</th>
-                            <th scope="col" class="px-4 py-2">Last Modified</th>
-                            <th scope="col" class="px-4 py-2">Size</th>
-                            <!-- <th scope="col" class="px-4 py-2">Actions</th> -->
-                        </tr>
-                    </thead>
-                    <tbody id="gdrive-file-list-body">
-                        <!-- File items will be appended here by cloud.js -->
-                        <tr>
-                           <td colspan="4" class="px-4 py-3 text-center text-gray-500">
-                                Connect to Google Drive to see files.
-                           </td>
-                        </tr>
-                    </tbody>
-                </table>
             </div>
 
-            <div class="flex justify-between items-center">
-                <button id="gdrive-up-folder" class="text-sm bg-gray-600 hover:bg-gray-500 px-3 py-1.5 rounded-md transition-colors duration-200" disabled>Up Folder</button>
-                <button id="gdrive-load-more" class="text-sm bg-blue-600 hover:bg-blue-500 px-3 py-1.5 rounded-md transition-colors duration-200 hidden">Load More</button>
-            </div>
-             <!-- Placeholder for Upload Button/Area -->
-            <div class="mt-6 pt-4 border-t border-gray-700">
-                <h4 class="text-md font-medium text-gradient mb-2">Upload Files</h4>
-                <p class="text-sm text-gray-400 mb-3">Select files to encrypt and upload to the current Google Drive folder.</p>
-                <input type="file" id="gdrive-file-upload-input" multiple class="hidden"/>
-                <button id="gdrive-select-files-button" class="bg-green-600 hover:bg-green-500 text-white px-4 py-2 rounded-md">Select Files to Upload</button>
-                <div id="gdrive-upload-queue" class="mt-3 space-y-2">
-                    <!-- Upload queue items will appear here -->
+            <!-- File Area -->
+            <div class="gdrive-file-area">
+                <!-- Upload Area -->
+                <div id="gdrive-upload-area" class="gdrive-upload-area hidden">
+                    <div class="material-icons" style="font-size: 48px; color: #9aa0a6; margin-bottom: 12px;">cloud_upload</div>
+                    <div class="text-lg font-medium mb-2">Drag files here or click to select</div>
+                    <div class="text-sm text-gray-400">Files will be encrypted before upload</div>
+                    <input type="file" id="gdrive-file-input" multiple style="display: none;">
+                </div>
+
+                <!-- Grid View -->
+                <div id="gdrive-grid" class="gdrive-grid active">
+                    <!-- Files will be populated here -->
+                </div>
+
+                <!-- List View -->
+                <div id="gdrive-list" class="gdrive-list">
+                    <table class="gdrive-list-table">
+                        <thead>
+                            <tr>
+                                <th style="width: 40px;"></th>
+                                <th>Name</th>
+                                <th style="width: 120px;">Modified</th>
+                                <th style="width: 80px;">Size</th>
+                                <th style="width: 40px;"></th>
+                            </tr>
+                        </thead>
+                        <tbody id="gdrive-list-body">
+                            <!-- Files will be populated here -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Loading State -->
+                <div id="gdrive-loading" class="text-center py-12">
+                    <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+                    <div class="mt-2 text-gray-400">Loading files...</div>
+                </div>
+
+                <!-- Empty State -->
+                <div id="gdrive-empty" class="text-center py-12 hidden">
+                    <span class="material-icons" style="font-size: 64px; color: #9aa0a6;">folder_open</span>
+                    <div class="mt-4 text-lg font-medium">This folder is empty</div>
+                    <div class="text-gray-400">Upload files to get started</div>
                 </div>
             </div>
         </div>
-        
-        <footer class="text-center text-gray-500 text-sm pt-8 pb-6">
-            <p>Seamless Encryptor v<span id="app-version">1.0.0</span></p>
-            <p class="mt-1">&copy; 2025 Secure Digital Tools</p>
-        </footer>
     </div>
-    
+
+    <!-- Context Menu -->
+    <div id="gdrive-context-menu" class="gdrive-context-menu">
+        <div class="gdrive-context-item" data-action="download">
+            <span class="material-icons">download</span>
+            Download
+        </div>
+        <div class="gdrive-context-item" data-action="encrypt">
+            <span class="material-icons">lock</span>
+            Encrypt & Upload
+        </div>
+        <div class="gdrive-context-item" data-action="decrypt">
+            <span class="material-icons">lock_open</span>
+            Decrypt & Download
+        </div>
+        <div class="gdrive-context-item" data-action="rename">
+            <span class="material-icons">edit</span>
+            Rename
+        </div>
+        <div class="gdrive-context-item" data-action="delete">
+            <span class="material-icons">delete</span>
+            Delete
+        </div>
+    </div>
+
+    <!-- Status Bar -->
+    <div class="gdrive-status-bar">
+        <div id="gdrive-status-info">Ready</div>
+        <div id="gdrive-selection-info"></div>
+    </div>
+
+    <!-- Hidden elements for file operations -->
+    <input type="file" id="hidden-file-input" multiple style="display: none;">
+
     <script src="js/cloud.js" type="module"></script>
+    
+    <style>
+        .sidebar-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 8px 16px;
+            cursor: pointer;
+            color: #e8eaed;
+            font-size: 14px;
+            transition: background 0.2s;
+        }
+        
+        .sidebar-item:hover {
+            background: #333;
+        }
+        
+        .sidebar-item.active {
+            background: #1a4480;
+            color: white;
+        }
+        
+        .sidebar-item .material-icons {
+            font-size: 20px;
+            color: #9aa0a6;
+        }
+        
+        .sidebar-item.active .material-icons {
+            color: white;
+        }
+    </style>
 </body>
 </html> 

@@ -4,6 +4,7 @@ const fs = require('fs');
 const crypto = require('crypto');
 const Store = require('electron-store');
 const { google } = require('googleapis');
+const keytar = require('keytar');
 
 // Load environment variables
 require('dotenv').config();
@@ -30,6 +31,36 @@ const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || 'your_google_client_id_
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || 'your_google_client_secret_here';
 const GOOGLE_REDIRECT_URI = process.env.GOOGLE_REDIRECT_URI || 'urn:ietf:wg:oauth:2.0:oob';
 
+// Check if Google credentials are properly configured
+const isGoogleConfigured = () => {
+  return GOOGLE_CLIENT_ID !== 'your_google_client_id_here' && 
+         GOOGLE_CLIENT_SECRET !== 'your_google_client_secret_here' &&
+         GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET;
+};
+
+// Validate OAuth setup for compliance
+const validateOAuthSetup = () => {
+  const issues = [];
+  
+  if (!isGoogleConfigured()) {
+    issues.push('Google API credentials not configured in .env file');
+  }
+  
+  if (GOOGLE_CLIENT_ID === 'your_google_client_id_here') {
+    issues.push('Using placeholder GOOGLE_CLIENT_ID - replace with real credentials');
+  }
+  
+  if (GOOGLE_CLIENT_SECRET === 'your_google_client_secret_here') {
+    issues.push('Using placeholder GOOGLE_CLIENT_SECRET - replace with real credentials');
+  }
+  
+  if (!process.env.DEVELOPER_EMAIL) {
+    issues.push('DEVELOPER_EMAIL not set in .env file (required for OAuth compliance)');
+  }
+  
+  return issues;
+};
+
 let googleAuthClient = null; // To store the OAuth2 client
 let googleDrive = null; // To store the Drive API client instance
 
@@ -55,47 +86,91 @@ function getGoogleAuthClient() {
     return googleAuthClient;
 }
 
-// Helper function to find or create an app-specific folder in Google Drive
-async function getOrCreateAppFolderId() {
+// Generate or get user UUID
+function getUserUUID() {
+    let userUUID = store.get('userUUID');
+    if (!userUUID) {
+        userUUID = crypto.randomBytes(16).toString('hex');
+        store.set('userUUID', userUUID);
+        console.log(`[main.js] Generated new user UUID: ${userUUID}`);
+    }
+    return userUUID;
+}
+
+// Helper function to find or create the EncryptedVault folder structure
+async function getOrCreateVaultStructure() {
     if (!googleDrive) {
-        console.log('[main.js] Google Drive API client not initialized. Cannot get/create app folder.');
+        console.log('[main.js] Google Drive API client not initialized. Cannot get/create vault structure.');
         getGoogleAuthClient(); // Attempt to initialize it
         if (!googleDrive) throw new Error('Google Drive client not available.');
     }
 
-    const folderName = 'SeamlessEncryptor_Files';
     try {
-        // Check if folder already exists
-        const response = await googleDrive.files.list({
-            q: `mimeType='application/vnd.google-apps.folder' and name='${folderName}' and trashed=false`,
-            fields: 'files(id, name)',
-            spaces: 'drive',
-        });
+        // Create EncryptedVault root folder
+        let vaultFolderId = await findOrCreateFolder('EncryptedVault', 'root');
+        
+        // Create user-specific subfolder
+        const userUUID = getUserUUID();
+        let userFolderId = await findOrCreateFolder(userUUID, vaultFolderId);
+        
+        // Create date-based subfolder (YYYY-MM-DD)
+        const today = new Date().toISOString().split('T')[0];
+        let dateFolderId = await findOrCreateFolder(today, userFolderId);
+        
+        // Create keys subfolder in user directory
+        let keysFolderId = await findOrCreateFolder('keys', userFolderId);
+        
+        return {
+            vaultFolderId,
+            userFolderId,
+            dateFolderId,
+            keysFolderId,
+            userUUID
+        };
+    } catch (error) {
+        console.error('[main.js] Error creating vault structure:', error);
+        throw error;
+    }
+}
 
-        if (response.data.files.length > 0) {
-            console.log(`[main.js] Found existing app folder '${folderName}' with ID: ${response.data.files[0].id}`);
-            return response.data.files[0].id;
-        } else {
-            // Create the folder
-            console.log(`[main.js] App folder '${folderName}' not found, creating new one...`);
-            const fileMetadata = {
-                name: folderName,
-                mimeType: 'application/vnd.google-apps.folder',
-            };
-            const folder = await googleDrive.files.create({
-                requestBody: fileMetadata,
-                fields: 'id',
-            });
-            console.log(`[main.js] Created new app folder '${folderName}' with ID: ${folder.data.id}`);
-            return folder.data.id;
-        }
+// Helper function to find or create a folder
+async function findOrCreateFolder(folderName, parentId) {
+    // Check if folder already exists
+    const response = await googleDrive.files.list({
+        q: `mimeType='application/vnd.google-apps.folder' and name='${folderName}' and '${parentId}' in parents and trashed=false`,
+        fields: 'files(id, name)',
+        spaces: 'drive',
+    });
+
+    if (response.data.files.length > 0) {
+        console.log(`[main.js] Found existing folder '${folderName}' with ID: ${response.data.files[0].id}`);
+        return response.data.files[0].id;
+    } else {
+        // Create the folder
+        console.log(`[main.js] Folder '${folderName}' not found, creating new one...`);
+        const fileMetadata = {
+            name: folderName,
+            mimeType: 'application/vnd.google-apps.folder',
+            parents: [parentId]
+        };
+        const folder = await googleDrive.files.create({
+            requestBody: fileMetadata,
+            fields: 'id',
+        });
+        console.log(`[main.js] Created new folder '${folderName}' with ID: ${folder.data.id}`);
+        return folder.data.id;
+    }
+}
+
+// Legacy function for backward compatibility
+async function getOrCreateAppFolderId() {
+    try {
+        const vaultStructure = await getOrCreateVaultStructure();
+        return vaultStructure.dateFolderId;
     } catch (error) {
         console.error('[main.js] Error finding or creating app folder in Google Drive:', error);
         // Fallback: if we can't create/find the specific folder, allow listing from root as a degraded experience
-        // Or, more strictly, throw an error. For now, let's allow listing from root if folder ops fail.
-        // To list from root, parentFolderId would be undefined or 'root'.
-        // However, for this function, we should throw if we can't ensure the app folder.
-        throw new Error(`Failed to get or create app folder '${folderName}': ${error.message}`);
+        throw new Error(`Failed to get or create app folder: ${error.message}`);
     }
 }
 
@@ -823,12 +898,15 @@ ipcMain.handle('encrypt-file', async (event, filePath, method) => {
     }
     
     // Prepare the encrypted file format with header
-    // Format: [Magic Bytes (2)][Version (1)][Algorithm ID (1)][IV Length (1)][Auth Tag Length (1)][IV][Auth Tag][Ciphertext]
-    const magicBytes = Buffer.from([0xF1, 0xE2]); // Magic bytes to identify our file format
+    // Format: [Magic Bytes (4)][Version (1)][Algorithm ID (1)][IV Length (1)][Auth Tag Length (1)][DEK Hash (32)][IV][Auth Tag][Ciphertext]
+    const magicBytes = Buffer.from([0x45, 0x54, 0x43, 0x52]); // Magic bytes "ETCR" to identify our file format
     const formatVersion = Buffer.from([0x01]); // Version 1 of our format
     const algorithmIdBuffer = Buffer.from([algorithmId]);
     const ivLength = Buffer.from([iv.length]);
     const tagLength = Buffer.from([authTag.length]);
+    
+    // Generate DEK hash for header
+    const dekHash = crypto.createHash('sha256').update(key).digest();
     
     const fullEncryptedData = Buffer.concat([
       magicBytes,
@@ -836,6 +914,7 @@ ipcMain.handle('encrypt-file', async (event, filePath, method) => {
       algorithmIdBuffer,
       ivLength,
       tagLength,
+      dekHash,
       iv,
       authTag,
       encryptedData
@@ -853,7 +932,7 @@ ipcMain.handle('encrypt-file', async (event, filePath, method) => {
       fs.mkdirSync(encryptedFilesDir, { recursive: true });
     }
     
-    const encryptedFilePath = path.join(encryptedFilesDir, `${fileId}_${fileName}.enc`);
+    const encryptedFilePath = path.join(encryptedFilesDir, `${fileId}_${fileName}.etcr`);
     
     try {
       fs.writeFileSync(encryptedFilePath, fullEncryptedData);
@@ -864,13 +943,16 @@ ipcMain.handle('encrypt-file', async (event, filePath, method) => {
     
     // Store metadata about the encrypted file
     const activeKeyInfo = getActiveKey();
+    const dekHashHex = dekHash.toString('hex');
     const metadata = {
       id: fileId,
       originalName: fileName,
       encryptedPath: encryptedFilePath,
+      encryptedFilename: `${fileId}_${fileName}.etcr`,
       originalSize: fileData.length,
       encryptedSize: fullEncryptedData.length,
       algorithm: method,
+      dekHash: dekHashHex,
       timestamp: new Date().toISOString(),
       keyId: activeKeyInfo ? activeKeyInfo.keyId : 'unknown', // Track which key encrypted this
       keyType: activeKeyInfo ? activeKeyInfo.metadata.type : 'unknown'
@@ -1133,11 +1215,11 @@ ipcMain.handle('decrypt-file', async (event, params) => {
     
     try {
       // Try to parse the file header
-      const header = encryptedData.slice(0, 2).toString('hex');
+      const header = encryptedData.slice(0, 4);
       
-      if (header === 'f1e2') { // Magic bytes for our encrypted file format
-        const formatVersion = encryptedData[2];
-        const algorithmId = encryptedData[3];
+      if (header.equals(Buffer.from([0x45, 0x54, 0x43, 0x52]))) { // Magic bytes "ETCR" for our encrypted file format
+        const formatVersion = encryptedData[4];
+        const algorithmId = encryptedData[5];
         
         // Map algorithm ID to name
         function getAlgorithmFromId(id) {
@@ -1154,9 +1236,10 @@ ipcMain.handle('decrypt-file', async (event, params) => {
         
         algorithm = getAlgorithmFromId(algorithmId);
         
-        const ivLength = encryptedData[4];
-        const tagLength = encryptedData[5];
-        const headerLength = 6; // 2 magic bytes + 1 version + 1 algorithm + 1 ivLength + 1 tagLength
+        const ivLength = encryptedData[6];
+        const tagLength = encryptedData[7];
+        const dekHash = encryptedData.slice(8, 40); // 32 bytes for SHA-256 hash
+        const headerLength = 40; // 4 magic bytes + 1 version + 1 algorithm + 1 ivLength + 1 tagLength + 32 DEK hash
         
         iv = encryptedData.slice(headerLength, headerLength + ivLength);
         tag = encryptedData.slice(headerLength + ivLength, headerLength + ivLength + tagLength);
@@ -2405,11 +2488,11 @@ ipcMain.handle('get-encrypted-files', async (event) => {
         let algorithm = 'aes-256-gcm'; // Default algorithm
         let originalName = fileName; // Default original name
 
-        // Check for new header format (Magic Bytes F1E2)
-        if (stats.size >= 6 && fileBuffer[0] === 0xF1 && fileBuffer[1] === 0xE2) { // Ensure buffer is large enough for header
-          const formatVersion = fileBuffer[2];
+        // Check for new header format (Magic Bytes ETCR)
+        if (stats.size >= 40 && fileBuffer[0] === 0x45 && fileBuffer[1] === 0x54 && fileBuffer[2] === 0x43 && fileBuffer[3] === 0x52) { // Ensure buffer is large enough for header
+          const formatVersion = fileBuffer[4];
           if (formatVersion === 0x01) { // Check if we support this version
-            const algorithmId = fileBuffer[3];
+            const algorithmId = fileBuffer[5];
             if (algorithmId === 1) {
               algorithm = 'aes-256-gcm';
             } else if (algorithmId === 2) {
@@ -2966,18 +3049,41 @@ ipcMain.handle('get-app-version', () => {
 // --- Google Drive IPC Handlers (Placeholders) ---
 ipcMain.handle('gdrive-connect', async () => {
     console.log('[main.js] gdrive-connect called');
-    const authClient = getGoogleAuthClient();
-    const authUrl = authClient.generateAuthUrl({
-      access_type: 'offline', // Important to get a refresh token
-      scope: [
-        'https://www.googleapis.com/auth/drive.file', // Full access to files created or opened by the app
-        'https://www.googleapis.com/auth/drive.readonly', // To list files
-        'https://www.googleapis.com/auth/userinfo.email' // To get user's email
-    ],
-      prompt: 'consent' // Ensures the consent screen is shown, good for getting refresh_token
-    });
-    console.log('[main.js] Generated GDrive Auth URL:', authUrl);
-    return { success: true, authUrl };
+    
+    // Check OAuth setup validation
+    const setupIssues = validateOAuthSetup();
+    if (setupIssues.length > 0) {
+      const errorMsg = `OAuth setup incomplete:\n${setupIssues.map(issue => `• ${issue}`).join('\n')}\n\nPlease see OAUTH_SETUP_GUIDE.md for detailed instructions.`;
+      console.error('[main.js]', errorMsg);
+      return { 
+        success: false, 
+        error: errorMsg,
+        needsSetup: true,
+        setupIssues: setupIssues
+      };
+    }
+    
+    try {
+      const authClient = getGoogleAuthClient();
+      const authUrl = authClient.generateAuthUrl({
+        access_type: 'offline', // Important to get a refresh token
+        scope: [
+          'https://www.googleapis.com/auth/drive.file', // Full access to files created or opened by the app
+          'https://www.googleapis.com/auth/drive.readonly', // To list files
+          'https://www.googleapis.com/auth/userinfo.email' // To get user's email
+      ],
+        prompt: 'consent' // Ensures the consent screen is shown, good for getting refresh_token
+      });
+      console.log('[main.js] Generated GDrive Auth URL:', authUrl);
+      return { success: true, authUrl };
+    } catch (error) {
+      console.error('[main.js] Error generating auth URL:', error);
+      return { 
+        success: false, 
+        error: `Failed to generate authorization URL: ${error.message}. Please check your Google API credentials.`,
+        needsSetup: true 
+      };
+    }
 });
 
 ipcMain.handle('gdrive-exchange-auth-code', async (event, authCode) => {
@@ -3045,35 +3151,73 @@ ipcMain.handle('gdrive-status', async () => {
 // IPC handler to list files from Google Drive
 ipcMain.handle('gdrive-list-files', async (event, { parentFolderId = null, pageToken = null } = {}) => {
   try {
-    console.log('[main.js] gdrive-list-files called. Parent:', parentFolderId, "PageToken:", pageToken);
-    getGoogleAuthClient(); // Ensures auth client and potentially Drive client are initialized
+    console.log(`[main.js] gdrive-list-files called with parentFolderId: ${parentFolderId}, pageToken: ${pageToken}`);
+    getGoogleAuthClient(); // Ensure auth client and Drive API are initialized
     if (!googleDrive) {
-      return { success: false, error: 'Google Drive not connected or initialized.' };
+      console.error('[main.js] Google Drive API client not initialized. Cannot list files.');
+      return { success: false, error: 'Google Drive client not available.', files: [] };
     }
 
     let targetFolderId = parentFolderId;
-    let defaultAppFolderId = null; // Variable to store the ID of the app's default folder
     let listedFolderName = null;
 
-    if (!targetFolderId) {
-        try {
-            // Default to listing from the app-specific folder if no parentFolderId is provided
-            defaultAppFolderId = await getOrCreateAppFolderId();
-            targetFolderId = defaultAppFolderId;
-            listedFolderName = 'SeamlessEncryptor_Files'; // Set name when app folder is used
-        } catch (folderError) {
-            console.warn('[main.js] Could not get/create app folder for listing, attempting to list root. Error:', folderError.message);
-            targetFolderId = 'root'; // Fallback to root
-            listedFolderName = 'My Drive'; // Set name for root
-            console.log('[main.js] Defaulting to list root directory due to app folder issue.');
+    // Helper function to find legacy SeamlessEncryptor_Files folder
+    async function findLegacyFolder() {
+      try {
+        const response = await googleDrive.files.list({
+          q: `mimeType='application/vnd.google-apps.folder' and name='SeamlessEncryptor_Files' and trashed=false`,
+          fields: 'files(id, name)',
+          spaces: 'drive',
+        });
+        
+        if (response.data.files.length > 0) {
+          console.log(`[main.js] Found legacy folder 'SeamlessEncryptor_Files' with ID: ${response.data.files[0].id}`);
+          return response.data.files[0].id;
         }
-    } else if (targetFolderId === 'root') {
-        listedFolderName = 'My Drive';
+        return null;
+      } catch (error) {
+        console.error('[main.js] Error finding legacy folder:', error);
+        return null;
+      }
     }
-    // If parentFolderId was provided and it's not 'root', the renderer should know its name.
-    // We only explicitly set listedFolderName for 'root' or the app's default folder.
-    
-    const query = `\'${targetFolderId}\' in parents and trashed=false`;
+
+    // Check for legacy folder first, then vault structure
+    if (!targetFolderId) {
+      const legacyFolderId = await findLegacyFolder();
+      if (legacyFolderId) {
+        console.log('[main.js] Using legacy SeamlessEncryptor_Files folder');
+        targetFolderId = legacyFolderId;
+      } else {
+        // If no legacy folder, use new vault structure
+        try {
+          const vaultStructure = await getOrCreateVaultStructure();
+          targetFolderId = vaultStructure.dateFolderId;
+          console.log('[main.js] Using new vault structure');
+        } catch (vaultError) {
+          console.error('[main.js] Error with vault structure:', vaultError);
+          // Fallback to default app folder
+          const defaultAppFolderId = await getOrCreateAppFolderId();
+          targetFolderId = defaultAppFolderId;
+        }
+      }
+    }
+
+    // Attempt to get folder name if we don't have it
+    if (targetFolderId && targetFolderId !== 'root') {
+        try {
+            const folderResponse = await googleDrive.files.get({
+                fileId: targetFolderId,
+                fields: 'name'
+            });
+            listedFolderName = folderResponse.data.name;
+        } catch (nameError) {
+            console.warn(`[main.js] Could not get folder name for ID ${targetFolderId}:`, nameError.message);
+        }
+    }
+
+    const query = targetFolderId === 'root' 
+      ? "trashed=false" 
+      : `'${targetFolderId}' in parents and trashed=false`;
 
     const response = await googleDrive.files.list({
       q: query,
@@ -3084,22 +3228,46 @@ ipcMain.handle('gdrive-list-files', async (event, { parentFolderId = null, pageT
       spaces: 'drive',
     });
 
-    // Re-check listedFolderName if it wasn't set by initial logic (e.g. navigating back to app folder by ID)
-    if (!listedFolderName && defaultAppFolderId && targetFolderId === defaultAppFolderId) {
-        listedFolderName = 'SeamlessEncryptor_Files';
-    } else if (!listedFolderName && targetFolderId === 'root') {
+    // Set folder name based on what we're looking at
+    if (!listedFolderName) {
+      if (targetFolderId === 'root') {
         listedFolderName = 'My Drive';
+      } else {
+        // Check if this is our legacy folder
+        const legacyFolderId = await findLegacyFolder();
+        if (legacyFolderId && targetFolderId === legacyFolderId) {
+          listedFolderName = 'SeamlessEncryptor_Files (Legacy)';
+        } else {
+          listedFolderName = 'Encrypted Vault';
+        }
+      }
     }
-    // If a specific parentFolderId was given (and it wasn't root, and not the default app folder),
-    // listedFolderName remains null, as the renderer should manage this.
 
-    console.log(`[main.js] Found ${response.data.files.length} files/folders in Drive folder ID ${targetFolderId}. Name: ${listedFolderName}`);
+    // Transform files to include encryption detection and source info
+    const transformedFiles = response.data.files.map(file => ({
+      id: file.id,
+      name: file.name,
+      mimeType: file.mimeType,
+      modifiedTime: file.modifiedTime,
+      size: file.size,
+      isFolder: file.mimeType === 'application/vnd.google-apps.folder',
+      isEncrypted: file.name.endsWith('.etcr') || file.name.endsWith('.enc'),
+      iconLink: file.iconLink,
+      webViewLink: file.webViewLink,
+      parents: file.parents,
+      capabilities: file.capabilities,
+      source: listedFolderName.includes('Legacy') ? 'legacy' : 'vault'
+    }));
+
+    console.log(`[main.js] Found ${transformedFiles.length} files/folders in Drive folder ID ${targetFolderId}. Name: ${listedFolderName}`);
     return { 
         success: true, 
-        files: response.data.files, 
+        files: transformedFiles, 
         nextPageToken: response.data.nextPageToken, 
         currentFolderId: targetFolderId, 
-        currentFolderName: listedFolderName // Can be null if renderer already knows the name
+        currentFolderName: listedFolderName,
+        hasLegacyFiles: transformedFiles.some(f => f.source === 'legacy'),
+        hasVaultFiles: transformedFiles.some(f => f.source === 'vault')
     };
   } catch (error) {
     console.error('[main.js] Error listing GDrive files:', error);
@@ -3421,6 +3589,365 @@ ipcMain.handle('delete-key', async (event, keyId) => {
     }
   } catch (error) {
     console.error('[KeyManager] Error deleting key:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Manifest management functions
+async function updateManifest(dateFolderId, originalFilename, encryptedFilename, dekHash, metadata = {}) {
+    try {
+        const manifestName = 'manifest.json';
+        
+        // Try to find existing manifest
+        let manifestFileId = null;
+        const response = await googleDrive.files.list({
+            q: `name='${manifestName}' and '${dateFolderId}' in parents and trashed=false`,
+            fields: 'files(id, name)',
+            spaces: 'drive',
+        });
+        
+        let manifest = { files: {}, metadata: { created: new Date().toISOString(), updated: new Date().toISOString() } };
+        
+        // Load existing manifest if it exists
+        if (response.data.files.length > 0) {
+            manifestFileId = response.data.files[0].id;
+            try {
+                const manifestResponse = await googleDrive.files.get({
+                    fileId: manifestFileId,
+                    alt: 'media'
+                });
+                manifest = JSON.parse(manifestResponse.data);
+                manifest.metadata.updated = new Date().toISOString();
+            } catch (parseError) {
+                console.warn('[main.js] Could not parse existing manifest, creating new one');
+            }
+        }
+        
+        // Add/update file entry
+        manifest.files[originalFilename] = {
+            encryptedFilename,
+            dekHash,
+            timestamp: new Date().toISOString(),
+            ...metadata
+        };
+        
+        // Upload or update manifest
+        const manifestContent = JSON.stringify(manifest, null, 2);
+        const manifestBuffer = Buffer.from(manifestContent, 'utf8');
+        
+        if (manifestFileId) {
+            // Update existing manifest
+            await googleDrive.files.update({
+                fileId: manifestFileId,
+                media: {
+                    mimeType: 'application/json',
+                    body: manifestBuffer
+                }
+            });
+        } else {
+            // Create new manifest
+            await googleDrive.files.create({
+                requestBody: {
+                    name: manifestName,
+                    parents: [dateFolderId],
+                    mimeType: 'application/json'
+                },
+                media: {
+                    mimeType: 'application/json',
+                    body: manifestBuffer
+                }
+            });
+        }
+        
+        console.log(`[main.js] Updated manifest for file: ${originalFilename} -> ${encryptedFilename}`);
+        return true;
+    } catch (error) {
+        console.error('[main.js] Error updating manifest:', error);
+        return false;
+    }
+}
+
+async function uploadDEKBackup(keysFolderId, password, dekHash) {
+    try {
+        if (!password || password.length < 8) {
+            throw new Error('Password must be at least 8 characters for DEK backup');
+        }
+        
+        // Get current DEK
+        const dek = await keyManager.getCurrentDEK();
+        
+        // Create password-protected backup
+        const encryptedDEK = await keyManager.createPasswordProtectedDEKBackup(password, dek);
+        
+        // Upload to keys folder
+        const keyFileName = `${dekHash.substring(0, 16)}.key.enc`;
+        
+        await googleDrive.files.create({
+            requestBody: {
+                name: keyFileName,
+                parents: [keysFolderId],
+                mimeType: 'application/octet-stream'
+            },
+            media: {
+                mimeType: 'application/octet-stream',
+                body: encryptedDEK
+            }
+        });
+        
+        console.log(`[main.js] Uploaded DEK backup: ${keyFileName}`);
+        return true;
+    } catch (error) {
+        console.error('[main.js] Error uploading DEK backup:', error);
+        return false;
+    }
+}
+
+// Upload file to Google Drive with new vault structure
+ipcMain.handle('upload-to-gdrive', async (event, { fileId, fileName, password = null }) => {
+  try {
+    console.log(`[main.js] upload-to-gdrive called for file: ${fileName}`);
+    
+    if (!googleDrive) {
+      return { success: false, error: 'Google Drive not connected' };
+    }
+    
+    // Get the vault structure
+    const vaultStructure = await getOrCreateVaultStructure();
+    
+    // Find the encrypted file
+    const encryptedFilesDir = path.join(app.getPath('userData'), 'encrypted');
+    const encryptedFilePath = path.join(encryptedFilesDir, `${fileId}_${fileName}.etcr`);
+    
+    if (!fs.existsSync(encryptedFilePath)) {
+      return { success: false, error: 'Encrypted file not found' };
+    }
+    
+    // Read file and extract DEK hash from header
+    const fileData = fs.readFileSync(encryptedFilePath);
+    const header = fileData.slice(0, 4);
+    
+    if (!header.equals(Buffer.from([0x45, 0x54, 0x43, 0x52]))) {
+      return { success: false, error: 'Invalid file format' };
+    }
+    
+    const dekHash = fileData.slice(8, 40);
+    const dekHashHex = dekHash.toString('hex');
+    
+    // Upload encrypted file
+    const encryptedFilename = `${fileId}_${fileName}.etcr`;
+    const uploadResult = await uploadFileToDriveInternal(
+      encryptedFilePath, 
+      encryptedFilename, 
+      vaultStructure.dateFolderId
+    );
+    
+    if (!uploadResult.success) {
+      return uploadResult;
+    }
+    
+    // Update manifest
+    await updateManifest(
+      vaultStructure.dateFolderId,
+      fileName,
+      encryptedFilename,
+      dekHashHex,
+      {
+        originalSize: fileData.length,
+        algorithm: 'aes-256-gcm', // Could be extracted from header
+        uploadedAt: new Date().toISOString()
+      }
+    );
+    
+    // Upload DEK backup if password provided
+    if (password) {
+      await uploadDEKBackup(vaultStructure.keysFolderId, password, dekHashHex);
+    }
+    
+    console.log(`[main.js] Successfully uploaded file to vault: ${fileName}`);
+    return { 
+      success: true, 
+      fileId: uploadResult.fileId, 
+      message: 'File uploaded to encrypted vault successfully' 
+    };
+    
+  } catch (error) {
+    console.error('[main.js] Error uploading to Google Drive vault:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Create DEK backup
+ipcMain.handle('create-dek-backup', async (event, { password }) => {
+  try {
+    if (!password || password.length < 8) {
+      return { success: false, error: 'Password must be at least 8 characters long' };
+    }
+    
+    if (!googleDrive) {
+      return { success: false, error: 'Google Drive not connected' };
+    }
+    
+    // Get vault structure
+    const vaultStructure = await getOrCreateVaultStructure();
+    
+    // Get current DEK
+    const dek = await keyManager.getCurrentDEK();
+    const dekHash = crypto.createHash('sha256').update(dek).digest('hex');
+    
+    // Upload DEK backup
+    const result = await uploadDEKBackup(vaultStructure.keysFolderId, password, dekHash);
+    
+    if (result) {
+      return { success: true, message: 'DEK backup created successfully' };
+    } else {
+      return { success: false, error: 'Failed to create DEK backup' };
+    }
+    
+  } catch (error) {
+    console.error('[main.js] Error creating DEK backup:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Restore DEK from backup
+ipcMain.handle('restore-dek-backup', async (event, { password, dekHash }) => {
+  try {
+    if (!password) {
+      return { success: false, error: 'Password is required' };
+    }
+    
+    if (!googleDrive) {
+      return { success: false, error: 'Google Drive not connected' };
+    }
+    
+    // Get vault structure
+    const vaultStructure = await getOrCreateVaultStructure();
+    
+    // Find the DEK backup file
+    const keyFileName = `${dekHash.substring(0, 16)}.key.enc`;
+    const response = await googleDrive.files.list({
+      q: `name='${keyFileName}' and '${vaultStructure.keysFolderId}' in parents and trashed=false`,
+      fields: 'files(id)',
+    });
+    
+    if (response.data.files.length === 0) {
+      return { success: false, error: 'DEK backup not found' };
+    }
+    
+    // Download the backup
+    const fileId = response.data.files[0].id;
+    const backupResponse = await googleDrive.files.get({
+      fileId: fileId,
+      alt: 'media'
+    });
+    
+    // Decrypt the DEK
+    const encryptedDEK = Buffer.from(backupResponse.data, 'binary');
+    const dek = await keyManager.decryptPasswordProtectedDEKBackup(password, encryptedDEK);
+    
+    // Store the restored DEK
+    await keytar.setPassword('seamless-encryptor-keys', 'master', dek.toString('hex'));
+    
+    return { success: true, message: 'DEK restored successfully' };
+    
+  } catch (error) {
+    console.error('[main.js] Error restoring DEK backup:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Get vault information
+ipcMain.handle('get-vault-info', async (event) => {
+  try {
+    if (!googleDrive) {
+      return { success: false, error: 'Google Drive not connected' };
+    }
+    
+    const vaultStructure = await getOrCreateVaultStructure();
+    
+    return {
+      success: true,
+      vaultInfo: {
+        userUUID: vaultStructure.userUUID,
+        vaultPath: `/EncryptedVault/${vaultStructure.userUUID}`,
+        currentDateFolder: new Date().toISOString().split('T')[0],
+        folders: {
+          vault: vaultStructure.vaultFolderId,
+          user: vaultStructure.userFolderId,
+          today: vaultStructure.dateFolderId,
+          keys: vaultStructure.keysFolderId
+        }
+      }
+    };
+    
+  } catch (error) {
+    console.error('[main.js] Error getting vault info:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Save temporary file
+ipcMain.handle('save-temporary-file', async (event, fileName, buffer) => {
+  try {
+    const tempDir = path.join(app.getPath('temp'), 'seamless-encryptor');
+    
+    // Ensure temp directory exists
+    if (!fs.existsSync(tempDir)) {
+      fs.mkdirSync(tempDir, { recursive: true });
+    }
+    
+    // Generate unique filename to avoid conflicts
+    const uniqueName = `${Date.now()}_${fileName}`;
+    const tempPath = path.join(tempDir, uniqueName);
+    
+    // Write buffer to file
+    fs.writeFileSync(tempPath, Buffer.from(buffer));
+    
+    console.log(`[main.js] Saved temporary file: ${tempPath}`);
+    return tempPath;
+    
+  } catch (error) {
+    console.error('[main.js] Error saving temporary file:', error);
+    throw error;
+  }
+});
+
+// Download file from Google Drive
+ipcMain.handle('gdrive-download-file', async (event, { fileId, fileName }) => {
+  try {
+    console.log(`[main.js] gdrive-download-file called for: ${fileName}`);
+    
+    if (!googleDrive) {
+      return { success: false, error: 'Google Drive not connected' };
+    }
+    
+    // Get the file content
+    const response = await googleDrive.files.get({
+      fileId: fileId,
+      alt: 'media'
+    });
+    
+    // Determine downloads directory
+    const downloadsPath = app.getPath('downloads');
+    const filePath = path.join(downloadsPath, fileName);
+    
+    // Write file to downloads directory
+    if (typeof response.data === 'string') {
+      fs.writeFileSync(filePath, response.data, 'utf8');
+    } else {
+      fs.writeFileSync(filePath, Buffer.from(response.data));
+    }
+    
+    console.log(`[main.js] Downloaded file to: ${filePath}`);
+    
+    return {
+      success: true,
+      filePath: filePath,
+      message: `Downloaded ${fileName} to Downloads folder`
+    };
+    
+  } catch (error) {
+    console.error('[main.js] Error downloading file from Google Drive:', error);
     return { success: false, error: error.message };
   }
 });

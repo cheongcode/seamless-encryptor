@@ -203,6 +203,10 @@ try {
     openExternalUrl: (url) => {
       console.log(`preload: openExternalUrl called with url: ${url}`);
       return safeInvoke('open-external-url', url);
+    },
+    saveTemporaryFile: (fileName, buffer) => {
+      console.log(`preload: saveTemporaryFile called with fileName: ${fileName}`);
+      return safeInvoke('save-temporary-file', fileName, buffer);
     }
   };
   
@@ -254,7 +258,12 @@ try {
     listGDriveFiles: (options) => safeInvoke('gdrive-list-files', options),
     disconnectGDrive: () => safeInvoke('gdrive-disconnect'),
     uploadFileToGDrive: (filePath, fileName, parentFolderId) => safeInvoke('gdrive-upload-file', { filePath, fileName, parentFolderId }),
-    uploadEncryptedFileToGDrive: (fileId) => safeInvoke('gdrive-upload-encrypted-file', fileId)
+    uploadEncryptedFileToGDrive: (fileId) => safeInvoke('gdrive-upload-encrypted-file', fileId),
+    downloadGDriveFile: (options) => safeInvoke('gdrive-download-file', options),
+    uploadToVault: (options) => safeInvoke('upload-to-gdrive', options),
+    getVaultInfo: () => safeInvoke('get-vault-info'),
+    createDEKBackup: (options) => safeInvoke('create-dek-backup', options),
+    restoreDEKBackup: (options) => safeInvoke('restore-dek-backup', options)
   });
   console.log('[preload.js] cloudApi successfully exposed.');
 

@@ -44,8 +44,8 @@ module.exports = {
           ],
         },
         devContentSecurityPolicy: "default-src 'self' 'unsafe-inline' 'unsafe-eval'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com;",
-        port: 5000,
-        loggerPort: 7000,
+        port: 5001,
+        loggerPort: 7001,
       },
     },
     new FusesPlugin({

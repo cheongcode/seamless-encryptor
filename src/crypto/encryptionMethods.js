@@ -96,24 +96,7 @@ module.exports = {
       encryptedData = Buffer.from(encryptedData);
     }
     
-    // If algorithm is explicitly provided, use that
-    if (algorithm) {
-      switch (algorithm) {
-        case 'aes-256-gcm':
-          return decryptAesGcm(encryptedData, key);
-        case 'aes-256-cbc':
-          return decryptAesCbc(encryptedData, key);
-        case 'chacha20-poly1305':
-          if (!sodium) {
-            throw new Error('ChaCha20-Poly1305 decryption is not available (libsodium-wrappers missing)');
-          }
-          return await decryptChacha20(encryptedData, key);
-        default:
-          throw new Error(`Unsupported decryption algorithm: ${algorithm}`);
-      }
-    }
-    
-    // Otherwise, detect from the encrypted data format
+    // Always parse the standardized format created by encrypt()
     if (encryptedData.length < 2) {
       throw new Error('Invalid encrypted data format: too short');
     }
@@ -128,8 +111,11 @@ module.exports = {
     const detectedAlgorithm = getAlgorithmFromCode(algorithmCode);
     const { metadata, data } = parseEncryptedData(encryptedData.slice(2));
     
-    // Decrypt with the detected algorithm
-    switch (detectedAlgorithm) {
+    // Use provided algorithm or detected algorithm
+    const useAlgorithm = algorithm || detectedAlgorithm;
+    
+    // Decrypt based on algorithm
+    switch (useAlgorithm) {
       case 'aes-256-gcm':
         return decryptAesGcm(data, key, metadata);
       case 'aes-256-cbc':
@@ -140,7 +126,7 @@ module.exports = {
         }
         return await decryptChacha20(data, key, metadata);
       default:
-        throw new Error(`Unsupported algorithm code: ${algorithmCode}`);
+        throw new Error(`Unsupported decryption algorithm: ${useAlgorithm}`);
     }
   },
   
