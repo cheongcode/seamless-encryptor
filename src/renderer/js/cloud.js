@@ -845,8 +845,8 @@ async function uploadAndEncryptFile(file) {
     const tempPath = await saveFileTemporarily(file);
     
     try {
-        // Encrypt the file
-        const encryptResult = await window.api.encryptFile(tempPath, 'aes-256-gcm');
+        // Encrypt the file (skip auto-upload to prevent double uploads)
+        const encryptResult = await window.api.encryptFile(tempPath, 'aes-256-gcm', { skipAutoUpload: true });
         
         if (!encryptResult?.success) {
             throw new Error('Failed to encrypt file');

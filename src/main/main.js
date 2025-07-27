@@ -190,6 +190,17 @@ if (store.get('gdriveTokens') === undefined) {
     store.set('gdriveTokens', null);
 }
 
+// Ensure output directory exists at startup
+try {
+    const outputDir = store.get('appSettings.outputDir');
+    if (outputDir && !fs.existsSync(outputDir)) {
+        fs.mkdirSync(outputDir, { recursive: true });
+        console.log('Created default output directory:', outputDir);
+    }
+} catch (error) {
+    console.error('Error creating output directory at startup:', error);
+}
+
 const DEFAULT_SETTINGS_MAIN = store.get('appSettings'); // Load defaults, including initialized outputDir
 
 // Import utility modules
@@ -585,7 +596,7 @@ async function decryptData(encryptedData, encryptionKey, algorithm) {
 }
 
 // IPC Handlers
-ipcMain.handle('encrypt-file', async (event, filePath, method) => {
+ipcMain.handle('encrypt-file', async (event, filePath, method, options = {}) => {
   try {
     // If method is not provided, use the globally set current encryption method
     if (!method) {
@@ -980,10 +991,10 @@ ipcMain.handle('encrypt-file', async (event, filePath, method) => {
     
     console.log(`File encrypted successfully: ${encryptedFilePath}`);
     
-    // Auto-upload to Google Drive if enabled
+    // Auto-upload to Google Drive if enabled (and not disabled by options)
     try {
         const appSettings = store.get('appSettings');
-        if (appSettings.gdriveConnected && appSettings.gdriveAutoUpload) {
+        if (appSettings.gdriveConnected && appSettings.gdriveAutoUpload && !options.skipAutoUpload) {
             if (!googleDrive) {
                 getGoogleAuthClient(); // Try to initialize if not already
             }
@@ -1070,13 +1081,42 @@ ipcMain.handle('encrypt-file', async (event, filePath, method) => {
         console.log('[main.js encrypt-file] Continuing despite auto-delete error...');
     }
     
+    // Copy encrypted file to output directory as backup
+    let backupPath = null;
+    try {
+      const outputDir = ensureOutputDirExists();
+      if (outputDir) {
+        const backupFileName = `${fileName}.enc`;
+        backupPath = path.join(outputDir, backupFileName);
+        let counter = 1;
+        
+        // Generate unique filename if file already exists
+        while (fs.existsSync(backupPath)) {
+          const ext = path.extname(backupFileName);
+          const nameWithoutExt = path.basename(backupFileName, ext);
+          const newFileName = `${nameWithoutExt}_${counter}${ext}`;
+          backupPath = path.join(outputDir, newFileName);
+          counter++;
+        }
+        
+        // Copy encrypted file to output directory
+        fs.copyFileSync(encryptedFilePath, backupPath);
+        console.log(`[main.js encrypt-file] Local backup copy saved to: ${backupPath}`);
+      }
+    } catch (backupError) {
+      console.warn('[main.js encrypt-file] Failed to create local backup copy:', backupError.message);
+      backupPath = null;
+      // Don't fail the entire process, just log the warning
+    }
+    
     return {
       success: true,
       fileId,
       fileName,
       algorithm: method,
       size: fileData.length,
-      encryptedPath: encryptedFilePath
+      encryptedPath: encryptedFilePath,
+      backupPath: backupPath
     };
   } catch (error) {
     console.error('Error in encrypt-file handler:', error);
@@ -1593,20 +1633,30 @@ ipcMain.handle('download-file', async (event, { fileId, fileName }) => {
         // Save the decrypted file
         event.sender.send('download-progress', { progress: 80, status: 'Saving file...' });
         
-        const savePath = await dialog.showSaveDialog({
-            defaultPath: originalFileName || 'decrypted-file',
-            filters: [{ name: 'All Files', extensions: ['*'] }]
-        });
-
-        if (savePath.canceled) {
-            return { success: false, error: 'Download cancelled' };
+        // Auto-save to output directory instead of showing dialog
+        const outputDir = ensureOutputDirExists();
+        if (!outputDir) {
+            return { success: false, error: 'Output directory not configured' };
+        }
+        
+        // Generate unique filename if file already exists
+        let finalFileName = originalFileName || 'decrypted-file';
+        let savePath = path.join(outputDir, finalFileName);
+        let counter = 1;
+        
+        while (fs.existsSync(savePath)) {
+            const ext = path.extname(finalFileName);
+            const nameWithoutExt = path.basename(finalFileName, ext);
+            const newFileName = `${nameWithoutExt}_${counter}${ext}`;
+            savePath = path.join(outputDir, newFileName);
+            counter++;
         }
 
-        await fs.promises.writeFile(savePath.filePath, decryptedData);
+        await fs.promises.writeFile(savePath, decryptedData);
         event.sender.send('download-progress', { progress: 100, status: 'Download complete!' });
 
-        console.log(`File downloaded and decrypted to: ${savePath.filePath}`);
-        return { success: true, filePath: savePath.filePath };
+        console.log(`File downloaded and decrypted to: ${savePath}`);
+        return { success: true, filePath: savePath };
     } catch (err) {
         console.error('Download error:', err);
         return { success: false, error: err.message };
@@ -1887,6 +1937,20 @@ function getEncryptedFilesDir() {
   }
   
   return encryptedFilesDir;
+}
+
+// Add a function to ensure output directory exists
+function ensureOutputDirExists() {
+  const outputDir = store.get('appSettings.outputDir');
+  if (outputDir && !fs.existsSync(outputDir)) {
+    try {
+      fs.mkdirSync(outputDir, { recursive: true });
+      console.log('Created output directory:', outputDir);
+    } catch (error) {
+      console.error('Error creating output directory:', error);
+    }
+  }
+  return outputDir;
 }
 
 // Fix the analyze-file-entropy handler
@@ -3547,6 +3611,90 @@ ipcMain.handle('set-active-key', async (event, keyId) => {
   }
 });
 
+// File-based Key Management IPC Handlers
+ipcMain.handle('generate-key-to-file', async (event, keyName) => {
+  try {
+    console.log('[KeyManager] generate-key-to-file handler called');
+    const result = await keyManager.generateKey(keyName);
+    return {
+      success: true,
+      ...result
+    };
+  } catch (error) {
+    console.error('[KeyManager] Error generating key to file:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('import-key-to-file', async (event, keyData, sourceName) => {
+  try {
+    console.log('[KeyManager] import-key-to-file handler called');
+    const result = await keyManager.importKeyToFile(keyData, sourceName);
+    return {
+      success: true,
+      ...result
+    };
+  } catch (error) {
+    console.error('[KeyManager] Error importing key to file:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('list-key-files', async (event) => {
+  try {
+    console.log('[KeyManager] list-key-files handler called');
+    const keyFiles = await keyManager.listKeyFiles();
+    return {
+      success: true,
+      keyFiles: keyFiles
+    };
+  } catch (error) {
+    console.error('[KeyManager] Error listing key files:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('read-key-file', async (event, fileName) => {
+  try {
+    console.log(`[KeyManager] read-key-file handler called for: ${fileName}`);
+    const keyData = await keyManager.readKeyFile(fileName);
+    return {
+      success: true,
+      keyData: keyData
+    };
+  } catch (error) {
+    console.error('[KeyManager] Error reading key file:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('delete-key-file', async (event, fileName) => {
+  try {
+    console.log(`[KeyManager] delete-key-file handler called for: ${fileName}`);
+    const deleted = await keyManager.deleteKeyFile(fileName);
+    return {
+      success: deleted,
+      message: deleted ? 'Key file deleted successfully' : 'Key file not found'
+    };
+  } catch (error) {
+    console.error('[KeyManager] Error deleting key file:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('get-key-folder-path', async (event) => {
+  try {
+    const keyFolderPath = keyManager.getKeyFolderPath();
+    return {
+      success: true,
+      path: keyFolderPath
+    };
+  } catch (error) {
+    console.error('[KeyManager] Error getting key folder path:', error);
+    return { success: false, error: error.message };
+  }
+});
+
 // Handle delete-key IPC call - UPDATED for multiple keys
 ipcMain.handle('delete-key', async (event, keyId) => {
   try {
@@ -3927,11 +4075,26 @@ ipcMain.handle('gdrive-download-file', async (event, { fileId, fileName }) => {
       alt: 'media'
     });
     
-    // Determine downloads directory
-    const downloadsPath = app.getPath('downloads');
-    const filePath = path.join(downloadsPath, fileName);
+    // Use configured output directory instead of downloads
+    const outputDir = ensureOutputDirExists();
+    if (!outputDir) {
+      return { success: false, error: 'Output directory not configured' };
+    }
     
-    // Write file to downloads directory
+    // Generate unique filename if file already exists
+    let finalFileName = fileName;
+    let filePath = path.join(outputDir, finalFileName);
+    let counter = 1;
+    
+    while (fs.existsSync(filePath)) {
+      const ext = path.extname(finalFileName);
+      const nameWithoutExt = path.basename(finalFileName, ext);
+      const newFileName = `${nameWithoutExt}_${counter}${ext}`;
+      filePath = path.join(outputDir, newFileName);
+      counter++;
+    }
+    
+    // Write file to output directory
     if (typeof response.data === 'string') {
       fs.writeFileSync(filePath, response.data, 'utf8');
     } else {
@@ -3943,7 +4106,7 @@ ipcMain.handle('gdrive-download-file', async (event, { fileId, fileName }) => {
     return {
       success: true,
       filePath: filePath,
-      message: `Downloaded ${fileName} to Downloads folder`
+      message: `Downloaded ${fileName} to output folder`
     };
     
   } catch (error) {

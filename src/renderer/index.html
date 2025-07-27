@@ -957,13 +957,25 @@
                                         <i class="fas fa-chart-line"></i>
                                     </button>
                                 ` : ''}
-                                <button onclick="removeFromQueue('${file.id}')" class="p-2 text-red-400 hover:bg-red-500/20 rounded-lg transition-colors" title="Remove">
+                                <button class="remove-file-btn p-2 text-red-400 hover:bg-red-500/20 rounded-lg transition-colors" title="Remove" data-file-id="${file.id}">
                                     <i class="fas fa-times"></i>
                                 </button>
                             </div>
                         </div>
                     `;
                 }).join('');
+                
+                // Add event listeners for remove buttons
+                fileListContainer.querySelectorAll('.remove-file-btn').forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        const fileId = btn.getAttribute('data-file-id');
+                        if (fileId) {
+                            removeFromQueue(fileId);
+                        }
+                    });
+                });
             }
         }
 
@@ -1697,7 +1709,7 @@
                 <div class="bg-dark-light border border-slate-700 rounded-xl p-6 max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto">
                     <div class="flex items-center justify-between mb-6">
                         <h3 class="text-xl font-semibold">File Analysis Report</h3>
-                        <button onclick="this.closest('.fixed').remove()" class="p-2 hover:bg-slate-700 rounded-lg transition-colors">
+                        <button class="modal-close-btn p-2 hover:bg-slate-700 rounded-lg transition-colors">
                             <i class="fas fa-times"></i>
                         </button>
                     </div>
@@ -1760,6 +1772,21 @@
             `;
             
             document.body.appendChild(modal);
+            
+            // Add close button event listener
+            const closeBtn = modal.querySelector('.modal-close-btn');
+            if (closeBtn) {
+                closeBtn.addEventListener('click', () => {
+                    modal.remove();
+                });
+            }
+            
+            // Close on background click
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) {
+                    modal.remove();
+                }
+            });
         }
 
         async function decryptFile(fileId, fileName) {
@@ -1966,18 +1993,109 @@
         }
 
         async function resetSettings() {
-            if (confirm('Are you sure you want to reset all settings to defaults?')) {
-                try {
-                    if (window.settingsApi?.resetAppSettings) {
-                        await window.settingsApi.resetAppSettings();
-                        loadSettings();
-                        showToast('Settings reset to defaults', 'success');
-                    }
-                } catch (error) {
-                    console.error('Error resetting settings:', error);
-                    showToast('Failed to reset settings', 'error');
+            // Show enhanced warning confirmation
+            const confirmed = await showDestructiveActionConfirmation(
+                'Reset All Settings?',
+                'This will reset all application settings to their default values.',
+                '⚠️ Your encryption keys and files will not be affected, but you will need to reconfigure your preferences.',
+                'Reset Settings',
+                'warning'
+            );
+            
+            if (!confirmed) return;
+            
+            try {
+                if (window.settingsApi?.resetAppSettings) {
+                    await window.settingsApi.resetAppSettings();
+                    loadSettings();
+                    showToast('Settings reset to defaults', 'success');
                 }
+            } catch (error) {
+                console.error('Error resetting settings:', error);
+                showToast('Failed to reset settings', 'error');
             }
+        }
+
+        /**
+         * Shows an enhanced confirmation dialog for destructive actions
+         */
+        function showDestructiveActionConfirmation(title, message, warning, actionText, severity = 'warning') {
+            return new Promise((resolve) => {
+                // Create modal overlay
+                const overlay = document.createElement('div');
+                overlay.style.cssText = `
+                    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+                    background-color: rgba(0, 0, 0, 0.75); z-index: 1000;
+                    display: flex; align-items: center; justify-content: center;
+                `;
+                
+                // Create modal content
+                const modal = document.createElement('div');
+                modal.style.cssText = `
+                    background-color: var(--bg-card, #1e232d); border-radius: 8px; padding: 24px;
+                    width: 500px; max-width: 90%; border: 1px solid var(--border-color, rgba(255, 255, 255, 0.1));
+                    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+                `;
+                
+                const severityColors = {
+                    danger: '#e64a4a',
+                    warning: '#f59e0b',
+                    info: '#3b82f6'
+                };
+                
+                modal.innerHTML = `
+                    <h3 style="font-size: 1.2rem; margin-bottom: 15px; font-weight: 600; color: ${severityColors[severity] || severityColors.warning};">
+                        ${title}
+                    </h3>
+                    <p style="font-size: 0.9rem; margin-bottom: 20px; color: var(--text-primary, rgba(255, 255, 255, 0.9)); line-height: 1.5;">
+                        ${message}
+                    </p>
+                    <div style="font-size: 0.85rem; margin-bottom: 20px; color: ${severityColors[severity] || severityColors.warning}; 
+                                background-color: rgba(230, 74, 74, 0.1); padding: 10px; border-radius: 4px; 
+                                border: 1px solid ${severityColors[severity] || severityColors.warning};">
+                        ${warning}
+                    </div>
+                    <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                        <button id="cancel-btn" style="padding: 8px 16px; border: 1px solid var(--border-color, rgba(255, 255, 255, 0.2)); 
+                                                     background-color: transparent; color: var(--text-primary, rgba(255, 255, 255, 0.9)); 
+                                                     border-radius: 4px; cursor: pointer; font-size: 0.9rem;">
+                            Cancel
+                        </button>
+                        <button id="confirm-btn" style="padding: 8px 16px; border: none; background-color: ${severityColors[severity] || severityColors.warning}; 
+                                                     color: white; border-radius: 4px; cursor: pointer; font-size: 0.9rem; font-weight: 500;">
+                            ${actionText}
+                        </button>
+                    </div>
+                `;
+                
+                overlay.appendChild(modal);
+                document.body.appendChild(overlay);
+                
+                // Handle button clicks
+                const cancelBtn = modal.querySelector('#cancel-btn');
+                const confirmBtn = modal.querySelector('#confirm-btn');
+                
+                cancelBtn.addEventListener('click', () => {
+                    document.body.removeChild(overlay);
+                    resolve(false);
+                });
+                
+                confirmBtn.addEventListener('click', () => {
+                    document.body.removeChild(overlay);
+                    resolve(true);
+                });
+                
+                // Close on escape key
+                overlay.addEventListener('keydown', (e) => {
+                    if (e.key === 'Escape') {
+                        document.body.removeChild(overlay);
+                        resolve(false);
+                    }
+                });
+                
+                // Focus the cancel button (safer default)
+                setTimeout(() => cancelBtn.focus(), 50);
+            });
         }
 
         function updateDashboard() {

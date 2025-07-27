@@ -53,13 +53,24 @@ module.exports = {
         if (!sodium) {
           console.warn('ChaCha20-Poly1305 not available, falling back to AES-256-GCM');
           result = encryptAesGcm(data, key);
+          algorithm = 'aes-256-gcm'; 
         } else {
           result = await encryptChacha20(data, key);
+        }
+        break;
+      case 'xchacha20-poly1305':
+        if (!sodium) {
+          console.warn('XChaCha20-Poly1305 not available, falling back to AES-256-GCM');
+          result = encryptAesGcm(data, key);
+          algorithm = 'aes-256-gcm'; // Update algorithm to reflect actual encryption
+        } else {
+          result = await encryptXchacha20(data, key);
         }
         break;
       default:
         console.warn(`Unsupported encryption algorithm: ${algorithm}, falling back to AES-256-GCM`);
         result = encryptAesGcm(data, key);
+        algorithm = 'aes-256-gcm'; // Update algorithm to reflect actual encryption
     }
     
     // Standardize the result
@@ -125,6 +136,11 @@ module.exports = {
           throw new Error('ChaCha20-Poly1305 decryption is not available (libsodium-wrappers missing)');
         }
         return await decryptChacha20(data, key, metadata);
+      case 'xchacha20-poly1305':
+        if (!sodium) {
+          throw new Error('XChaCha20-Poly1305 decryption is not available (libsodium-wrappers missing)');
+        }
+        return await decryptXchacha20(data, key, metadata);
       default:
         throw new Error(`Unsupported decryption algorithm: ${useAlgorithm}`);
     }
@@ -150,12 +166,18 @@ module.exports = {
       }
     ];
     
-    // Add ChaCha20-Poly1305 only if sodium is available
+    // Add ChaCha20-Poly1305 and XChaCha20-Poly1305 only if sodium is available
     if (sodium) {
       algorithms.push({
         name: 'chacha20-poly1305',
         code: 0x03,
         description: 'ChaCha20-Poly1305 - A modern stream cipher with high performance on devices without AES hardware acceleration',
+        strength: 'High'
+      });
+      algorithms.push({
+        name: 'xchacha20-poly1305',
+        code: 0x04,
+        description: 'XChaCha20-Poly1305 - Extended nonce ChaCha20, more resistant to nonce misuse and ideal for high-volume encryption',
         strength: 'High'
       });
     }
@@ -351,6 +373,64 @@ async function decryptChacha20(data, key, metadata = null) {
   }
   
   return sodium.crypto_aead_chacha20poly1305_decrypt(
+    null, // No secret nonce
+    encryptedData,
+    null, // No additional data
+    nonce,
+    key
+  );
+}
+
+/**
+ * XChaCha20-Poly1305 encryption
+ */
+async function encryptXchacha20(data, key) {
+  if (!sodium) {
+    throw new Error('libsodium-wrappers not available');
+  }
+
+  await sodium.ready;
+
+  const nonce = sodium.randombytes_buf(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
+  const encryptedData = sodium.crypto_aead_xchacha20poly1305_ietf_encrypt(
+    data,
+    null, // No additional data
+    null, // No secret nonce
+    nonce,
+    key
+  );
+
+  return {
+    encryptedData,
+    nonce
+  };
+}
+
+/**
+ * XChaCha20-Poly1305 decryption
+ */
+async function decryptXchacha20(data, key, metadata = null) {
+  if (!sodium) {
+    throw new Error('libsodium-wrappers not available');
+  }
+
+  await sodium.ready;
+
+  let nonce, encryptedData;
+
+  if (metadata) {
+    // Use provided metadata
+    ({ nonce } = metadata);
+    encryptedData = data;
+  } else {
+    // Extract metadata from the data
+    const nonceLength = sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES;
+    
+    nonce = data.slice(0, nonceLength);
+    encryptedData = data.slice(nonceLength);
+  }
+
+  return sodium.crypto_aead_xchacha20poly1305_ietf_decrypt(
     null, // No secret nonce
     encryptedData,
     null, // No additional data

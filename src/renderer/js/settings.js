@@ -222,7 +222,18 @@ async function handleBrowseOutputDir() {
 
 async function handleClearAppData() {
     console.log('[Settings] Clear App Data button clicked');
-    if (!confirm('Are you sure you want to clear all application data? This cannot be undone.')) return;
+    
+    // Show enhanced warning confirmation
+    const confirmed = await showDestructiveActionConfirmation(
+        'Clear All Application Data?',
+        'This will permanently delete all application settings, stored tokens, and configuration data.',
+        '⚠️ WARNING: This action cannot be undone. You will need to reconfigure the application and reconnect to Google Drive if you were using cloud features.',
+        'Clear Data',
+        'danger'
+    );
+    
+    if (!confirmed) return;
+    
     try {
         const success = await window.settingsApi?.clearAppData();
         if (success) {
@@ -234,6 +245,88 @@ async function handleClearAppData() {
     } catch (error) {
         showToast(`Error clearing app data: ${error.message}`, 'error');
     }
+}
+
+/**
+ * Shows an enhanced confirmation dialog for destructive actions
+ */
+function showDestructiveActionConfirmation(title, message, warning, actionText, severity = 'warning') {
+    return new Promise((resolve) => {
+        // Create modal overlay
+        const overlay = document.createElement('div');
+        overlay.style.cssText = `
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background-color: rgba(0, 0, 0, 0.75); z-index: 1000;
+            display: flex; align-items: center; justify-content: center;
+        `;
+        
+        // Create modal content
+        const modal = document.createElement('div');
+        modal.style.cssText = `
+            background-color: var(--bg-card, #1e232d); border-radius: 8px; padding: 24px;
+            width: 500px; max-width: 90%; border: 1px solid var(--border-color, rgba(255, 255, 255, 0.1));
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+        `;
+        
+        const severityColors = {
+            danger: '#e64a4a',
+            warning: '#f59e0b',
+            info: '#3b82f6'
+        };
+        
+        modal.innerHTML = `
+            <h3 style="font-size: 1.2rem; margin-bottom: 15px; font-weight: 600; color: ${severityColors[severity] || severityColors.warning};">
+                ${title}
+            </h3>
+            <p style="font-size: 0.9rem; margin-bottom: 20px; color: var(--text-primary, rgba(255, 255, 255, 0.9)); line-height: 1.5;">
+                ${message}
+            </p>
+            <div style="font-size: 0.85rem; margin-bottom: 20px; color: ${severityColors[severity] || severityColors.warning}; 
+                        background-color: rgba(230, 74, 74, 0.1); padding: 10px; border-radius: 4px; 
+                        border: 1px solid ${severityColors[severity] || severityColors.warning};">
+                ${warning}
+            </div>
+            <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                <button id="cancel-btn" style="padding: 8px 16px; border: 1px solid var(--border-color, rgba(255, 255, 255, 0.2)); 
+                                             background-color: transparent; color: var(--text-primary, rgba(255, 255, 255, 0.9)); 
+                                             border-radius: 4px; cursor: pointer; font-size: 0.9rem;">
+                    Cancel
+                </button>
+                <button id="confirm-btn" style="padding: 8px 16px; border: none; background-color: ${severityColors[severity] || severityColors.warning}; 
+                                              color: white; border-radius: 4px; cursor: pointer; font-size: 0.9rem; font-weight: 500;">
+                    ${actionText}
+                </button>
+            </div>
+        `;
+        
+        overlay.appendChild(modal);
+        document.body.appendChild(overlay);
+        
+        // Handle button clicks
+        const cancelBtn = modal.querySelector('#cancel-btn');
+        const confirmBtn = modal.querySelector('#confirm-btn');
+        
+        cancelBtn.addEventListener('click', () => {
+            document.body.removeChild(overlay);
+            resolve(false);
+        });
+        
+        confirmBtn.addEventListener('click', () => {
+            document.body.removeChild(overlay);
+            resolve(true);
+        });
+        
+        // Close on escape key
+        overlay.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                document.body.removeChild(overlay);
+                resolve(false);
+            }
+        });
+        
+        // Focus the cancel button (safer default)
+        setTimeout(() => cancelBtn.focus(), 50);
+    });
 }
 
 function showToast(message, type = 'info', duration = 3000) {

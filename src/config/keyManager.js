@@ -15,6 +15,28 @@ const store = new ElectronStore({
   encryptionKey: 'seamless-encryptor-config' // Simple encryption for settings
 });
 
+// Get KeyFolder path
+const getKeyFolderPath = () => {
+  return path.join(app.getPath('userData'), 'KeyFolder');
+};
+
+// Ensure KeyFolder exists
+const ensureKeyFolderExists = () => {
+  const folderPath = getKeyFolderPath();
+  if (!fs.existsSync(folderPath)) {
+    fs.mkdirSync(folderPath, { recursive: true });
+    console.log('KeyFolder created at:', folderPath);
+  }
+  return folderPath;
+};
+
+// Generate unique filename for key
+const generateKeyFileName = (prefix = 'key') => {
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const uuid = crypto.randomUUID().substring(0, 8);
+  return `${prefix}_${timestamp}_${uuid}.txt`;
+};
+
 /**
  * Key Management Module
  * Handles secure storage and retrieval of encryption keys
@@ -25,6 +47,9 @@ module.exports = {
    * @returns {Promise<void>}
    */
   init: async () => {
+    // Ensure KeyFolder exists
+    ensureKeyFolderExists();
+    
     // Check if we have a master key
     const hasMasterKey = await keytar.getPassword(KEY_SERVICE, MASTER_KEY_ACCOUNT);
     
@@ -38,13 +63,188 @@ module.exports = {
       store.set('masterSalt', salt.toString('hex'));
     }
   },
-  
+
   /**
-   * Generate a new encryption key
-   * @returns {Promise<Buffer>} The generated key
+   * Ensure KeyFolder exists (can be called manually)
+   * @returns {string} The KeyFolder path
    */
-  generateKey: async () => {
-    return crypto.randomBytes(32);
+  ensureKeyFolderExists,
+
+  /**
+   * Get KeyFolder path
+   * @returns {string} The KeyFolder path
+   */
+  getKeyFolderPath,
+
+  /**
+   * Generate a new encryption key and auto-save to KeyFolder
+   * @param {string} keyName Optional name for the key (defaults to 'generated')
+   * @returns {Promise<{key: Buffer, filePath: string, fileName: string}>} The generated key and file info
+   */
+  generateKey: async (keyName = 'generated') => {
+    const key = crypto.randomBytes(32);
+    const filePath = await module.exports.saveKeyToFile(key, keyName);
+    const fileName = path.basename(filePath);
+    return { key, filePath, fileName };
+  },
+
+  /**
+   * Save a key to a file in KeyFolder
+   * @param {Buffer} key The key to save
+   * @param {string} prefix Optional prefix for the filename
+   * @returns {Promise<string>} The file path where the key was saved
+   */
+  saveKeyToFile: async (key, prefix = 'key') => {
+    ensureKeyFolderExists();
+    const fileName = generateKeyFileName(prefix);
+    const filePath = path.join(getKeyFolderPath(), fileName);
+    
+    // Create metadata object
+    const keyData = {
+      key: key.toString('hex'),
+      algorithm: 'generated',
+      created: new Date().toISOString(),
+      keySize: key.length * 8,
+      prefix: prefix
+    };
+    
+    // Save to file
+    await fs.promises.writeFile(filePath, JSON.stringify(keyData, null, 2));
+    console.log('Key saved to:', filePath);
+    return filePath;
+  },
+
+  /**
+   * Import a key and auto-save to KeyFolder
+   * @param {Buffer|string} keyData The key data to import
+   * @param {string} sourceName Source name for the key
+   * @returns {Promise<{filePath: string, fileName: string}>} File info for the imported key
+   */
+  importKeyToFile: async (keyData, sourceName = 'imported') => {
+    let key;
+    if (Buffer.isBuffer(keyData)) {
+      key = keyData;
+    } else if (typeof keyData === 'string') {
+      // Try to parse as hex
+      try {
+        key = Buffer.from(keyData, 'hex');
+      } catch (error) {
+        // If not hex, treat as base64
+        key = Buffer.from(keyData, 'base64');
+      }
+    } else {
+      throw new Error('Invalid key data format');
+    }
+
+    const filePath = await module.exports.saveKeyToFile(key, `imported_${sourceName}`);
+    const fileName = path.basename(filePath);
+    return { filePath, fileName };
+  },
+
+  /**
+   * List all key files in KeyFolder
+   * @returns {Promise<Array>} Array of key file information
+   */
+  listKeyFiles: async () => {
+    ensureKeyFolderExists();
+    const keyFolderPath = getKeyFolderPath();
+    
+    try {
+      const files = await fs.promises.readdir(keyFolderPath);
+      const keyFiles = files.filter(file => file.endsWith('.txt'));
+      
+      const keyFileInfo = await Promise.all(keyFiles.map(async (fileName) => {
+        const filePath = path.join(keyFolderPath, fileName);
+        const stats = await fs.promises.stat(filePath);
+        
+        let metadata = {};
+        try {
+          const content = await fs.promises.readFile(filePath, 'utf8');
+          metadata = JSON.parse(content);
+        } catch (error) {
+          // If can't parse as JSON, treat as raw key
+          metadata = { 
+            key: content.trim(),
+            algorithm: 'unknown',
+            created: stats.birthtime.toISOString()
+          };
+        }
+        
+        return {
+          fileName,
+          filePath,
+          created: stats.birthtime,
+          modified: stats.mtime,
+          size: stats.size,
+          ...metadata
+        };
+      }));
+      
+      // Sort by creation date (newest first)
+      return keyFileInfo.sort((a, b) => new Date(b.created) - new Date(a.created));
+    } catch (error) {
+      console.error('Error listing key files:', error);
+      return [];
+    }
+  },
+
+  /**
+   * Read a key file
+   * @param {string} fileName The key file name
+   * @returns {Promise<Object>} The key file content and metadata
+   */
+  readKeyFile: async (fileName) => {
+    const filePath = path.join(getKeyFolderPath(), fileName);
+    
+    if (!fs.existsSync(filePath)) {
+      throw new Error(`Key file not found: ${fileName}`);
+    }
+    
+    const content = await fs.promises.readFile(filePath, 'utf8');
+    const stats = await fs.promises.stat(filePath);
+    
+    let keyData;
+    try {
+      keyData = JSON.parse(content);
+    } catch (error) {
+      // If can't parse as JSON, treat as raw key
+      keyData = {
+        key: content.trim(),
+        algorithm: 'unknown',
+        created: stats.birthtime.toISOString()
+      };
+    }
+    
+    return {
+      fileName,
+      filePath,
+      created: stats.birthtime,
+      modified: stats.mtime,
+      size: stats.size,
+      ...keyData
+    };
+  },
+
+  /**
+   * Delete a key file
+   * @param {string} fileName The key file name to delete
+   * @returns {Promise<boolean>} True if deleted successfully
+   */
+  deleteKeyFile: async (fileName) => {
+    const filePath = path.join(getKeyFolderPath(), fileName);
+    
+    if (!fs.existsSync(filePath)) {
+      return false;
+    }
+    
+    try {
+      await fs.promises.unlink(filePath);
+      console.log('Key file deleted:', filePath);
+      return true;
+    } catch (error) {
+      console.error('Error deleting key file:', error);
+      return false;
+    }
   },
   
   /**
