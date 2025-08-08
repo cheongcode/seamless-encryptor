@@ -190,16 +190,48 @@ if (store.get('gdriveTokens') === undefined) {
     store.set('gdriveTokens', null);
 }
 
-// Ensure output directory exists at startup
-try {
+// Centralized directory initialization function
+function initializeAppDirectories() {
+  console.log('[INIT] Initializing application directories...');
+  
+  const userDataPath = app.getPath('userData');
+  const homePath = app.getPath('home');
+  
+  const directories = [
+    { path: path.join(userDataPath, 'encrypted'), name: 'Encrypted files' },
+    { path: path.join(userDataPath, 'keys'), name: 'Encryption keys' },
+    { path: path.join(userDataPath, 'temp'), name: 'Temporary files' },
+    { path: path.join(userDataPath, 'output'), name: 'Output files' },
+    { path: path.join(homePath, 'SeamlessEncryptor_Output'), name: 'User output folder' }
+  ];
+  
+  directories.forEach(({ path: dirPath, name }) => {
+    try {
+      if (!fs.existsSync(dirPath)) {
+        fs.mkdirSync(dirPath, { recursive: true });
+        console.log(`[INIT] ✅ Created ${name} directory: ${dirPath}`);
+      } else {
+        console.log(`[INIT] ✅ ${name} directory exists: ${dirPath}`);
+      }
+    } catch (error) {
+      console.error(`[INIT] ❌ Failed to create ${name} directory ${dirPath}:`, error.message);
+    }
+  });
+  
+  // Ensure output directory from settings exists
+  try {
     const outputDir = store.get('appSettings.outputDir');
     if (outputDir && !fs.existsSync(outputDir)) {
-        fs.mkdirSync(outputDir, { recursive: true });
-        console.log('Created default output directory:', outputDir);
+      fs.mkdirSync(outputDir, { recursive: true });
+      console.log('[INIT] ✅ Created configured output directory:', outputDir);
     }
-} catch (error) {
-    console.error('Error creating output directory at startup:', error);
+  } catch (error) {
+    console.error('[INIT] ❌ Error creating configured output directory:', error.message);
+  }
 }
+
+// Initialize directories at startup
+initializeAppDirectories();
 
 const DEFAULT_SETTINGS_MAIN = store.get('appSettings'); // Load defaults, including initialized outputDir
 
@@ -1135,41 +1167,55 @@ ipcMain.handle('decrypt-file', async (event, params) => {
     
     const { fileId, password } = params;
     
-    // Get encryption key - use the same logic as encryption
+    // Get encryption key - use the NEW key management system first, then fallbacks
     let key = password;
     
     if (!key) {
-      // Try multiple sources for the key - same order as encryption
-      key = encryptionKey; // Use the same global variable as encryption
-      console.log('Using decryption key exists:', !!key);
+      // UPDATED: Use new key management system first
+      const activeKey = getActiveKey();
+      if (activeKey && activeKey.key) {
+        key = activeKey.key;
+        console.log(`[DECRYPTION] Using active key from storage: ${activeKey.keyId}`);
+      }
       
-      // If no key in global variable, try to get from key manager
+      // Fallback: Check legacy global variable
+      if (!key) {
+        key = encryptionKey;
+        console.log('[DECRYPTION] Using legacy global encryption key:', !!key);
+      }
+      
+      // Fallback: Try key manager
       if (!key && keyManager) {
         try {
           if (typeof keyManager.getKey === 'function') {
             key = await keyManager.getKey();
-            console.log('Retrieved key from keyManager.getKey()');
+            console.log('[DECRYPTION] Retrieved key from keyManager.getKey()');
           } else if (typeof keyManager.getMasterKey === 'function') {
             key = await keyManager.getMasterKey();
-            console.log('Retrieved key from keyManager.getMasterKey()');
+            console.log('[DECRYPTION] Retrieved key from keyManager.getMasterKey()');
           }
         } catch (keyErr) {
-          console.error('Error getting key from keyManager:', keyErr);
+          console.error('[DECRYPTION] Error getting key from keyManager:', keyErr);
         }
       }
       
-      // As a last resort, check if key exists in the file system
+      // Last resort: Check file system
       if (!key) {
         const keyPath = path.join(app.getPath('userData'), 'encryption.key');
         if (fs.existsSync(keyPath)) {
           try {
             const keyData = fs.readFileSync(keyPath, 'utf8');
             key = Buffer.from(keyData, 'hex');
-            console.log('Retrieved key from filesystem for decryption');
-            // Store it for future use
-            encryptionKey = key;
+            console.log('[DECRYPTION] Retrieved key from filesystem');
+            
+            // Migrate to new storage system
+            const keyId = addKeyToStorage(key, { 
+              type: 'Legacy Key', 
+              description: 'Migrated from filesystem during decryption' 
+            });
+            console.log(`[DECRYPTION] Migrated filesystem key to storage: ${keyId}`);
           } catch (fsErr) {
-            console.error('Error reading key from filesystem:', fsErr);
+            console.error('[DECRYPTION] Error reading key from filesystem:', fsErr);
           }
         }
       }
@@ -1309,9 +1355,19 @@ ipcMain.handle('decrypt-file', async (event, params) => {
           decipher.update(ciphertext),
           decipher.final()
         ]);
-      } else if (algorithm === 'chacha20-poly1305') {
-        // Use ChaCha20-Poly1305 decryption
-        decryptedData = cryptoUtil.decryptChaCha20Poly1305(ciphertext, key, iv, tag);
+      } else if (algorithm === 'chacha20-poly1305' || algorithm === 'xchacha20-poly1305') {
+        // Encrypted payload for ChaCha20/XChaCha20 is stored using encryptionMethods format
+        // (version + algorithm code + serialized metadata + ciphertext). Defer to module and let it auto-detect algorithm.
+        decryptedData = await encryptionMethods.decrypt({ encryptedData: ciphertext }, key);
+      } else if (algorithm === 'aes-256-cbc') {
+        const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
+        decryptedData = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
+      } else if (algorithm === 'aes-256-ctr') {
+        const decipher = crypto.createDecipheriv('aes-256-ctr', key, iv);
+        decryptedData = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
+      } else if (algorithm === 'aes-256-ofb') {
+        const decipher = crypto.createDecipheriv('aes-256-ofb', key, iv);
+        decryptedData = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
       } else {
         return { success: false, error: `Unsupported algorithm: ${algorithm}` };
       }
@@ -1342,8 +1398,12 @@ ipcMain.handle('decrypt-file', async (event, params) => {
       return { success: false, error: 'Decryption produced no data' };
     }
     
-    // Save the decrypted file with proper name restoration
-    const downloadsPath = app.getPath('downloads');
+    // Save the decrypted file to configured output directory
+    const outputDir = ensureOutputDirExists();
+    if (!outputDir) {
+      return { success: false, error: 'Output directory not configured. Please check your settings.' };
+    }
+    
     let fileName;
     let originalExtension = '';
     
@@ -1459,10 +1519,21 @@ ipcMain.handle('decrypt-file', async (event, params) => {
     
     console.log('Final decrypted filename:', fileName);
     
-    const decryptedFilePath = path.join(downloadsPath, fileName);
+    // Generate unique filename if file already exists
+    let decryptedFilePath = path.join(outputDir, fileName);
+    let counter = 1;
+    
+    while (fs.existsSync(decryptedFilePath)) {
+      const ext = path.extname(fileName);
+      const nameWithoutExt = path.basename(fileName, ext);
+      const newFileName = `${nameWithoutExt}_${counter}${ext}`;
+      decryptedFilePath = path.join(outputDir, newFileName);
+      counter++;
+    }
     
     try {
       fs.writeFileSync(decryptedFilePath, decryptedData);
+      console.log(`Decrypted file saved to: ${decryptedFilePath}`);
     } catch (writeError) {
       console.error('Error writing decrypted file:', writeError);
       return { success: false, error: `Error saving decrypted file: ${writeError.message}` };
@@ -1470,10 +1541,23 @@ ipcMain.handle('decrypt-file', async (event, params) => {
     
     return {
       success: true,
-      filePath: decryptedFilePath
+      filePath: decryptedFilePath,
+      decryptedPath: decryptedFilePath
     };
   } catch (error) {
     console.error('Error in decrypt-file handler:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Handle show-item-in-folder IPC call
+ipcMain.handle('show-item-in-folder', async (event, filePath) => {
+  try {
+    const { shell } = require('electron');
+    shell.showItemInFolder(filePath);
+    return { success: true };
+  } catch (error) {
+    console.error('Error showing item in folder:', error);
     return { success: false, error: error.message };
   }
 });
@@ -1527,29 +1611,54 @@ ipcMain.handle('download-file', async (event, { fileId, fileName }) => {
         event.sender.send('download-progress', { progress: 25, status: 'Reading encrypted file...' });
         const encryptedData = fs.readFileSync(filePath);
         
-        // Get encryption key - use same logic as decryption
-        let key = encryptionKey;
+        // Get encryption key - use NEW key management system first
+        let key = null;
+        
+        // First: Try to get the active key from the new key storage system
+        const activeKey = getActiveKey();
+        if (activeKey && activeKey.key) {
+            key = activeKey.key;
+            console.log(`[DOWNLOAD] Using active key from storage: ${activeKey.keyId}`);
+        }
+        
+        // Fallback: Check legacy global variable
+        if (!key) {
+            key = encryptionKey;
+            console.log('[DOWNLOAD] Using legacy global encryption key:', !!key);
+        }
+        
+        // Fallback: Try key manager
         if (!key && keyManager) {
             try {
                 if (typeof keyManager.getKey === 'function') {
                     key = await keyManager.getKey();
+                    console.log('[DOWNLOAD] Retrieved key from keyManager.getKey()');
                 } else if (typeof keyManager.getMasterKey === 'function') {
                     key = await keyManager.getMasterKey();
+                    console.log('[DOWNLOAD] Retrieved key from keyManager.getMasterKey()');
                 }
             } catch (keyErr) {
-                console.error('Error getting key from keyManager:', keyErr);
+                console.error('[DOWNLOAD] Error getting key from keyManager:', keyErr);
             }
         }
         
-        // Check filesystem as fallback
+        // Last resort: Check filesystem
         if (!key) {
             const keyPath = path.join(app.getPath('userData'), 'encryption.key');
             if (fs.existsSync(keyPath)) {
                 try {
                     const keyData = fs.readFileSync(keyPath, 'utf8');
                     key = Buffer.from(keyData, 'hex');
+                    console.log('[DOWNLOAD] Retrieved key from filesystem');
+                    
+                    // Migrate to new storage system
+                    const keyId = addKeyToStorage(key, { 
+                        type: 'Legacy Key', 
+                        description: 'Migrated from filesystem during download' 
+                    });
+                    console.log(`[DOWNLOAD] Migrated filesystem key to storage: ${keyId}`);
                 } catch (fsErr) {
-                    console.error('Error reading key from filesystem:', fsErr);
+                    console.error('[DOWNLOAD] Error reading key from filesystem:', fsErr);
                 }
             }
         }
@@ -1570,30 +1679,31 @@ ipcMain.handle('download-file', async (event, { fileId, fileName }) => {
         let iv, tag, ciphertext;
         
         try {
-            // Try to parse the file header
-            const header = encryptedData.slice(0, 2).toString('hex');
-            
-            if (header === 'f1e2') { // Magic bytes for our encrypted file format
-                const algorithmId = encryptedData[3];
-                
-                // Map algorithm ID to name
-                if (algorithmId === 1) {
-                    algorithm = 'aes-256-gcm';
-                } else if (algorithmId === 2) {
-                    algorithm = 'chacha20-poly1305';
-                } else if (algorithmId === 3) {
-                    algorithm = 'xchacha20-poly1305';
-                }
-                
-                const ivLength = encryptedData[4];
-                const tagLength = encryptedData[5];
-                const headerLength = 6;
-                
+            // Try to parse the modern ETCR header first
+            const magic = encryptedData.slice(0, 4);
+            if (magic.equals(Buffer.from([0x45, 0x54, 0x43, 0x52]))) {
+                const formatVersion = encryptedData[4];
+                const algorithmId = encryptedData[5];
+                const ivLength = encryptedData[6];
+                const tagLength = encryptedData[7];
+                const headerLength = 40; // 4 magic + 1 ver + 1 alg + 1 ivLen + 1 tagLen + 32 DEK hash
+
+                // Map algorithm ID to name per encrypt-file implementation
+                const idMap = {
+                  1: 'aes-256-gcm',
+                  2: 'aes-256-cbc',
+                  3: 'chacha20-poly1305',
+                  4: 'xchacha20-poly1305',
+                  5: 'aes-256-ctr',
+                  6: 'aes-256-ofb'
+                };
+                algorithm = idMap[algorithmId] || 'aes-256-gcm';
+
                 iv = encryptedData.slice(headerLength, headerLength + ivLength);
                 tag = encryptedData.slice(headerLength + ivLength, headerLength + ivLength + tagLength);
                 ciphertext = encryptedData.slice(headerLength + ivLength + tagLength);
             } else {
-                // Legacy format
+                // Legacy format (no header)
                 iv = encryptedData.slice(0, 16);
                 tag = encryptedData.slice(16, 32);
                 ciphertext = encryptedData.slice(32);
@@ -1615,9 +1725,18 @@ ipcMain.handle('download-file', async (event, { fileId, fileName }) => {
                     decipher.update(ciphertext),
                     decipher.final()
                 ]);
-            } else if (algorithm === 'chacha20-poly1305') {
-                // Use ChaCha20-Poly1305 decryption
-                decryptedData = cryptoUtil.decryptChaCha20Poly1305(ciphertext, key, iv, tag);
+            } else if (algorithm === 'chacha20-poly1305' || algorithm === 'xchacha20-poly1305') {
+                // Defer to encryptionMethods format for ChaCha20 families (auto-detect inside)
+                decryptedData = await encryptionMethods.decrypt({ encryptedData: ciphertext }, key);
+            } else if (algorithm === 'aes-256-cbc') {
+                const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
+                decryptedData = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
+            } else if (algorithm === 'aes-256-ctr') {
+                const decipher = crypto.createDecipheriv('aes-256-ctr', key, iv);
+                decryptedData = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
+            } else if (algorithm === 'aes-256-ofb') {
+                const decipher = crypto.createDecipheriv('aes-256-ofb', key, iv);
+                decryptedData = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
             } else {
                 return { success: false, error: `Unsupported algorithm: ${algorithm}` };
             }
@@ -2665,29 +2784,65 @@ ipcMain.handle('import-key', async (event, keyData) => {
       return { success: false, error: 'Invalid key type, must be string or buffer' };
     }
     
-    // Save the key to memory
-    encryptionKey = key;
+    // NEW: Add to key storage system instead of overwriting
+    const keyId = addKeyToStorage(key, {
+      type: 'Imported Key',
+      description: 'Key imported by user'
+    });
     
-    // Try to save to key manager if available
+    // Create keys directory if it doesn't exist
+    const keysDir = path.join(app.getPath('userData'), 'keys');
+    if (!fs.existsSync(keysDir)) {
+      fs.mkdirSync(keysDir, { recursive: true });
+      console.log('Created keys directory:', keysDir);
+    }
+    
+    // Save key to individual file in keys directory
+    try {
+      const keyFilePath = path.join(keysDir, `${keyId}.key`);
+      const keyFileData = {
+        keyId: keyId,
+        key: key.toString('hex'),
+        metadata: {
+          type: 'Imported Key',
+          description: 'Key imported by user',
+          created: new Date().toISOString(),
+          imported: true
+        }
+      };
+      fs.writeFileSync(keyFilePath, JSON.stringify(keyFileData, null, 2), 'utf8');
+      console.log(`Imported key saved to file: ${keyFilePath}`);
+    } catch (fileErr) {
+      console.error('Error saving imported key to file system:', fileErr);
+      // Don't fail the import if file saving fails
+    }
+    
+    // Try to save to key manager if available (for backup)
     if (keyManager && typeof keyManager.setKey === 'function') {
       try {
         await keyManager.setKey(key);
+        console.log('Imported key saved to keyManager');
       } catch (keyErr) {
-        console.error('Error saving key to keyManager:', keyErr);
+        console.error('Error saving imported key to keyManager:', keyErr);
       }
     }
     
-    // Always save to file system as backup
-    try {
-      const keyPath = path.join(app.getPath('userData'), 'encryption.key');
-      fs.writeFileSync(keyPath, key.toString('hex'), 'utf8');
-    } catch (fileErr) {
-      console.error('Error saving key to file system:', fileErr);
+    // Update active key backup file if this becomes the active key
+    if (activeKeyId === keyId) {
+      try {
+        const keyPath = path.join(app.getPath('userData'), 'encryption.key');
+        fs.writeFileSync(keyPath, key.toString('hex'), 'utf8');
+        console.log('Updated active key backup file');
+      } catch (fileErr) {
+        console.error('Error updating active key backup file:', fileErr);
+      }
     }
     
+    console.log(`[KeyManager] Imported key: ${keyId}`);
     return {
       success: true,
-      keyId: key.toString('hex').substring(0, 8)
+      keyId: keyId,
+      isActive: activeKeyId === keyId
     };
   } catch (error) {
     console.error('Error importing key:', error);
@@ -3245,23 +3400,26 @@ ipcMain.handle('gdrive-list-files', async (event, { parentFolderId = null, pageT
       }
     }
 
-    // Check for legacy folder first, then vault structure
+    // Prioritize EncryptedVault structure for consistency
     if (!targetFolderId) {
-      const legacyFolderId = await findLegacyFolder();
-      if (legacyFolderId) {
-        console.log('[main.js] Using legacy SeamlessEncryptor_Files folder');
-        targetFolderId = legacyFolderId;
-      } else {
-        // If no legacy folder, use new vault structure
-        try {
-          const vaultStructure = await getOrCreateVaultStructure();
-          targetFolderId = vaultStructure.dateFolderId;
-          console.log('[main.js] Using new vault structure');
-        } catch (vaultError) {
-          console.error('[main.js] Error with vault structure:', vaultError);
-          // Fallback to default app folder
+      try {
+        // Always use the new vault structure first
+        const vaultStructure = await getOrCreateVaultStructure();
+        targetFolderId = vaultStructure.dateFolderId;
+        console.log('[main.js] Using EncryptedVault structure');
+      } catch (vaultError) {
+        console.error('[main.js] Error with vault structure:', vaultError);
+        
+        // Fallback to legacy folder if vault creation fails
+        const legacyFolderId = await findLegacyFolder();
+        if (legacyFolderId) {
+          console.log('[main.js] Falling back to legacy SeamlessEncryptor_Files folder');
+          targetFolderId = legacyFolderId;
+        } else {
+          // Final fallback to default app folder
           const defaultAppFolderId = await getOrCreateAppFolderId();
           targetFolderId = defaultAppFolderId;
+          console.log('[main.js] Using default app folder as final fallback');
         }
       }
     }
@@ -4069,11 +4227,17 @@ ipcMain.handle('gdrive-download-file', async (event, { fileId, fileName }) => {
       return { success: false, error: 'Google Drive not connected' };
     }
     
-    // Get the file content
+    // Get the file content with proper response type handling
     const response = await googleDrive.files.get({
       fileId: fileId,
       alt: 'media'
+    }, {
+      responseType: 'arraybuffer' // Ensure we get binary data
     });
+    
+    if (!response || !response.data) {
+      return { success: false, error: 'No file data received from Google Drive' };
+    }
     
     // Use configured output directory instead of downloads
     const outputDir = ensureOutputDirExists();
@@ -4094,14 +4258,26 @@ ipcMain.handle('gdrive-download-file', async (event, { fileId, fileName }) => {
       counter++;
     }
     
-    // Write file to output directory
-    if (typeof response.data === 'string') {
-      fs.writeFileSync(filePath, response.data, 'utf8');
-    } else {
-      fs.writeFileSync(filePath, Buffer.from(response.data));
+    // Write file to output directory with proper data handling
+    try {
+      let fileData;
+      if (response.data instanceof ArrayBuffer) {
+        fileData = Buffer.from(response.data);
+      } else if (Buffer.isBuffer(response.data)) {
+        fileData = response.data;
+      } else if (typeof response.data === 'string') {
+        fileData = Buffer.from(response.data, 'utf8');
+      } else {
+        fileData = Buffer.from(response.data);
+      }
+      
+      fs.writeFileSync(filePath, fileData);
+      console.log(`[main.js] Downloaded file to: ${filePath} (${fileData.length} bytes)`);
+      
+    } catch (writeError) {
+      console.error(`[main.js] Error writing downloaded file:`, writeError);
+      return { success: false, error: `Failed to save file: ${writeError.message}` };
     }
-    
-    console.log(`[main.js] Downloaded file to: ${filePath}`);
     
     return {
       success: true,

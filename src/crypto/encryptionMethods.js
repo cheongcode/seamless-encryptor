@@ -324,7 +324,7 @@ function decryptAesCbc(data, key, metadata = null) {
 }
 
 /**
- * ChaCha20-Poly1305 encryption
+ * ChaCha20-Poly1305 encryption (using IETF variant)
  */
 async function encryptChacha20(data, key) {
   if (!sodium) {
@@ -333,23 +333,30 @@ async function encryptChacha20(data, key) {
   
   await sodium.ready;
   
-  const nonce = sodium.randombytes_buf(sodium.crypto_aead_chacha20poly1305_NPUBBYTES);
-  const encryptedData = sodium.crypto_aead_chacha20poly1305_encrypt(
-    data,
+  // Use IETF variant with 12-byte nonce for better compatibility
+  const nonce = sodium.randombytes_buf(sodium.crypto_aead_chacha20poly1305_ietf_NPUBBYTES);
+  
+  // Convert to Uint8Array for proper libsodium handling
+  const dataArray = new Uint8Array(data);
+  const keyArray = new Uint8Array(key);
+  const nonceArray = new Uint8Array(nonce);
+  
+  const encryptedData = sodium.crypto_aead_chacha20poly1305_ietf_encrypt(
+    dataArray,
     null, // No additional data
     null, // No secret nonce
-    nonce,
-    key
+    nonceArray,
+    keyArray
   );
   
   return {
-    encryptedData,
-    nonce
+    encryptedData: Buffer.from(encryptedData),
+    nonce: Buffer.from(nonceArray)
   };
 }
 
 /**
- * ChaCha20-Poly1305 decryption
+ * ChaCha20-Poly1305 decryption (using IETF variant)
  */
 async function decryptChacha20(data, key, metadata = null) {
   if (!sodium) {
@@ -360,25 +367,47 @@ async function decryptChacha20(data, key, metadata = null) {
   
   let nonce, encryptedData;
   
-  if (metadata) {
+  if (metadata && metadata.nonce) {
     // Use provided metadata
-    ({ nonce } = metadata);
+    nonce = metadata.nonce;
     encryptedData = data;
   } else {
-    // Extract metadata from the data
-    const nonceLength = sodium.crypto_aead_chacha20poly1305_NPUBBYTES;
+    // Extract metadata from the data - use IETF variant nonce size
+    const nonceLength = sodium.crypto_aead_chacha20poly1305_ietf_NPUBBYTES;
+    
+    if (data.length < nonceLength) {
+      throw new Error(`Invalid ChaCha20 data: too short to contain nonce (${data.length} < ${nonceLength})`);
+    }
     
     nonce = data.slice(0, nonceLength);
     encryptedData = data.slice(nonceLength);
   }
   
-  return sodium.crypto_aead_chacha20poly1305_decrypt(
-    null, // No secret nonce
-    encryptedData,
-    null, // No additional data
-    nonce,
-    key
-  );
+  // Ensure we have proper buffers
+  if (!Buffer.isBuffer(nonce)) nonce = Buffer.from(nonce);
+  if (!Buffer.isBuffer(encryptedData)) encryptedData = Buffer.from(encryptedData);
+  if (!Buffer.isBuffer(key)) key = Buffer.from(key);
+  
+  // Convert to Uint8Array for proper libsodium handling
+  const encryptedArray = new Uint8Array(encryptedData);
+  const nonceArray = new Uint8Array(nonce);
+  const keyArray = new Uint8Array(key);
+  
+  try {
+    // Correct parameter order for libsodium-wrappers: (secret_nonce, ciphertext, additional_data, public_nonce, key)
+    const decrypted = sodium.crypto_aead_chacha20poly1305_ietf_decrypt(
+      null, // secret nonce (null for public operations)
+      encryptedArray, // ciphertext
+      null, // additional data
+      nonceArray, // public nonce
+      keyArray // key
+    );
+    
+    return Buffer.from(decrypted);
+  } catch (sodiumError) {
+    console.error('ChaCha20 decryption failed:', sodiumError.message);
+    throw new Error(`ChaCha20 decryption failed: ${sodiumError.message}. Please check if the file was encrypted with the same algorithm and key.`);
+  }
 }
 
 /**
@@ -392,17 +421,23 @@ async function encryptXchacha20(data, key) {
   await sodium.ready;
 
   const nonce = sodium.randombytes_buf(sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
+  
+  // Convert to Uint8Array for proper libsodium handling
+  const dataArray = new Uint8Array(data);
+  const keyArray = new Uint8Array(key);
+  const nonceArray = new Uint8Array(nonce);
+  
   const encryptedData = sodium.crypto_aead_xchacha20poly1305_ietf_encrypt(
-    data,
+    dataArray,
     null, // No additional data
     null, // No secret nonce
-    nonce,
-    key
+    nonceArray,
+    keyArray
   );
 
   return {
-    encryptedData,
-    nonce
+    encryptedData: Buffer.from(encryptedData),
+    nonce: Buffer.from(nonceArray)
   };
 }
 
@@ -418,25 +453,47 @@ async function decryptXchacha20(data, key, metadata = null) {
 
   let nonce, encryptedData;
 
-  if (metadata) {
+  if (metadata && metadata.nonce) {
     // Use provided metadata
-    ({ nonce } = metadata);
+    nonce = metadata.nonce;
     encryptedData = data;
   } else {
     // Extract metadata from the data
     const nonceLength = sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES;
     
+    if (data.length < nonceLength) {
+      throw new Error(`Invalid XChaCha20 data: too short to contain nonce (${data.length} < ${nonceLength})`);
+    }
+    
     nonce = data.slice(0, nonceLength);
     encryptedData = data.slice(nonceLength);
   }
 
-  return sodium.crypto_aead_xchacha20poly1305_ietf_decrypt(
-    null, // No secret nonce
-    encryptedData,
-    null, // No additional data
-    nonce,
-    key
-  );
+  // Ensure we have proper buffers
+  if (!Buffer.isBuffer(nonce)) nonce = Buffer.from(nonce);
+  if (!Buffer.isBuffer(encryptedData)) encryptedData = Buffer.from(encryptedData);
+  if (!Buffer.isBuffer(key)) key = Buffer.from(key);
+
+  // Convert to Uint8Array for proper libsodium handling
+  const encryptedArray = new Uint8Array(encryptedData);
+  const nonceArray = new Uint8Array(nonce);
+  const keyArray = new Uint8Array(key);
+
+  try {
+    // Correct parameter order for libsodium-wrappers: (secret_nonce, ciphertext, additional_data, public_nonce, key)
+    const decrypted = sodium.crypto_aead_xchacha20poly1305_ietf_decrypt(
+      null, // secret nonce (null for public operations)
+      encryptedArray, // ciphertext
+      null, // additional data
+      nonceArray, // public nonce
+      keyArray // key
+    );
+    
+    return Buffer.from(decrypted);
+  } catch (sodiumError) {
+    console.error('XChaCha20 decryption failed:', sodiumError.message);
+    throw new Error(`XChaCha20 decryption failed: ${sodiumError.message}. Please check if the file was encrypted with the same algorithm and key.`);
+  }
 }
 
 /**

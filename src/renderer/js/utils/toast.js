@@ -13,6 +13,15 @@ let activeToasts = new Set();
  * @param {number} duration - Duration in milliseconds
  */
 export function showToast(message, type = 'info', duration = 4000) {
+    // Check if notifications are enabled
+    const notificationsEnabled = document.getElementById('notifications')?.checked;
+    
+    if (notificationsEnabled === false) {
+        // Log the notification instead of showing it when disabled
+        console.log(`[NOTIFICATIONS DISABLED] ${type.toUpperCase()}: ${message}`);
+        return;
+    }
+    
     // Prevent duplicates within a short timeframe
     const toastId = `${message}-${type}`;
     if (activeToasts.has(toastId)) return;

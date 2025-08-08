@@ -1,0 +1,37 @@
+{
+  "keyManagement": {
+    "generateKey": "available",
+    "exportKey": "missing",
+    "importKey": "missing",
+    "keysDir": false
+  },
+  "encryptionDecryption": {
+    "aes-256-gcm": "working",
+    "chacha20-poly1305": "working",
+    "xchacha20-poly1305": "working"
+  },
+  "fileOperations": {
+    "encryptedFilesCount": 1,
+    "metadata": {
+      "exists": true,
+      "entries": 5,
+      "algorithms": [
+        "aes-256-gcm",
+        "xchacha20-poly1305"
+      ]
+    },
+    "fileFormat": "new"
+  },
+  "uiComponents": {
+    "src/renderer/index.html": {
+      "closeButton": true,
+      "cancelButton": true,
+      "progressModal": true
+    },
+    "src/renderer/js/ui/events.js": {
+      "eventListeners": true
+    }
+  },
+  "cloudIntegration": {},
+  "directoryManagement": {}
+}

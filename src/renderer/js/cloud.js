@@ -667,7 +667,7 @@ async function decryptAndDownload(fileId, fileName) {
     
     try {
         // Download and decrypt the .etcr file
-        const result = await window.api.decryptFile({ fileId: fileId });
+        const result = await window.api.decryptFile({ fileId });
         
         if (result?.success) {
             showToast(`Decrypted and downloaded ${fileName}`, 'success');
@@ -1055,6 +1055,15 @@ async function confirmPrompt(message) {
 }
 
 function showToast(message, type = 'info') {
+    // Check if notifications are enabled
+    const notificationsEnabled = document.getElementById('notifications')?.checked;
+    
+    if (notificationsEnabled === false) {
+        // Log the notification instead of showing it when disabled
+        console.log(`[NOTIFICATIONS DISABLED] ${type.toUpperCase()}: ${message}`);
+        return;
+    }
+    
     // Create and show toast notification
     const toast = document.createElement('div');
     toast.className = `fixed top-4 right-4 px-4 py-2 rounded-lg text-white z-50 ${

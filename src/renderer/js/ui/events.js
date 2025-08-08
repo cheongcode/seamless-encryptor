@@ -6,6 +6,19 @@ import { updateKeyStatus } from './keyStatus.js';
 import { generateKey } from '../crypto/keyManagement.js';
 import { encryptFiles } from '../crypto/fileOperations.js';
 
+// Helper function to show confirmation respecting user settings
+async function showConfirmationIfEnabled(message, defaultAction = false) {
+    const confirmActionsEnabled = document.getElementById('confirm-actions')?.checked;
+    
+    if (confirmActionsEnabled !== false) { // Show confirmation by default or if setting is enabled
+        return confirm(message);
+    } else {
+        // Log the action when confirmation is bypassed
+        console.log('[SETTINGS] Confirmation bypassed for action:', message);
+        return defaultAction; // Use defaultAction when confirmations are disabled
+    }
+}
+
 /**
  * Sets up all UI event listeners
  * @param {Object} api - The electron API for IPC communication
@@ -114,7 +127,7 @@ export function toggleMobileMenu() {
  * @param {Event} event - The click event
  * @param {Object} api - The electron API for IPC communication
  */
-function handleFileActions(event, api) {
+async function handleFileActions(event, api) {
     // Import these functions only when needed (lazy loading)
     import('../crypto/fileOperations.js').then(({ decryptFile, downloadEncryptedFile, deleteEncryptedFile }) => {
         // Find target with its class
@@ -140,7 +153,8 @@ function handleFileActions(event, api) {
         if (deleteButton) {
             const fileCard = deleteButton.closest('.file-card');
             if (fileCard && fileCard.dataset.fileId) {
-                if (confirm('Are you sure you want to delete this encrypted file?')) {
+                const shouldDelete = await showConfirmationIfEnabled('Are you sure you want to delete this encrypted file?', false);
+                if (shouldDelete) {
                     deleteEncryptedFile(api, fileCard.dataset.fileId);
                 }
             }

@@ -5,6 +5,19 @@ import { showToast } from '../utils/toast.js';
 import { formatFileSize, getEntropyClass } from '../utils/format.js';
 import { showEntropyVisualization } from '../utils/entropyVisualization.js';
 
+// Helper function to show confirmation respecting user settings
+async function showConfirmationIfEnabled(message, defaultAction = false) {
+    const confirmActionsEnabled = document.getElementById('confirm-actions')?.checked;
+    
+    if (confirmActionsEnabled !== false) { // Show confirmation by default or if setting is enabled
+        return confirm(message);
+    } else {
+        // Log the action when confirmation is bypassed
+        console.log('[SETTINGS] Confirmation bypassed for action:', message);
+        return defaultAction; // Use defaultAction when confirmations are disabled
+    }
+}
+
 /**
  * Encrypts files selected by the user
  * @param {Object} appApi - The electron API for IPC communication
@@ -445,9 +458,10 @@ export async function loadEncryptedFiles(appApi) {
             
             const deleteBtn = fileCard.querySelector('.delete-button');
             if (deleteBtn) {
-                deleteBtn.addEventListener('click', () => {
+                deleteBtn.addEventListener('click', async () => {
                     console.log(`[fileOperations.js] Delete button clicked for file ID: ${file.id}`);
-                    if (confirm(`Are you sure you want to delete ${fileName}?`)) {
+                    const shouldDelete = await showConfirmationIfEnabled(`Are you sure you want to delete ${fileName}?`, false);
+                    if (shouldDelete) {
                         deleteEncryptedFile(appApi, file.id);
                     }
                 });
@@ -543,9 +557,11 @@ export function calculateEntropy(buffer) {
 function formatAlgorithm(algorithm) {
     if (!algorithm) return 'Unknown';
     
-    // Convert to uppercase and remove any underscores/dashes
-    const formatted = algorithm.toUpperCase().replace(/[_-]/g, ' ');
-    return formatted;
+    // Use consistent algorithm formatting across the application
+    if (algorithm === 'aes-256-gcm') return 'AES-256-GCM';
+    if (algorithm === 'chacha20-poly1305') return 'ChaCha20-Poly1305';
+    if (algorithm === 'xchacha20-poly1305') return 'XChaCha20-Poly1305';
+    return algorithm.toUpperCase();
 }
 
 /**
@@ -587,7 +603,8 @@ export function createFileCard(file) {
     if (deleteBtn) {
         deleteBtn.addEventListener('click', async (e) => {
             e.stopPropagation();
-            if (confirm(`Are you sure you want to delete "${file.name}"?`)) {
+            const shouldDelete = await showConfirmationIfEnabled(`Are you sure you want to delete "${file.name}"?`, false);
+            if (shouldDelete) {
                 try {
                     // Get api from window
                     const { appApi } = window;

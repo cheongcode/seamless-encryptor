@@ -586,5 +586,118 @@ module.exports = {
       console.error('Error importing keys:', error);
       return false;
     }
+  },
+
+  /**
+   * Export a single key to a file
+   * @param {string} keyId - The ID of the key to export (or 'master' for master key)
+   * @param {string} exportPath - Path where to save the key
+   * @param {string} password - Optional password to protect the export
+   * @returns {Promise<boolean>} True if successful
+   */
+  exportKey: async (keyId, exportPath, password = null) => {
+    try {
+      let keyData;
+      
+      // Get the key data
+      if (keyId === 'master') {
+        keyData = await module.exports.getMasterKey();
+      } else {
+        const fileKeys = store.get('fileKeys') || {};
+        keyData = fileKeys[keyId];
+      }
+      
+      if (!keyData) {
+        throw new Error(`Key with ID ${keyId} not found`);
+      }
+      
+      const exportData = {
+        keyId,
+        timestamp: new Date().toISOString(),
+        keyData: keyData.toString('hex')
+      };
+      
+      // If password provided, encrypt the export
+      if (password) {
+        const salt = crypto.randomBytes(16);
+        const key = crypto.pbkdf2Sync(password, salt, 100000, 32, 'sha256');
+        const iv = crypto.randomBytes(16);
+        const cipher = crypto.createCipheriv('aes-256-cbc', key, iv);
+        
+        let encrypted = cipher.update(JSON.stringify(exportData), 'utf8', 'hex');
+        encrypted += cipher.final('hex');
+        
+        const finalExport = {
+          encrypted: true,
+          salt: salt.toString('hex'),
+          iv: iv.toString('hex'),
+          data: encrypted
+        };
+        
+        fs.writeFileSync(exportPath, JSON.stringify(finalExport, null, 2));
+      } else {
+        fs.writeFileSync(exportPath, JSON.stringify(exportData, null, 2));
+      }
+      
+      console.log(`[KEY] Exported key ${keyId} to ${exportPath}`);
+      return true;
+      
+    } catch (error) {
+      console.error(`[KEY] Error exporting key ${keyId}:`, error);
+      return false;
+    }
+  },
+
+  /**
+   * Import a single key from a file
+   * @param {string} importPath - Path to the key file
+   * @param {string} password - Optional password if the key is encrypted
+   * @returns {Promise<{success: boolean, keyId?: string, error?: string}>}
+   */
+  importKey: async (importPath, password = null) => {
+    try {
+      if (!fs.existsSync(importPath)) {
+        return { success: false, error: 'Import file does not exist' };
+      }
+      
+      const importContent = fs.readFileSync(importPath, 'utf8');
+      let importData = JSON.parse(importContent);
+      
+      // If encrypted, decrypt first
+      if (importData.encrypted) {
+        if (!password) {
+          return { success: false, error: 'Password required for encrypted key file' };
+        }
+        
+        const salt = Buffer.from(importData.salt, 'hex');
+        const iv = Buffer.from(importData.iv, 'hex');
+        const key = crypto.pbkdf2Sync(password, salt, 100000, 32, 'sha256');
+        
+        const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
+        let decrypted = decipher.update(importData.data, 'hex', 'utf8');
+        decrypted += decipher.final('utf8');
+        
+        importData = JSON.parse(decrypted);
+      }
+      
+      const keyData = Buffer.from(importData.keyData, 'hex');
+      const keyId = importData.keyId || `imported_${Date.now()}`;
+      
+      // Store the key
+      if (keyId === 'master') {
+        await module.exports.storeMasterKey(keyData);
+      } else {
+        const fileKeys = store.get('fileKeys') || {};
+        fileKeys[keyId] = keyData;
+        store.set('fileKeys', fileKeys);
+      }
+      
+      console.log(`[KEY] Imported key ${keyId} from ${importPath}`);
+      return { success: true, keyId };
+      
+    } catch (error) {
+      console.error(`[KEY] Error importing key:`, error);
+      return { success: false, error: error.message };
+    }
   }
 }; 

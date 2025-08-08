@@ -34,9 +34,19 @@ try {
       console.log(`[preload.js] encryptFile() called with:`, filePath, `method: ${method}`);
       return safeInvoke('encrypt-file', filePath, method);
     },
-    decryptFile: (fileId, password) => {
-      console.log(`preload: decryptFile called with fileId: ${fileId}, password: ${password ? '***' : 'none'}`);
-      return safeInvoke('decrypt-file', { fileId, password });
+    decryptFile: (params) => {
+      console.log(`preload: decryptFile called with:`, params);
+      // Handle both object and separate parameter formats for backward compatibility
+      if (typeof params === 'string') {
+        // Legacy format: decryptFile(fileId)
+        return safeInvoke('decrypt-file', { fileId: params });
+      } else if (params && typeof params === 'object') {
+        // New format: decryptFile({ fileId, password })
+        return safeInvoke('decrypt-file', params);
+      } else {
+        console.error('Invalid parameters passed to decryptFile:', params);
+        return Promise.resolve({ success: false, error: 'Invalid parameters' });
+      }
     },
     downloadFile: (fileId, fileName) => {
       console.log(`preload: downloadFile called with fileId: ${fileId}, fileName: ${fileName}`);
