@@ -5,6 +5,73 @@ import { showToast } from '../utils/toast.js';
 import { formatFileSize, getEntropyClass } from '../utils/format.js';
 import { showEntropyVisualization } from '../utils/entropyVisualization.js';
 
+// Modern Modal Functions (replacing prompt())
+function showPasswordModal(title, message) {
+    return new Promise((resolve) => {
+        const modal = document.getElementById('password-modal');
+        if (!modal) {
+            // Fallback to simple prompt if modal doesn't exist
+            const password = prompt(message);
+            resolve(password);
+            return;
+        }
+        
+        const titleEl = document.getElementById('password-modal-title');
+        const messageEl = document.getElementById('password-modal-message');
+        const fieldEl = document.getElementById('password-modal-field');
+        const errorEl = document.getElementById('password-modal-error');
+        const cancelBtn = document.getElementById('password-modal-cancel');
+        const confirmBtn = document.getElementById('password-modal-confirm');
+        
+        // Set content
+        titleEl.textContent = title;
+        messageEl.textContent = message;
+        fieldEl.value = '';
+        errorEl.classList.add('hidden');
+        
+        // Show modal
+        modal.classList.remove('hidden');
+        fieldEl.focus();
+        
+        // Handle events
+        const cleanup = () => {
+            modal.classList.add('hidden');
+            cancelBtn.removeEventListener('click', onCancel);
+            confirmBtn.removeEventListener('click', onConfirm);
+            fieldEl.removeEventListener('keypress', onKeypress);
+        };
+        
+        const onCancel = () => {
+            cleanup();
+            resolve(null);
+        };
+        
+        const onConfirm = () => {
+            const value = fieldEl.value;
+            if (!value) {
+                errorEl.textContent = 'Password is required';
+                errorEl.classList.remove('hidden');
+                fieldEl.focus();
+                return;
+            }
+            cleanup();
+            resolve(value);
+        };
+        
+        const onKeypress = (e) => {
+            if (e.key === 'Enter') {
+                onConfirm();
+            } else if (e.key === 'Escape') {
+                onCancel();
+            }
+        };
+        
+        cancelBtn.addEventListener('click', onCancel);
+        confirmBtn.addEventListener('click', onConfirm);
+        fieldEl.addEventListener('keypress', onKeypress);
+    });
+}
+
 // Helper function to show confirmation respecting user settings
 async function showConfirmationIfEnabled(message, defaultAction = false) {
     const confirmActionsEnabled = document.getElementById('confirm-actions')?.checked;
@@ -436,10 +503,10 @@ export async function loadEncryptedFiles(appApi) {
             // Add event listeners to buttons directly
             const decryptBtn = fileCard.querySelector('.decrypt-button');
             if (decryptBtn) {
-                decryptBtn.addEventListener('click', () => {
+                decryptBtn.addEventListener('click', async () => {
                     console.log(`[fileOperations.js] Decrypt button clicked for file ID: ${file.id}`);
-                    // Prompt user for password
-                    const password = prompt('Enter decryption password:');
+                    // Show modern password modal instead of prompt
+                    const password = await showPasswordModal('Enter Decryption Password', 'Please enter the password to decrypt this file:');
                     if (password) {
                         decryptFile(file.id, password);
                     } else {
@@ -670,10 +737,10 @@ export function createFileCard(file) {
                     return;
                 }
                 
-                // Prompt user for password
-                const password = prompt('Enter decryption password:');
+                // Show modern password modal instead of prompt
+                const password = await showPasswordModal('Enter Decryption Password', 'Please enter the password to decrypt this file:');
                 if (password === null) {
-                    // User cancelled the prompt
+                    // User cancelled the modal
                     return;
                 }
                 

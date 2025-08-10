@@ -480,6 +480,77 @@
         </div>
     </div>
 
+    <!-- Input Modal -->
+    <div id="input-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50">
+        <div class="bg-dark-light border border-slate-700 rounded-xl p-6 max-w-md w-full mx-4">
+            <div class="mb-4">
+                <h3 id="input-modal-title" class="text-lg font-semibold mb-2">Enter Information</h3>
+                <p id="input-modal-message" class="text-slate-400 text-sm mb-4">Please enter the required information:</p>
+                <input id="input-modal-field" type="text" class="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary focus:border-transparent" placeholder="Enter value...">
+                <div id="input-modal-error" class="hidden text-red-400 text-sm mt-2"></div>
+            </div>
+            <div class="flex justify-end space-x-3">
+                <button id="input-modal-cancel" class="px-4 py-2 text-slate-400 hover:text-white transition-colors">Cancel</button>
+                <button id="input-modal-confirm" class="px-4 py-2 bg-primary hover:bg-primary-light rounded-lg transition-colors">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Password Modal -->
+    <div id="password-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50">
+        <div class="bg-dark-light border border-slate-700 rounded-xl p-6 max-w-md w-full mx-4">
+            <div class="mb-4">
+                <h3 id="password-modal-title" class="text-lg font-semibold mb-2">Enter Password</h3>
+                <p id="password-modal-message" class="text-slate-400 text-sm mb-4">Please enter your password:</p>
+                <input id="password-modal-field" type="password" class="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary focus:border-transparent" placeholder="Enter password...">
+                <div id="password-modal-error" class="hidden text-red-400 text-sm mt-2"></div>
+            </div>
+            <div class="flex justify-end space-x-3">
+                <button id="password-modal-cancel" class="px-4 py-2 text-slate-400 hover:text-white transition-colors">Cancel</button>
+                <button id="password-modal-confirm" class="px-4 py-2 bg-primary hover:bg-primary-light rounded-lg transition-colors">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- File Import Modal -->
+    <div id="file-import-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50">
+        <div class="bg-dark-light border border-slate-700 rounded-xl p-6 max-w-lg w-full mx-4">
+            <div class="mb-4">
+                <h3 class="text-lg font-semibold mb-2">Import Encryption Key</h3>
+                <p class="text-slate-400 text-sm mb-4">Choose how you want to import your key:</p>
+                
+                <div class="space-y-4">
+                    <!-- File Upload Option -->
+                    <div class="border border-slate-600 rounded-lg p-4">
+                        <label class="block text-sm font-medium mb-2">Import from File</label>
+                        <input id="key-file-input" type="file" accept=".key,.txt,.json" class="w-full text-sm text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-primary file:text-white hover:file:bg-primary-light">
+                        <p class="text-xs text-slate-500 mt-1">Select a .key, .txt, or .json file containing your encryption key</p>
+                    </div>
+                    
+                    <!-- Manual Entry Option -->
+                    <div class="border border-slate-600 rounded-lg p-4">
+                        <label class="block text-sm font-medium mb-2">Enter Key Manually</label>
+                        <textarea id="manual-key-input" class="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary focus:border-transparent" rows="3" placeholder="Paste your 64-character hex key here..."></textarea>
+                        <p class="text-xs text-slate-500 mt-1">Enter 64 hexadecimal characters (0-9, A-F)</p>
+                    </div>
+                    
+                    <!-- Password for encrypted keys -->
+                    <div class="border border-slate-600 rounded-lg p-4">
+                        <label class="block text-sm font-medium mb-2">Password (if key is encrypted)</label>
+                        <input id="key-password-input" type="password" class="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary focus:border-transparent" placeholder="Enter password if required...">
+                        <p class="text-xs text-slate-500 mt-1">Leave empty if your key is not password-protected</p>
+                    </div>
+                </div>
+                
+                <div id="import-modal-error" class="hidden text-red-400 text-sm mt-2"></div>
+            </div>
+            <div class="flex justify-end space-x-3">
+                <button id="import-modal-cancel" class="px-4 py-2 text-slate-400 hover:text-white transition-colors">Cancel</button>
+                <button id="import-modal-confirm" class="px-4 py-2 bg-primary hover:bg-primary-light rounded-lg transition-colors">Import Key</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         // Global state
         let currentSection = 'dashboard';
@@ -2322,6 +2393,200 @@
             return algorithm.toUpperCase();
         }
 
+        // Modern Modal Functions (replacing prompt())
+        function showInputModal(title, message, placeholder = '', inputType = 'text') {
+            return new Promise((resolve) => {
+                const modal = document.getElementById('input-modal');
+                const titleEl = document.getElementById('input-modal-title');
+                const messageEl = document.getElementById('input-modal-message');
+                const fieldEl = document.getElementById('input-modal-field');
+                const errorEl = document.getElementById('input-modal-error');
+                const cancelBtn = document.getElementById('input-modal-cancel');
+                const confirmBtn = document.getElementById('input-modal-confirm');
+                
+                // Set content
+                titleEl.textContent = title;
+                messageEl.textContent = message;
+                fieldEl.type = inputType;
+                fieldEl.placeholder = placeholder;
+                fieldEl.value = '';
+                errorEl.classList.add('hidden');
+                
+                // Show modal
+                modal.classList.remove('hidden');
+                fieldEl.focus();
+                
+                // Handle events
+                const cleanup = () => {
+                    modal.classList.add('hidden');
+                    cancelBtn.removeEventListener('click', onCancel);
+                    confirmBtn.removeEventListener('click', onConfirm);
+                    fieldEl.removeEventListener('keypress', onKeypress);
+                };
+                
+                const onCancel = () => {
+                    cleanup();
+                    resolve(null);
+                };
+                
+                const onConfirm = () => {
+                    const value = fieldEl.value.trim();
+                    if (!value) {
+                        errorEl.textContent = 'This field is required';
+                        errorEl.classList.remove('hidden');
+                        fieldEl.focus();
+                        return;
+                    }
+                    cleanup();
+                    resolve(value);
+                };
+                
+                const onKeypress = (e) => {
+                    if (e.key === 'Enter') {
+                        onConfirm();
+                    } else if (e.key === 'Escape') {
+                        onCancel();
+                    }
+                };
+                
+                cancelBtn.addEventListener('click', onCancel);
+                confirmBtn.addEventListener('click', onConfirm);
+                fieldEl.addEventListener('keypress', onKeypress);
+            });
+        }
+
+        function showPasswordModal(title, message) {
+            return new Promise((resolve) => {
+                const modal = document.getElementById('password-modal');
+                const titleEl = document.getElementById('password-modal-title');
+                const messageEl = document.getElementById('password-modal-message');
+                const fieldEl = document.getElementById('password-modal-field');
+                const errorEl = document.getElementById('password-modal-error');
+                const cancelBtn = document.getElementById('password-modal-cancel');
+                const confirmBtn = document.getElementById('password-modal-confirm');
+                
+                // Set content
+                titleEl.textContent = title;
+                messageEl.textContent = message;
+                fieldEl.value = '';
+                errorEl.classList.add('hidden');
+                
+                // Show modal
+                modal.classList.remove('hidden');
+                fieldEl.focus();
+                
+                // Handle events
+                const cleanup = () => {
+                    modal.classList.add('hidden');
+                    cancelBtn.removeEventListener('click', onCancel);
+                    confirmBtn.removeEventListener('click', onConfirm);
+                    fieldEl.removeEventListener('keypress', onKeypress);
+                };
+                
+                const onCancel = () => {
+                    cleanup();
+                    resolve(null);
+                };
+                
+                const onConfirm = () => {
+                    const value = fieldEl.value;
+                    if (!value) {
+                        errorEl.textContent = 'Password is required';
+                        errorEl.classList.remove('hidden');
+                        fieldEl.focus();
+                        return;
+                    }
+                    cleanup();
+                    resolve(value);
+                };
+                
+                const onKeypress = (e) => {
+                    if (e.key === 'Enter') {
+                        onConfirm();
+                    } else if (e.key === 'Escape') {
+                        onCancel();
+                    }
+                };
+                
+                cancelBtn.addEventListener('click', onCancel);
+                confirmBtn.addEventListener('click', onConfirm);
+                fieldEl.addEventListener('keypress', onKeypress);
+            });
+        }
+
+        function showImportKeyModal() {
+            return new Promise((resolve) => {
+                const modal = document.getElementById('file-import-modal');
+                const fileInput = document.getElementById('key-file-input');
+                const manualInput = document.getElementById('manual-key-input');
+                const passwordInput = document.getElementById('key-password-input');
+                const errorEl = document.getElementById('import-modal-error');
+                const cancelBtn = document.getElementById('import-modal-cancel');
+                const confirmBtn = document.getElementById('import-modal-confirm');
+                
+                // Reset inputs
+                fileInput.value = '';
+                manualInput.value = '';
+                passwordInput.value = '';
+                errorEl.classList.add('hidden');
+                
+                // Show modal
+                modal.classList.remove('hidden');
+                
+                // Handle events
+                const cleanup = () => {
+                    modal.classList.add('hidden');
+                    cancelBtn.removeEventListener('click', onCancel);
+                    confirmBtn.removeEventListener('click', onConfirm);
+                    fileInput.removeEventListener('change', onFileChange);
+                };
+                
+                const onCancel = () => {
+                    cleanup();
+                    resolve(null);
+                };
+                
+                const onFileChange = async () => {
+                    const file = fileInput.files[0];
+                    if (file) {
+                        try {
+                            const text = await file.text();
+                            manualInput.value = text;
+                        } catch (error) {
+                            errorEl.textContent = 'Error reading file: ' + error.message;
+                            errorEl.classList.remove('hidden');
+                        }
+                    }
+                };
+                
+                const onConfirm = () => {
+                    const keyData = manualInput.value.trim();
+                    const password = passwordInput.value.trim();
+                    
+                    if (!keyData) {
+                        errorEl.textContent = 'Please provide a key either by file upload or manual entry';
+                        errorEl.classList.remove('hidden');
+                        return;
+                    }
+                    
+                    // Basic validation for hex keys
+                    const cleanedKey = keyData.replace(/\s+/g, '');
+                    if (!/^[0-9a-fA-F]{64}$/.test(cleanedKey) && !keyData.includes('{')) {
+                        errorEl.textContent = 'Invalid key format. Must be 64 hex characters (0-9, A-F) or a JSON key file.';
+                        errorEl.classList.remove('hidden');
+                        return;
+                    }
+                    
+                    cleanup();
+                    resolve({ keyData: cleanedKey, password: password || null });
+                };
+                
+                cancelBtn.addEventListener('click', onCancel);
+                confirmBtn.addEventListener('click', onConfirm);
+                fileInput.addEventListener('change', onFileChange);
+            });
+        }
+
         // Debug functions
         async function testFileDialog() {
             console.log('Testing file dialog...');
@@ -2810,19 +3075,13 @@
                         }
                     }
                     
-                    // For now, show a simple prompt - this could be enhanced with a proper file picker
-                    const keyData = prompt('Enter your encryption key (64 hex characters):');
-                    if (!keyData) return;
-                    
-                    const cleanedKey = keyData.replace(/\s+/g, '');
-                    if (!/^[0-9a-fA-F]{64}$/.test(cleanedKey)) {
-                        showToast('Invalid key format. Must be 64 hex characters (0-9, A-F).', 'error');
-                        return;
-                    }
+                    // Show modern import modal instead of prompt
+                    const importData = await showImportKeyModal();
+                    if (!importData) return;
                     
                     showProgressModal('Importing Key', 'Loading your encryption key...');
                     
-                    const result = await window.api.importKey(cleanedKey);
+                    const result = await window.api.importKey(importData.keyData);
                     hideProgressModal();
                     
                     if (result && result.success) {

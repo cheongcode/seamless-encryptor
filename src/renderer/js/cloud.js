@@ -1045,8 +1045,76 @@ async function saveFileTemporarily(file) {
 
 async function promptForPassword(message) {
     return new Promise((resolve) => {
-        const password = prompt(message);
-        resolve(password);
+        // Try to use the password modal if available
+        const modal = document.getElementById('password-modal');
+        if (modal) {
+            showPasswordModal('Enter Password', message).then(resolve);
+        } else {
+            // Fallback to alert for legacy support
+            const password = window.prompt ? window.prompt(message) : null;
+            resolve(password);
+        }
+    });
+}
+
+// Add the showPasswordModal function for cloud.js
+function showPasswordModal(title, message) {
+    return new Promise((resolve) => {
+        const modal = document.getElementById('password-modal');
+        if (!modal) {
+            // Fallback if modal doesn't exist
+            const password = window.prompt ? window.prompt(message) : null;
+            resolve(password);
+            return;
+        }
+        
+        const titleEl = document.getElementById('password-modal-title');
+        const messageEl = document.getElementById('password-modal-message');
+        const fieldEl = document.getElementById('password-modal-field');
+        const errorEl = document.getElementById('password-modal-error');
+        const cancelBtn = document.getElementById('password-modal-cancel');
+        const confirmBtn = document.getElementById('password-modal-confirm');
+        
+        // Set content
+        titleEl.textContent = title;
+        messageEl.textContent = message;
+        fieldEl.value = '';
+        errorEl.classList.add('hidden');
+        
+        // Show modal
+        modal.classList.remove('hidden');
+        fieldEl.focus();
+        
+        // Handle events
+        const cleanup = () => {
+            modal.classList.add('hidden');
+            cancelBtn.removeEventListener('click', onCancel);
+            confirmBtn.removeEventListener('click', onConfirm);
+            fieldEl.removeEventListener('keypress', onKeypress);
+        };
+        
+        const onCancel = () => {
+            cleanup();
+            resolve(null);
+        };
+        
+        const onConfirm = () => {
+            const value = fieldEl.value;
+            cleanup();
+            resolve(value || null);
+        };
+        
+        const onKeypress = (e) => {
+            if (e.key === 'Enter') {
+                onConfirm();
+            } else if (e.key === 'Escape') {
+                onCancel();
+            }
+        };
+        
+        cancelBtn.addEventListener('click', onCancel);
+        confirmBtn.addEventListener('click', onConfirm);
+        fieldEl.addEventListener('keypress', onKeypress);
     });
 }
 
