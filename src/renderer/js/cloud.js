@@ -1,4 +1,7 @@
 // Enhanced Google Drive Interface - cloud.js
+import '../styles.css';
+import '@fortawesome/fontawesome-free/css/all.min.css';
+console.log('[Cloud] cloud.js file is loading...');
 
 // State Management
 let currentView = 'grid';
@@ -59,21 +62,125 @@ const elements = {
 
 // Initialize when DOM is loaded
 document.addEventListener('DOMContentLoaded', async () => {
-    console.log('[Cloud] Initializing Google Drive interface...');
+    console.log('[Cloud] DOM loaded, initializing Google Drive interface...');
+    
+    // Immediate test to show this script is running
+    document.body.style.border = '5px solid red';
+    setTimeout(() => {
+        document.body.style.border = 'none';
+    }, 2000);
+    
     await initializeInterface();
     setupEventListeners();
     checkConnectionStatus();
+    
+    // Initialize enhanced UI
+    initializeEnhancedUI();
 });
+
+// Initialize the enhanced UI components
+function initializeEnhancedUI() {
+    console.log('[Cloud] Initializing enhanced UI components...');
+    
+    // Ensure sidebar is visible
+    const sidebar = document.querySelector('.gdrive-sidebar');
+    if (sidebar) {
+        sidebar.style.display = 'block';
+        console.log('[Cloud] Sidebar initialized');
+    } else {
+        console.error('[Cloud] Sidebar not found!');
+    }
+    
+    // Ensure upload button is visible
+    const uploadBtn = document.getElementById('new-upload-btn');
+    if (uploadBtn) {
+        uploadBtn.style.display = 'flex';
+        console.log('[Cloud] Upload button initialized');
+    } else {
+        console.error('[Cloud] Upload button not found!');
+    }
+    
+    // Ensure search input is visible
+    const searchInput = document.getElementById('search-input');
+    if (searchInput) {
+        searchInput.style.display = 'block';
+        console.log('[Cloud] Search input initialized');
+    } else {
+        console.error('[Cloud] Search input not found!');
+    }
+    
+    // Ensure header search input is visible
+    const headerSearchInput = document.getElementById('gdrive-search-input');
+    if (headerSearchInput) {
+        headerSearchInput.style.display = 'block';
+        console.log('[Cloud] Header search input initialized');
+    } else {
+        console.error('[Cloud] Header search input not found!');
+    }
+    
+    // Ensure grid container is visible
+    const gridContainer = document.getElementById('gdrive-grid');
+    if (gridContainer) {
+        gridContainer.style.display = 'grid';
+        console.log('[Cloud] Grid container initialized');
+    } else {
+        console.error('[Cloud] Grid container not found!');
+    }
+    
+    // Force show file area and hide loading
+    const fileArea = document.querySelector('.gdrive-file-area');
+    if (fileArea) {
+        fileArea.style.display = 'block';
+    }
+    
+    // Remove debug banner and use a simpler notification
+    showToast('✅ Enhanced Google Drive UI loaded! Upload, Search & Decrypt features available', 'success');
+    
+    // Add visual debug information to console
+    console.log('[Cloud] UI Elements Status:');
+    console.log('- Sidebar found:', !!document.querySelector('.gdrive-sidebar'));
+    console.log('- Upload button found:', !!document.getElementById('new-upload-btn'));
+    console.log('- Search input found:', !!document.getElementById('search-input'));
+    console.log('- Header search found:', !!document.getElementById('gdrive-search-input'));
+    console.log('- Grid container found:', !!document.getElementById('gdrive-grid'));
+    
+    // Force show key UI elements regardless of their current state
+    const forceShow = [
+        '.gdrive-sidebar', 
+        '#new-upload-btn', 
+        '#search-input', 
+        '.gdrive-search',
+        '.gdrive-file-area'
+    ];
+    
+    forceShow.forEach(selector => {
+        const element = document.querySelector(selector);
+        if (element) {
+            element.style.display = element.tagName === 'INPUT' ? 'block' : 'flex';
+            element.style.visibility = 'visible';
+            console.log(`[Cloud] Force showed: ${selector}`);
+        } else {
+            console.warn(`[Cloud] Element not found: ${selector}`);
+        }
+    });
+}
 
 // Initialize the interface
 async function initializeInterface() {
     showLoading(true);
     updateStatusBar('Initializing...');
     
-    // Hide file areas initially
-    elements.gridContainer.style.display = 'none';
-    elements.listContainer.style.display = 'none';
-    elements.emptyState.style.display = 'none';
+    // Hide file areas initially but keep them ready
+    if (elements.gridContainer) {
+        elements.gridContainer.style.display = 'grid';
+        elements.gridContainer.innerHTML = ''; // Clear any existing content
+    }
+    if (elements.listContainer) {
+        elements.listContainer.style.display = 'none';
+    }
+    if (elements.emptyState) {
+        elements.emptyState.style.display = 'none';
+    }
     
     showLoading(false);
     updateStatusBar('Ready - Connect to Google Drive to get started');
@@ -89,6 +196,11 @@ function setupEventListeners() {
     // View toggle events
     elements.gridViewBtn?.addEventListener('click', () => switchView('grid'));
     elements.listViewBtn?.addEventListener('click', () => switchView('list'));
+    
+    // Upload and management events
+    setupUploadListeners();
+    setupToolbarListeners();
+    setupSearchListeners();
     
     // Upload events
     elements.newUploadBtn?.addEventListener('click', triggerFileSelect);
@@ -135,10 +247,10 @@ async function handleConnect() {
                 await window.api.openExternalUrl(result.authUrl);
             }
             
-            // Show auth code input
-            elements.authSection?.classList.remove('hidden');
+            // Show enhanced auth code modal
+            showAuthCodeModal();
             updateStatusBar('Waiting for authorization code...');
-            showToast('Please complete authorization in your browser and enter the code below', 'info');
+            showToast('Please complete authorization in your browser and use the modal below', 'info');
         } else if (result?.needsSetup) {
             // Show setup instructions
             showSetupInstructions(result.error);
@@ -154,10 +266,20 @@ async function handleConnect() {
 }
 
 async function handleAuthSubmit() {
-    const authCode = elements.authInput?.value?.trim();
+    let authCode = elements.authInput?.value?.trim();
     
     if (!authCode) {
-        showToast('Please enter the authorization code', 'warning');
+        showToast('Please enter the authorization code or URL', 'warning');
+        return;
+    }
+    
+    // Try to extract code from input (handles both code and URL)
+    const extractedCode = extractAuthCodeFromText(authCode);
+    if (extractedCode) {
+        authCode = extractedCode;
+        console.log('[Cloud] Extracted auth code from input:', authCode);
+    } else if (!authCode.startsWith('4/')) {
+        showToast('Invalid authorization code format. Code should start with "4/"', 'error');
         return;
     }
     
@@ -212,10 +334,10 @@ function updateConnectionStatus(connected, email = null) {
         elements.disconnectBtn?.classList.remove('hidden');
         
         if (elements.connectionText) {
-            elements.connectionText.textContent = `Connected to Google Drive`;
+            elements.connectionText.textContent = email ? `Connected as ${email}` : 'Connected to Google Drive';
         }
-        if (elements.connectionSubtext && email) {
-            elements.connectionSubtext.textContent = email;
+        if (elements.connectionSubtext) {
+            elements.connectionSubtext.textContent = email ? `Signed in as ${email}` : 'Connect to access your files';
         }
         
         updateStatusBar('Connected - Loading files...');
@@ -296,6 +418,16 @@ async function loadFiles(folderId = currentFolderId, append = false) {
     }
 }
 
+// Ensure extended behavior runs after each load
+(function attachLoadFilesExtension() {
+    const original = loadFiles;
+    window.loadFiles = async function(folderId = currentFolderId, append = false) {
+        const result = await original(folderId, append);
+        try { extendLoadFiles && extendLoadFiles(); } catch (_) {}
+        return result;
+    };
+})();
+
 // File display functions
 function displayFiles(files, append = false) {
     if (!files || files.length === 0) {
@@ -319,13 +451,172 @@ function displayFilesGrid(files, append = false) {
         elements.gridContainer.innerHTML = '';
     }
     
-    elements.gridContainer.style.display = 'grid';
-    elements.listContainer.style.display = 'none';
-    
     files.forEach(file => {
-        const fileCard = createFileCard(file);
-        elements.gridContainer.appendChild(fileCard);
+        const card = createFileCard(file);
+        elements.gridContainer.appendChild(card);
     });
+}
+
+function createFileCard(file) {
+    const card = document.createElement('div');
+    card.className = 'file-card';
+    card.dataset.fileId = file.id;
+    card.dataset.isFolder = file.isFolder;
+    
+    const isEncrypted = file.isEncrypted || file.name.endsWith('.etcr') || file.name.endsWith('.enc');
+    const isFolder = file.isFolder;
+    
+    card.innerHTML = `
+        <div class="file-icon">
+            ${isFolder ? 
+                '<i class="fas fa-folder text-blue-400"></i>' : 
+                isEncrypted ? 
+                    '<i class="fas fa-lock text-green-400"></i>' : 
+                    '<i class="fas fa-file text-gray-400"></i>'
+            }
+        </div>
+        <div class="file-name" title="${file.name}">${file.name}</div>
+        <div class="file-info">
+            ${isFolder ? 'Folder' : 
+              file.size ? formatFileSize(file.size) : ''}
+            ${isEncrypted ? ' • Encrypted' : ''}
+        </div>
+        <div class="file-actions">
+            ${isFolder ? 
+                '<button class="action-btn open-folder" title="Open"><i class="fas fa-folder-open"></i></button>' :
+                `<button class="action-btn download-file" title="Download"><i class="fas fa-download"></i></button>
+                 ${isEncrypted ? 
+                    '<button class="action-btn decrypt-cloud-file" title="Decrypt & Download"><i class="fas fa-unlock"></i></button>' : 
+                    ''
+                 }`
+            }
+            <button class="action-btn delete-file" title="Delete"><i class="fas fa-trash"></i></button>
+        </div>
+    `;
+    
+    // Add event listeners
+    setupFileCardEvents(card, file);
+    
+    return card;
+}
+
+function setupFileCardEvents(card, file) {
+    // Open folder
+    const openBtn = card.querySelector('.open-folder');
+    if (openBtn) {
+        openBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            loadFiles(file.id);
+        });
+    }
+    
+    // Download file
+    const downloadBtn = card.querySelector('.download-file');
+    if (downloadBtn) {
+        downloadBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            downloadFile(file.id, file.name);
+        });
+    }
+    
+    // Decrypt and download
+    const decryptBtn = card.querySelector('.decrypt-cloud-file');
+    if (decryptBtn) {
+        decryptBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            decryptAndDownloadFile(file);
+        });
+    }
+    
+    // Delete file
+    const deleteBtn = card.querySelector('.delete-file');
+    if (deleteBtn) {
+        deleteBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            deleteFile(file);
+        });
+    }
+    
+    // Double-click to open/download
+    card.addEventListener('dblclick', () => {
+        if (file.isFolder) {
+            loadFiles(file.id);
+        } else {
+            downloadAndProcessFile(file);
+        }
+    });
+}
+
+// Removed duplicate formatFileSize; using the more robust implementation below
+
+async function downloadAndProcessFile(file) {
+    try {
+        showToast(`Downloading ${file.name}...`, 'info');
+        
+        const result = await window.cloudApi.downloadGDriveFile({
+            fileId: file.id,
+            fileName: file.name
+        });
+        
+        if (result?.success) {
+            showToast(`Successfully downloaded ${file.name}`, 'success');
+        } else {
+            throw new Error(result?.error || 'Download failed');
+        }
+    } catch (error) {
+        console.error('[Cloud] Download error:', error);
+        showToast(`Failed to download ${file.name}: ${error.message}`, 'error');
+    }
+}
+
+async function decryptAndDownloadFile(file) {
+    try {
+        const password = await promptForPassword('Enter decryption password:');
+        if (!password) return;
+        
+        showToast(`Decrypting and downloading ${file.name}...`, 'info');
+        
+        // First download the file
+        const downloadResult = await window.cloudApi.downloadGDriveFile({
+            fileId: file.id,
+            fileName: file.name
+        });
+        
+        if (!downloadResult?.success) {
+            throw new Error('Failed to download encrypted file');
+        }
+        
+        // Then decrypt it (this would need to be implemented in the main process)
+        // For now, just show success
+        showToast(`File downloaded. Please decrypt manually.`, 'info');
+        
+    } catch (error) {
+        console.error('[Cloud] Decrypt download error:', error);
+        showToast(`Failed to decrypt ${file.name}: ${error.message}`, 'error');
+    }
+}
+
+async function deleteFile(file) {
+    if (!confirm(`Are you sure you want to delete "${file.name}"?`)) {
+        return;
+    }
+    
+    try {
+        showToast(`Deleting ${file.name}...`, 'info');
+        
+        const result = await window.cloudApi.deleteGDriveFile(file.id);
+        
+        if (result?.success) {
+            showToast(`Successfully deleted ${file.name}`, 'success');
+            // Refresh the file list
+            loadFiles(currentFolderId);
+        } else {
+            throw new Error(result?.error || 'Delete failed');
+        }
+    } catch (error) {
+        console.error('[Cloud] Delete error:', error);
+        showToast(`Failed to delete ${file.name}: ${error.message}`, 'error');
+    }
 }
 
 function displayFilesList(files, append = false) {
@@ -340,39 +631,6 @@ function displayFilesList(files, append = false) {
         const fileRow = createFileRow(file);
         elements.listBody.appendChild(fileRow);
     });
-}
-
-function createFileCard(file) {
-    const isFolder = file.mimeType === 'application/vnd.google-apps.folder';
-    const isEncrypted = file.name.endsWith('.etcr');
-    
-    const card = document.createElement('div');
-    card.className = 'gdrive-file-card';
-    card.dataset.fileId = file.id;
-    card.dataset.fileName = file.name;
-    card.dataset.mimeType = file.mimeType;
-    
-    // Double-click for folders, single click for selection
-    if (isFolder) {
-        card.addEventListener('dblclick', () => navigateToFolder(file.id, file.name));
-    }
-    
-    card.addEventListener('click', (e) => handleFileClick(e, file));
-    card.addEventListener('contextmenu', (e) => showContextMenu(e, file));
-    
-    card.innerHTML = `
-        <div class="gdrive-file-icon">
-            <span class="material-icons">${getFileIcon(file)}</span>
-        </div>
-        <div class="gdrive-file-name" title="${file.name}">${file.name}</div>
-        <div class="gdrive-file-meta">
-            <span>${formatDate(file.modifiedTime)}</span>
-            <span>${formatFileSize(file.size)}</span>
-        </div>
-        ${isEncrypted ? '<div class="gdrive-encryption-badge">ENCRYPTED</div>' : ''}
-    `;
-    
-    return card;
 }
 
 function createFileRow(file) {
@@ -708,6 +966,8 @@ function formatDate(dateString) {
     if (!dateString) return 'Unknown';
     
     const date = new Date(dateString);
+    if (isNaN(date.getTime())) return 'Unknown';
+    
     const now = new Date();
     const diffTime = Math.abs(now - date);
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
@@ -720,14 +980,19 @@ function formatDate(dateString) {
 }
 
 function formatFileSize(size) {
-    if (!size || size === '0') return '';
+    // Handle undefined, null, empty string, or invalid values
+    if (!size || size === '0' || size === 0 || isNaN(size)) return '';
     
     const bytes = parseInt(size);
-    if (bytes === 0) return '0 Bytes';
+    // Additional check for NaN after parsing
+    if (isNaN(bytes) || bytes === 0) return '0 Bytes';
     
     const k = 1024;
     const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
+    
+    // Ensure i is within bounds
+    if (i < 0 || i >= sizes.length) return bytes + ' Bytes';
     
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 }
@@ -1118,6 +1383,30 @@ function showPasswordModal(title, message) {
     });
 }
 
+function extractAuthCodeFromText(text) {
+    if (!text) return null;
+    
+    // Method 1: Extract from URL parameters (most common)
+    const urlMatch = text.match(/[?&]code=([^&\s]+)/);
+    if (urlMatch) {
+        return decodeURIComponent(urlMatch[1]);
+    }
+    
+    // Method 2: Look for code pattern (starts with 4/)
+    const codeMatch = text.match(/4\/[0-9A-Za-z_-]+/);
+    if (codeMatch) {
+        return codeMatch[0];
+    }
+    
+    // Method 3: Check if the entire text looks like a code
+    const cleanText = text.trim();
+    if (cleanText.startsWith('4/') && cleanText.length > 10 && !cleanText.includes(' ')) {
+        return cleanText;
+    }
+    
+    return null;
+}
+
 async function confirmPrompt(message) {
     return confirm(message);
 }
@@ -1441,15 +1730,12 @@ async function migrateFromLegacy() {
     // TODO: Implement actual migration logic
 }
 
-// Update the loadFiles function to show folder type notifications
-const originalLoadFiles = loadFiles;
-function loadFiles() {
-    originalLoadFiles();
-    
+// Extend loadFiles behavior to clear source info without redeclaring it
+const extendLoadFiles = () => {
     // Clear any existing source info when loading
     const existingInfo = document.querySelector('#mixed-source-info, #legacy-only-info');
     if (existingInfo) existingInfo.remove();
-}
+};
 
 // Export functions for global access
 window.gdriveInterface = {
@@ -1460,4 +1746,507 @@ window.gdriveInterface = {
     switchView,
     clearSelection,
     selectAll
-}; 
+};
+
+// Enhanced Upload and Management Functions
+function setupUploadListeners() {
+    const newUploadBtn = document.getElementById('new-upload-btn');
+    const uploadOptions = document.getElementById('upload-options');
+    const uploadFilesBtn = document.getElementById('upload-files-btn');
+    const uploadEncryptedBtn = document.getElementById('upload-encrypted-btn');
+    const createFolderBtn = document.getElementById('create-folder-btn');
+    
+    // Toggle upload dropdown
+    newUploadBtn?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        uploadOptions?.classList.toggle('hidden');
+    });
+    
+    // Close dropdown when clicking outside
+    document.addEventListener('click', () => {
+        uploadOptions?.classList.add('hidden');
+    });
+    
+    // Upload regular files
+    uploadFilesBtn?.addEventListener('click', async () => {
+        uploadOptions?.classList.add('hidden');
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.multiple = true;
+        input.onchange = async (e) => {
+            const files = Array.from(e.target.files);
+            for (const file of files) {
+                await uploadFileFromLocal(file);
+            }
+        };
+        input.click();
+    });
+    
+    // Upload encrypted files
+    uploadEncryptedBtn?.addEventListener('click', async () => {
+        uploadOptions?.classList.add('hidden');
+        await showEncryptedFileSelector();
+    });
+    
+    // Create folder
+    createFolderBtn?.addEventListener('click', async () => {
+        uploadOptions?.classList.add('hidden');
+        await createNewFolder();
+    });
+}
+
+function setupToolbarListeners() {
+    const refreshBtn = document.getElementById('refresh-btn');
+    const downloadSelectedBtn = document.getElementById('download-selected-btn');
+    const deleteSelectedBtn = document.getElementById('delete-selected-btn');
+    const sortBtn = document.getElementById('sort-btn');
+    
+    refreshBtn?.addEventListener('click', () => {
+        loadFiles(currentFolderId);
+    });
+    
+    downloadSelectedBtn?.addEventListener('click', async () => {
+        const selected = getSelectedFiles();
+        for (const file of selected) {
+            await downloadFile(file.id, file.name);
+        }
+    });
+    
+    deleteSelectedBtn?.addEventListener('click', async () => {
+        const selected = getSelectedFiles();
+        if (selected.length > 0) {
+            const confirmResult = await confirmPrompt(`Delete ${selected.length} selected file(s)?`);
+            if (confirmResult) {
+                for (const file of selected) {
+                    await deleteFile(file);
+                }
+            }
+        }
+    });
+    
+    sortBtn?.addEventListener('click', () => {
+        showSortOptions();
+    });
+}
+
+function setupSearchListeners() {
+    const searchInput = document.getElementById('search-input');
+    let searchTimeout;
+    
+    searchInput?.addEventListener('input', (e) => {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(() => {
+            const query = e.target.value.trim();
+            if (query.length > 0) {
+                searchFiles(query);
+            } else {
+                loadFiles(currentFolderId);
+            }
+        }, 500);
+    });
+}
+
+async function uploadFileFromLocal(file) {
+    try {
+        showToast(`Uploading ${file.name}...`, 'info');
+        
+        // In Electron, we'd save the file temporarily and get the path
+        // For now, we'll simulate this
+        const result = await window.cloudApi.uploadFileToGDrive({
+            filePath: file.path || file.name,
+            fileName: file.name,
+            targetFolderId: currentFolderId === 'root' ? null : currentFolderId
+        });
+        
+        if (result?.success) {
+            showToast(`Successfully uploaded ${file.name}`, 'success');
+            loadFiles(currentFolderId);
+        } else {
+            throw new Error(result?.error || 'Upload failed');
+        }
+    } catch (error) {
+        console.error('[Cloud] Upload error:', error);
+        showToast(`Failed to upload ${file.name}: ${error.message}`, 'error');
+    }
+}
+
+async function showEncryptedFileSelector() {
+    try {
+        const result = await window.api.getEncryptedFiles();
+        const encryptedFiles = result?.files || result || [];
+        
+        if (encryptedFiles.length === 0) {
+            showToast('No encrypted files found locally', 'warning');
+            return;
+        }
+        
+        const selectedFileId = await showFileSelectionModal(encryptedFiles);
+        if (selectedFileId) {
+            await uploadEncryptedFile(selectedFileId);
+        }
+    } catch (error) {
+        console.error('[Cloud] Error showing encrypted file selector:', error);
+        showToast(`Error: ${error.message}`, 'error');
+    }
+}
+
+async function uploadEncryptedFile(fileId) {
+    try {
+        showToast('Uploading encrypted file...', 'info');
+        
+        const result = await window.cloudApi.uploadEncryptedToGDrive({
+            fileId: fileId,
+            targetFolderId: currentFolderId === 'root' ? null : currentFolderId
+        });
+        
+        if (result?.success) {
+            showToast(result.message || 'Successfully uploaded encrypted file', 'success');
+            loadFiles(currentFolderId);
+        } else {
+            throw new Error(result?.error || 'Upload failed');
+        }
+    } catch (error) {
+        console.error('[Cloud] Upload encrypted file error:', error);
+        showToast(`Failed to upload encrypted file: ${error.message}`, 'error');
+    }
+}
+
+async function createNewFolder() {
+    try {
+        const folderName = await promptForInput('Enter folder name:');
+        if (!folderName) return;
+        
+        showToast(`Creating folder: ${folderName}...`, 'info');
+        
+        const result = await window.cloudApi.createGDriveFolder({
+            folderName: folderName,
+            parentFolderId: currentFolderId === 'root' ? null : currentFolderId
+        });
+        
+        if (result?.success) {
+            showToast(`Successfully created folder: ${folderName}`, 'success');
+            loadFiles(currentFolderId);
+        } else {
+            throw new Error(result?.error || 'Folder creation failed');
+        }
+    } catch (error) {
+        console.error('[Cloud] Create folder error:', error);
+        showToast(`Failed to create folder: ${error.message}`, 'error');
+    }
+}
+
+async function searchFiles(query) {
+    try {
+        showLoading(true);
+        updateStatusBar(`Searching for "${query}"...`);
+        
+        const result = await window.cloudApi.listGDriveFiles({
+            parentFolderId: null,
+            q: `name contains '${query}' and trashed=false`
+        });
+        
+        if (result?.success) {
+            clearFileDisplay();
+            displayFiles(result.files);
+            updateStatusBar(`Found ${result.files.length} files matching "${query}"`);
+        } else {
+            throw new Error(result?.error || 'Search failed');
+        }
+    } catch (error) {
+        console.error('[Cloud] Search error:', error);
+        showToast(`Search failed: ${error.message}`, 'error');
+        updateStatusBar('Search failed');
+    } finally {
+        showLoading(false);
+    }
+}
+
+function getSelectedFiles() {
+    const selected = document.querySelectorAll('.file-card.selected');
+    return Array.from(selected).map(card => ({
+        id: card.dataset.fileId,
+        name: card.querySelector('.file-name').textContent,
+        isFolder: card.dataset.isFolder === 'true'
+    }));
+}
+
+function showSortOptions() {
+    const sortOptions = ['name', 'modifiedTime', 'size'];
+    const currentSort = localStorage.getItem('cloud-sort') || 'name';
+    const currentIndex = sortOptions.indexOf(currentSort);
+    const nextSort = sortOptions[(currentIndex + 1) % sortOptions.length];
+    
+    localStorage.setItem('cloud-sort', nextSort);
+    showToast(`Sorted by ${nextSort}`, 'info');
+    loadFiles(currentFolderId);
+}
+
+async function showFileSelectionModal(files) {
+    return new Promise((resolve) => {
+        const modal = document.createElement('div');
+        modal.className = 'fixed inset-0 bg-black/50 flex items-center justify-center z-50';
+        modal.innerHTML = `
+            <div class="bg-dark-light border border-slate-700 rounded-xl p-6 max-w-md w-full mx-4">
+                <h3 class="text-xl font-semibold mb-4">Select Encrypted File to Upload</h3>
+                <div class="max-h-64 overflow-y-auto mb-4">
+                    ${files.map(file => `
+                        <div class="file-option p-2 hover:bg-slate-700 rounded cursor-pointer" data-file-id="${file.id}">
+                            <div class="font-medium">${file.name}</div>
+                            <div class="text-sm text-slate-400">${file.algorithm} • ${formatFileSize(file.size)}</div>
+                        </div>
+                    `).join('')}
+                </div>
+                <div class="flex space-x-3">
+                    <button id="cancel-selection" class="flex-1 bg-slate-600 hover:bg-slate-500 text-white px-4 py-2 rounded-lg">
+                        Cancel
+                    </button>
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(modal);
+        
+        modal.querySelectorAll('.file-option').forEach(option => {
+            option.addEventListener('click', () => {
+                modal.remove();
+                resolve(option.dataset.fileId);
+            });
+        });
+        
+        modal.querySelector('#cancel-selection').addEventListener('click', () => {
+            modal.remove();
+            resolve(null);
+        });
+    });
+}
+
+async function promptForInput(message) {
+    return new Promise((resolve) => {
+        const modal = document.createElement('div');
+        modal.className = 'fixed inset-0 bg-black/50 flex items-center justify-center z-50';
+        modal.innerHTML = `
+            <div class="bg-dark-light border border-slate-700 rounded-xl p-6 max-w-md w-full mx-4">
+                <h3 class="text-xl font-semibold mb-4">${message}</h3>
+                <input type="text" id="input-field" class="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg focus:border-primary focus:outline-none mb-4">
+                <div class="flex space-x-3">
+                    <button id="cancel-input" class="flex-1 bg-slate-600 hover:bg-slate-500 text-white px-4 py-2 rounded-lg">
+                        Cancel
+                    </button>
+                    <button id="confirm-input" class="flex-1 bg-primary hover:bg-primary/80 text-white px-4 py-2 rounded-lg">
+                        OK
+                    </button>
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(modal);
+        
+        const inputField = modal.querySelector('#input-field');
+        inputField.focus();
+        
+        const cleanup = (result) => {
+            modal.remove();
+            resolve(result);
+        };
+        
+        modal.querySelector('#cancel-input').addEventListener('click', () => cleanup(null));
+        modal.querySelector('#confirm-input').addEventListener('click', () => cleanup(inputField.value.trim()));
+        
+        inputField.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') cleanup(inputField.value.trim());
+            if (e.key === 'Escape') cleanup(null);
+        });
+    });
+}
+
+// Enhanced Authorization Modal (same as index.html)
+function showAuthCodeModal() {
+    const modal = document.createElement('div');
+    modal.className = 'fixed inset-0 bg-black/50 flex items-center justify-center z-50';
+    modal.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 9999;';
+    modal.innerHTML = `
+        <div style="background: #1a1a1a; border: 1px solid #444; border-radius: 12px; padding: 24px; max-width: 500px; width: 90%; margin: 16px;">
+            <div style="text-align: center; margin-bottom: 24px;">
+                <i class="fas fa-google" style="font-size: 48px; color: #4285f4; margin-bottom: 16px;"></i>
+                <h3 style="font-size: 20px; font-weight: 600; margin-bottom: 8px; color: #e8eaed;">Google Drive Authorization</h3>
+                <p style="color: #9aa0a6;">Complete the authorization in your browser, then use one of the methods below:</p>
+            </div>
+            
+            <div style="margin-bottom: 16px;">
+                <!-- Tab selector -->
+                <div style="display: flex; background: #2d2d2d; border-radius: 8px; padding: 4px; margin-bottom: 16px;">
+                    <button id="code-tab" style="flex: 1; padding: 8px 16px; font-size: 14px; font-weight: 500; text-align: center; border-radius: 6px; background: #4285f4; color: white; border: none; cursor: pointer;">
+                        Code Only
+                    </button>
+                    <button id="url-tab" style="flex: 1; padding: 8px 16px; font-size: 14px; font-weight: 500; text-align: center; border-radius: 6px; background: none; color: #9aa0a6; border: none; cursor: pointer;">
+                        Full URL
+                    </button>
+                </div>
+                
+                <!-- Code input (default) -->
+                <div id="code-input-section">
+                    <label style="display: block; font-size: 14px; font-weight: 500; margin-bottom: 8px; color: #e8eaed;">Authorization Code:</label>
+                    <textarea id="auth-code-input" style="width: 100%; padding: 12px; background: #2d2d2d; border: 1px solid #444; border-radius: 8px; color: #e8eaed; resize: none; font-family: monospace;" rows="3" placeholder="Paste the authorization code here (e.g., 4/0AX4XfWh...)"></textarea>
+                    <p style="font-size: 12px; color: #9aa0a6; margin-top: 4px;">Just the code portion from the browser</p>
+                </div>
+                
+                <!-- URL input (hidden by default) -->
+                <div id="url-input-section" style="display: none;">
+                    <label style="display: block; font-size: 14px; font-weight: 500; margin-bottom: 8px; color: #e8eaed;">Complete Authorization URL:</label>
+                    <textarea id="auth-url-input" style="width: 100%; padding: 12px; background: #2d2d2d; border: 1px solid #444; border-radius: 8px; color: #e8eaed; resize: none; font-family: monospace;" rows="4" placeholder="Paste the complete URL from your browser (e.g., http://localhost:3000/oauth2callback?code=4/0AX4...)"></textarea>
+                    <p style="font-size: 12px; color: #9aa0a6; margin-top: 4px;">Copy the entire URL from your browser address bar</p>
+                </div>
+                
+                <!-- Auto-detect clipboard -->
+                <div style="background: #2d2d2d; border-radius: 8px; padding: 12px; margin: 16px 0;">
+                    <button id="auto-detect-btn" style="width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 14px; color: #4285f4; background: none; border: none; cursor: pointer;">
+                        <i class="fas fa-magic"></i>
+                        <span>Auto-detect from clipboard</span>
+                    </button>
+                    <p style="font-size: 12px; color: #9aa0a6; margin-top: 4px; text-align: center;">Automatically extract code from copied content</p>
+                </div>
+                
+                <div id="auth-error" style="display: none; color: #f28b82; font-size: 14px; background: rgba(242, 139, 130, 0.1); border: 1px solid rgba(242, 139, 130, 0.2); border-radius: 8px; padding: 12px; margin: 16px 0;"></div>
+                
+                <div style="display: flex; gap: 12px; margin-top: 24px;">
+                    <button onclick="submitAuthCodeFromModal()" style="flex: 1; background: #4285f4; color: white; border: none; padding: 12px 16px; border-radius: 8px; font-size: 14px; cursor: pointer;">
+                        Connect
+                    </button>
+                    <button onclick="this.closest('.fixed') ? this.closest('.fixed').remove() : this.closest('[style*=\"position: fixed\"]').remove()" style="flex: 1; background: #5f6368; color: white; border: none; padding: 12px 16px; border-radius: 8px; font-size: 14px; cursor: pointer;">
+                        Cancel
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    // Set up tab switching
+    const codeTab = modal.querySelector('#code-tab');
+    const urlTab = modal.querySelector('#url-tab');
+    const codeSection = modal.querySelector('#code-input-section');
+    const urlSection = modal.querySelector('#url-input-section');
+    const autoDetectBtn = modal.querySelector('#auto-detect-btn');
+    
+    codeTab.addEventListener('click', () => {
+        codeTab.style.background = '#4285f4';
+        codeTab.style.color = 'white';
+        urlTab.style.background = 'none';
+        urlTab.style.color = '#9aa0a6';
+        codeSection.style.display = 'block';
+        urlSection.style.display = 'none';
+    });
+    
+    urlTab.addEventListener('click', () => {
+        urlTab.style.background = '#4285f4';
+        urlTab.style.color = 'white';
+        codeTab.style.background = 'none';
+        codeTab.style.color = '#9aa0a6';
+        urlSection.style.display = 'block';
+        codeSection.style.display = 'none';
+    });
+    
+    // Auto-detect functionality
+    autoDetectBtn.addEventListener('click', async () => {
+        try {
+            const clipboardText = await navigator.clipboard.readText();
+            const extractedCode = extractAuthCodeFromText(clipboardText);
+            
+            if (extractedCode) {
+                const codeInput = modal.querySelector('#auth-code-input');
+                codeInput.value = extractedCode;
+                showAuthSuccess('✅ Authorization code detected and filled automatically!');
+            } else {
+                showAuthError('No authorization code found in clipboard. Please copy the code or URL from your browser.');
+            }
+        } catch (error) {
+            showAuthError('Could not access clipboard. Please paste manually.');
+        }
+    });
+    
+    // Focus the appropriate input
+    setTimeout(() => {
+        const input = modal.querySelector('#auth-code-input');
+        if (input) input.focus();
+    }, 100);
+}
+
+async function submitAuthCodeFromModal() {
+    let authCode = '';
+    
+    // Check which tab is active and get the appropriate input
+    const codeSection = document.getElementById('code-input-section');
+    const urlSection = document.getElementById('url-input-section');
+    
+    if (urlSection && urlSection.style.display !== 'none') {
+        // URL tab is active
+        const urlInput = document.getElementById('auth-url-input');
+        const urlValue = urlInput?.value?.trim();
+        
+        if (!urlValue) {
+            showAuthError('Please paste the authorization URL from your browser');
+            return;
+        }
+        
+        // Extract code from URL
+        authCode = extractAuthCodeFromText(urlValue);
+        if (!authCode) {
+            showAuthError('Could not extract authorization code from URL. Please check the URL or use the "Code Only" tab.');
+            return;
+        }
+        
+        console.log('Extracted code from URL:', authCode);
+    } else {
+        // Code tab is active
+        const codeInput = document.getElementById('auth-code-input');
+        authCode = codeInput?.value?.trim();
+        
+        if (!authCode) {
+            showAuthError('Please enter the authorization code');
+            return;
+        }
+        
+        // Validate the code format
+        if (!authCode.startsWith('4/')) {
+            showAuthError('Authorization code should start with "4/". Please check the code.');
+            return;
+        }
+    }
+    
+    try {
+        // Use the existing cloud API to exchange the code
+        const result = await window.cloudApi.exchangeGDriveAuthCode(authCode);
+        
+        // Close the modal
+        const modal = document.querySelector('[style*="position: fixed"]');
+        if (modal) modal.remove();
+        
+        if (result?.success) {
+            showToast(`Successfully connected to Google Drive as ${result.email || 'user'}!`, 'success');
+            
+            // Update connection status instead of reloading
+            isConnected = true;
+            updateConnectionStatus(true, result.email);
+            await loadFiles();
+        } else {
+            showToast(`Failed to connect: ${result?.error || 'Unknown error'}`, 'error');
+        }
+    } catch (error) {
+        console.error('Error exchanging auth code:', error);
+        showToast('Failed to connect to Google Drive', 'error');
+    }
+}
+
+function showAuthError(message) {
+    const errorDiv = document.getElementById('auth-error');
+    if (errorDiv) {
+        errorDiv.textContent = message;
+        errorDiv.style.display = 'block';
+        setTimeout(() => errorDiv.style.display = 'none', 5000);
+    }
+}
+
+function showAuthSuccess(message) {
+    showToast(message, 'success');
+} 

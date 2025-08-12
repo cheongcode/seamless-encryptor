@@ -29,7 +29,12 @@ const store = new Store({
 // Google Drive Integration - Using environment variables for security
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || 'your_google_client_id_here';
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || 'your_google_client_secret_here';
-const GOOGLE_REDIRECT_URI = process.env.GOOGLE_REDIRECT_URI || 'urn:ietf:wg:oauth:2.0:oob';
+const GOOGLE_REDIRECT_URI = process.env.GOOGLE_REDIRECT_URI || 'http://localhost:3000/oauth2callback';
+
+// Add HTTP server for OAuth callback
+const http = require('http');
+let oauthServer = null;
+let oauthCallback = null;
 
 // Check if Google credentials are properly configured
 const isGoogleConfigured = () => {
@@ -84,6 +89,162 @@ function getGoogleAuthClient() {
         }
     }
     return googleAuthClient;
+}
+
+// Helper function to refresh tokens automatically
+async function refreshGoogleTokensIfNeeded() {
+    try {
+        const authClient = getGoogleAuthClient();
+        const tokens = store.get('gdriveTokens');
+        
+        if (!tokens || !tokens.refresh_token) {
+            console.log('[main.js] No refresh token available, need fresh authorization');
+            return false;
+        }
+        
+        // Check if token is expired or will expire soon (within 5 minutes)
+        const expiryBuffer = 5 * 60 * 1000; // 5 minutes in milliseconds
+        const now = Date.now();
+        const expiryTime = tokens.expiry_date || 0;
+        
+        if (expiryTime > now + expiryBuffer) {
+            console.log('[main.js] Tokens are still valid');
+            return true;
+        }
+        
+        console.log('[main.js] Tokens expired or expiring soon, refreshing...');
+        
+        // Refresh the tokens
+        const { credentials } = await authClient.refreshAccessToken();
+        authClient.setCredentials(credentials);
+        
+        // Store the new tokens
+        store.set('gdriveTokens', credentials);
+        console.log('[main.js] Successfully refreshed Google Drive tokens');
+        
+        // Re-initialize Google Drive client with new tokens
+        googleDrive = google.drive({ version: 'v3', auth: authClient });
+        
+        return true;
+    } catch (error) {
+        console.error('[main.js] Failed to refresh tokens:', error);
+        // Clear invalid tokens
+        store.set('gdriveTokens', null);
+        store.set('appSettings.gdriveConnected', false);
+        store.set('appSettings.gdriveUserEmail', null);
+        googleDrive = null;
+        return false;
+    }
+}
+
+// OAuth callback server functions
+function startOAuthServer() {
+    return new Promise((resolve, reject) => {
+        if (oauthServer) {
+            resolve(3000); // Already running
+            return;
+        }
+        
+        oauthServer = http.createServer((req, res) => {
+            const url = new URL(req.url, 'http://localhost:3000');
+            
+            if (url.pathname === '/oauth2callback') {
+                const code = url.searchParams.get('code');
+                const error = url.searchParams.get('error');
+                
+                // Send a nice response page
+                res.writeHead(200, { 'Content-Type': 'text/html' });
+                
+                if (code) {
+                    res.end(`
+                        <!DOCTYPE html>
+                        <html>
+                        <head>
+                            <title>Authorization Successful</title>
+                            <style>
+                                body { font-family: Arial, sans-serif; text-align: center; padding: 50px; background: #f5f5f5; }
+                                .container { max-width: 400px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+                                .success { color: #28a745; font-size: 48px; margin-bottom: 20px; }
+                                h1 { color: #333; margin-bottom: 15px; }
+                                p { color: #666; margin-bottom: 20px; }
+                                .code { background: #f8f9fa; padding: 10px; border-radius: 5px; font-family: monospace; font-size: 12px; word-break: break-all; }
+                            </style>
+                        </head>
+                        <body>
+                            <div class="container">
+                                <div class="success">✅</div>
+                                <h1>Authorization Successful!</h1>
+                                <p>You can now close this browser window and return to the Seamless Encryptor app.</p>
+                                <div class="code">Code: ${code}</div>
+                            </div>
+                            <script>
+                                // Auto-close after 3 seconds
+                                setTimeout(() => window.close(), 3000);
+                            </script>
+                        </body>
+                        </html>
+                    `);
+                    
+                    // Trigger the callback
+                    if (oauthCallback) {
+                        oauthCallback(code);
+                    }
+                } else if (error) {
+                    res.end(`
+                        <!DOCTYPE html>
+                        <html>
+                        <head>
+                            <title>Authorization Failed</title>
+                            <style>
+                                body { font-family: Arial, sans-serif; text-align: center; padding: 50px; background: #f5f5f5; }
+                                .container { max-width: 400px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+                                .error { color: #dc3545; font-size: 48px; margin-bottom: 20px; }
+                                h1 { color: #333; margin-bottom: 15px; }
+                                p { color: #666; margin-bottom: 20px; }
+                            </style>
+                        </head>
+                        <body>
+                            <div class="container">
+                                <div class="error">❌</div>
+                                <h1>Authorization Failed</h1>
+                                <p>Error: ${error}</p>
+                                <p>Please close this window and try again in the app.</p>
+                            </div>
+                            <script>
+                                setTimeout(() => window.close(), 5000);
+                            </script>
+                        </body>
+                        </html>
+                    `);
+                    
+                    if (oauthCallback) {
+                        oauthCallback(null, error);
+                    }
+                }
+            } else {
+                res.writeHead(404, { 'Content-Type': 'text/plain' });
+                res.end('Not Found');
+            }
+        });
+        
+        oauthServer.listen(3000, (err) => {
+            if (err) {
+                reject(err);
+            } else {
+                console.log('[main.js] OAuth callback server started on port 3000');
+                resolve(3000);
+            }
+        });
+    });
+}
+
+function stopOAuthServer() {
+    if (oauthServer) {
+        oauthServer.close();
+        oauthServer = null;
+        oauthCallback = null;
+        console.log('[main.js] OAuth callback server stopped');
+    }
 }
 
 // Generate or get user UUID
@@ -550,6 +711,48 @@ function createWindow() {
   });
 
   console.log('[main.js] Window creation complete.');
+}
+
+// Create cloud window
+function createCloudWindow() {
+  console.log('[main.js] Creating cloud window...');
+  
+  const cloudWindow = new BrowserWindow({
+    width: 1200,
+    height: 800,
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+      preload: path.join(__dirname, 'preload.js')
+    },
+    icon: path.join(__dirname, '../renderer/assets/icon.png')
+  });
+
+  // Load cloud.html
+  let cloudHtmlPath;
+  
+  if (MAIN_WINDOW_WEBPACK_ENTRY) {
+    // In development with webpack dev server - use the cloud_window entry point
+    const baseUrl = MAIN_WINDOW_WEBPACK_ENTRY.replace('/main_window', '');
+    cloudHtmlPath = baseUrl + '/cloud_window';
+    console.log('[main.js] Using webpack dev server cloud path:', cloudHtmlPath);
+  } else {
+    // In production or file:// mode
+    cloudHtmlPath = 'file://' + path.join(__dirname, 'cloud_window.html');
+    console.log('[main.js] Using file path for cloud window:', cloudHtmlPath);
+  }
+  
+  console.log('[main.js] Loading cloud HTML from:', cloudHtmlPath);
+  cloudWindow.loadURL(cloudHtmlPath);
+  
+  // Open DevTools for debugging
+  cloudWindow.webContents.openDevTools();
+  
+  cloudWindow.on('closed', () => {
+    console.log('[main.js] Cloud window closed.');
+  });
+  
+  return cloudWindow;
 }
 
 // Storage service for saving encrypted files
@@ -1558,6 +1761,17 @@ ipcMain.handle('show-item-in-folder', async (event, filePath) => {
     return { success: true };
   } catch (error) {
     console.error('Error showing item in folder:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Cloud window handler
+ipcMain.handle('open-cloud-window', async (event) => {
+  try {
+    createCloudWindow();
+    return { success: true };
+  } catch (error) {
+    console.error('Error opening cloud window:', error);
     return { success: false, error: error.message };
   }
 });
@@ -3266,8 +3480,8 @@ ipcMain.handle('get-app-version', () => {
 });
 
 // --- Google Drive IPC Handlers (Placeholders) ---
-ipcMain.handle('gdrive-connect', async () => {
-    console.log('[main.js] gdrive-connect called');
+ipcMain.handle('gdrive-connect', async (event, options = {}) => {
+    console.log('[main.js] gdrive-connect called with options:', options);
     
     // Check OAuth setup validation
     const setupIssues = validateOAuthSetup();
@@ -3284,17 +3498,50 @@ ipcMain.handle('gdrive-connect', async () => {
     
     try {
       const authClient = getGoogleAuthClient();
-      const authUrl = authClient.generateAuthUrl({
+      
+      // Check if we should use automatic mode (local server)
+      const useAutoMode = options.autoMode !== false && GOOGLE_REDIRECT_URI.includes('localhost');
+      
+      let redirectUri = GOOGLE_REDIRECT_URI;
+      
+      if (useAutoMode) {
+        try {
+          // Start the OAuth callback server
+          await startOAuthServer();
+          redirectUri = 'http://localhost:3000/oauth2callback';
+          console.log('[main.js] Using automatic OAuth mode with local server');
+        } catch (serverError) {
+          console.log('[main.js] Failed to start OAuth server, falling back to manual mode:', serverError.message);
+          redirectUri = 'urn:ietf:wg:oauth:2.0:oob';
+        }
+      }
+      
+      // Create a new auth client with the appropriate redirect URI
+      const authClientForUrl = new google.auth.OAuth2(
+        GOOGLE_CLIENT_ID,
+        GOOGLE_CLIENT_SECRET,
+        redirectUri
+      );
+      
+      const authUrl = authClientForUrl.generateAuthUrl({
         access_type: 'offline', // Important to get a refresh token
         scope: [
           'https://www.googleapis.com/auth/drive.file', // Full access to files created or opened by the app
           'https://www.googleapis.com/auth/drive.readonly', // To list files
           'https://www.googleapis.com/auth/userinfo.email' // To get user's email
-      ],
+        ],
         prompt: 'consent' // Ensures the consent screen is shown, good for getting refresh_token
       });
+      
       console.log('[main.js] Generated GDrive Auth URL:', authUrl);
-      return { success: true, authUrl };
+      console.log('[main.js] Using redirect URI:', redirectUri);
+      
+      return { 
+        success: true, 
+        authUrl, 
+        autoMode: useAutoMode,
+        redirectUri 
+      };
     } catch (error) {
       console.error('[main.js] Error generating auth URL:', error);
       return { 
@@ -3342,6 +3589,33 @@ ipcMain.handle('gdrive-exchange-auth-code', async (event, authCode) => {
   }
 });
 
+// Add IPC handler for automatic auth capture
+ipcMain.handle('gdrive-wait-for-auth', async (event) => {
+  return new Promise((resolve) => {
+    // Set up the callback for when auth code is received
+    oauthCallback = (code, error) => {
+      stopOAuthServer(); // Clean up
+      
+      if (code) {
+        console.log('[main.js] Automatic auth capture successful:', code);
+        resolve({ success: true, authCode: code });
+      } else {
+        console.log('[main.js] Automatic auth capture failed:', error);
+        resolve({ success: false, error: error || 'Authorization cancelled' });
+      }
+    };
+    
+    // Set up a timeout in case user doesn't complete auth
+    setTimeout(() => {
+      if (oauthCallback) {
+        stopOAuthServer();
+        oauthCallback = null;
+        resolve({ success: false, error: 'Authorization timeout. Please try again.' });
+      }
+    }, 300000); // 5 minute timeout
+  });
+});
+
 ipcMain.handle('gdrive-status', async () => {
   try {
     console.log('[main.js] gdrive-status called');
@@ -3350,11 +3624,16 @@ ipcMain.handle('gdrive-status', async () => {
     const gdriveUserEmail = store.get('appSettings.gdriveUserEmail', null);
 
     if (tokens && gdriveConnected) {
-      const authClient = getGoogleAuthClient(); // Will load tokens if available
-      // Optionally, you could add a light API call here to truly verify token validity
-      // For now, trusting stored state and token presence.
-      console.log('[main.js] GDrive status: Connected as', gdriveUserEmail);
-      return { success: true, connected: true, email: gdriveUserEmail };
+      // Try to refresh tokens if needed
+      const refreshSuccess = await refreshGoogleTokensIfNeeded();
+      
+      if (refreshSuccess) {
+        console.log('[main.js] GDrive status: Connected as', gdriveUserEmail);
+        return { success: true, connected: true, email: gdriveUserEmail };
+      } else {
+        console.log('[main.js] GDrive status: Token refresh failed, need re-authentication');
+        return { success: true, connected: false, needsAuth: true };
+      }
     } else {
       console.log('[main.js] GDrive status: Not connected');
       return { success: true, connected: false };
@@ -3371,6 +3650,14 @@ ipcMain.handle('gdrive-status', async () => {
 ipcMain.handle('gdrive-list-files', async (event, { parentFolderId = null, pageToken = null } = {}) => {
   try {
     console.log(`[main.js] gdrive-list-files called with parentFolderId: ${parentFolderId}, pageToken: ${pageToken}`);
+    
+    // Ensure tokens are refreshed before API call
+    const refreshSuccess = await refreshGoogleTokensIfNeeded();
+    if (!refreshSuccess) {
+      console.error('[main.js] Token refresh failed, cannot list files');
+      return { success: false, error: 'Authentication expired. Please reconnect to Google Drive.', files: [] };
+    }
+    
     getGoogleAuthClient(); // Ensure auth client and Drive API are initialized
     if (!googleDrive) {
       console.error('[main.js] Google Drive API client not initialized. Cannot list files.');
@@ -3400,28 +3687,11 @@ ipcMain.handle('gdrive-list-files', async (event, { parentFolderId = null, pageT
       }
     }
 
-    // Prioritize EncryptedVault structure for consistency
+    // Default to showing all files in My Drive (root) unless specific folder requested
     if (!targetFolderId) {
-      try {
-        // Always use the new vault structure first
-        const vaultStructure = await getOrCreateVaultStructure();
-        targetFolderId = vaultStructure.dateFolderId;
-        console.log('[main.js] Using EncryptedVault structure');
-      } catch (vaultError) {
-        console.error('[main.js] Error with vault structure:', vaultError);
-        
-        // Fallback to legacy folder if vault creation fails
-        const legacyFolderId = await findLegacyFolder();
-        if (legacyFolderId) {
-          console.log('[main.js] Falling back to legacy SeamlessEncryptor_Files folder');
-          targetFolderId = legacyFolderId;
-        } else {
-          // Final fallback to default app folder
-          const defaultAppFolderId = await getOrCreateAppFolderId();
-          targetFolderId = defaultAppFolderId;
-          console.log('[main.js] Using default app folder as final fallback');
-        }
-      }
+      console.log('[main.js] No folder specified, showing all files in My Drive');
+      targetFolderId = 'root';
+      listedFolderName = 'My Drive';
     }
 
     // Attempt to get folder name if we don't have it
@@ -3570,73 +3840,9 @@ async function uploadFileToDriveInternal(filePath, fileName, parentFolderId) {
     }
 }
 
-// IPC Handler for manual file upload to Google Drive (e.g., from Cloud tab UI)
-ipcMain.handle('gdrive-upload-file', async (event, { filePath, fileName, parentFolderId }) => {
-    if (!filePath || !fileName) {
-        console.error('[main.js] gdrive-upload-file: Missing filePath or fileName.');
-        return { success: false, error: 'Missing required parameters for GDrive upload.' };
-    }
-    try {
-        // If no parentFolderId provided, use the app's default folder
-        let targetFolderId = parentFolderId;
-        if (!targetFolderId) {
-            try {
-                targetFolderId = await getOrCreateAppFolderId();
-            } catch (folderError) {
-                console.error('[main.js] Could not get app folder for upload:', folderError);
-                return { success: false, error: 'Could not access Google Drive folder.' };
-            }
-        }
-        
-        const uploadResult = await uploadFileToDriveInternal(filePath, fileName, targetFolderId);
-        return { ...uploadResult, success: true };
-    } catch (error) {
-        return { success: false, error: error.message };
-    }
-});
 
-// IPC Handler to upload encrypted files to Google Drive
-ipcMain.handle('gdrive-upload-encrypted-file', async (event, fileId) => {
-    try {
-        console.log('[main.js] gdrive-upload-encrypted-file called with fileId:', fileId);
-        
-        if (!fileId) {
-            return { success: false, error: 'No file ID provided' };
-        }
-        
-        // Find the encrypted file
-        const encryptedDir = path.join(app.getPath('userData'), 'encrypted');
-        let filePath = '';
-        let fileName = '';
-        
-        if (fs.existsSync(encryptedDir)) {
-            const files = fs.readdirSync(encryptedDir);
-            const matchingFile = files.find(file => file.startsWith(fileId) || file === fileId);
-            
-            if (matchingFile) {
-                filePath = path.join(encryptedDir, matchingFile);
-                fileName = matchingFile;
-            }
-        }
-        
-        if (!filePath || !fs.existsSync(filePath)) {
-            return { success: false, error: 'Encrypted file not found' };
-        }
-        
-        // Get the app folder ID
-        const appFolderId = await getOrCreateAppFolderId();
-        
-        // Upload the encrypted file
-        const uploadResult = await uploadFileToDriveInternal(filePath, fileName, appFolderId);
-        
-        console.log('[main.js] Encrypted file uploaded to Google Drive:', uploadResult);
-        return uploadResult;
-        
-    } catch (error) {
-        console.error('[main.js] Error uploading encrypted file to Google Drive:', error);
-        return { success: false, error: error.message };
-    }
-});
+
+
 
 // Add getFileStats handler
 ipcMain.handle('getFileStats', async (event, filePath) => {
@@ -4215,6 +4421,196 @@ ipcMain.handle('save-temporary-file', async (event, fileName, buffer) => {
   } catch (error) {
     console.error('[main.js] Error saving temporary file:', error);
     throw error;
+  }
+});
+
+// Add IPC handler for uploading encrypted files to Google Drive
+ipcMain.handle('gdrive-upload-encrypted', async (event, { fileId, targetFolderId = null }) => {
+  try {
+    console.log(`[main.js] gdrive-upload-encrypted called for fileId: ${fileId}, targetFolder: ${targetFolderId}`);
+    
+    // Ensure tokens are refreshed
+    const refreshSuccess = await refreshGoogleTokensIfNeeded();
+    if (!refreshSuccess) {
+      return { success: false, error: 'Authentication expired. Please reconnect to Google Drive.' };
+    }
+    
+    getGoogleAuthClient();
+    if (!googleDrive) {
+      return { success: false, error: 'Google Drive client not available.' };
+    }
+    
+    // Get local encrypted file info
+    const encryptedDir = path.join(app.getPath('userData'), 'encrypted');
+    const fileMetadataPath = path.join(encryptedDir, 'metadata.json');
+    
+    let fileMetadata = null;
+    if (fs.existsSync(fileMetadataPath)) {
+      const metadataContent = fs.readFileSync(fileMetadataPath, 'utf8');
+      const metadataArray = JSON.parse(metadataContent);
+      fileMetadata = metadataArray.find(meta => meta.id === fileId);
+    }
+    
+    if (!fileMetadata) {
+      return { success: false, error: 'File metadata not found' };
+    }
+    
+    // Find the encrypted file
+    const encryptedFilePath = path.join(encryptedDir, fileMetadata.fileName);
+    if (!fs.existsSync(encryptedFilePath)) {
+      return { success: false, error: 'Encrypted file not found on disk' };
+    }
+    
+    // Prepare upload metadata
+    const uploadMetadata = {
+      name: fileMetadata.fileName,
+      parents: targetFolderId ? [targetFolderId] : undefined
+    };
+    
+    // Create file stream
+    const fileStream = fs.createReadStream(encryptedFilePath);
+    
+    // Upload to Google Drive
+    const response = await googleDrive.files.create({
+      requestBody: uploadMetadata,
+      media: {
+        mimeType: 'application/octet-stream',
+        body: fileStream
+      },
+      fields: 'id, name, size, modifiedTime'
+    });
+    
+    console.log(`[main.js] Successfully uploaded file to Google Drive:`, response.data);
+    
+    return {
+      success: true,
+      file: response.data,
+      message: `Successfully uploaded ${fileMetadata.originalName} to Google Drive`
+    };
+    
+  } catch (error) {
+    console.error('[main.js] Error uploading encrypted file:', error);
+    return { success: false, error: `Upload failed: ${error.message}` };
+  }
+});
+
+// Add IPC handler for uploading any file to Google Drive
+ipcMain.handle('gdrive-upload-file', async (event, { filePath, fileName, targetFolderId = null, mimeType = null }) => {
+  try {
+    console.log(`[main.js] gdrive-upload-file called for: ${fileName}`);
+    
+    // Ensure tokens are refreshed
+    const refreshSuccess = await refreshGoogleTokensIfNeeded();
+    if (!refreshSuccess) {
+      return { success: false, error: 'Authentication expired. Please reconnect to Google Drive.' };
+    }
+    
+    getGoogleAuthClient();
+    if (!googleDrive) {
+      return { success: false, error: 'Google Drive client not available.' };
+    }
+    
+    // Check if file exists
+    if (!fs.existsSync(filePath)) {
+      return { success: false, error: 'File not found on disk' };
+    }
+    
+    // Auto-detect MIME type if not provided
+    const fileExtension = path.extname(fileName).toLowerCase();
+    if (!mimeType) {
+      const mimeTypes = {
+        '.txt': 'text/plain',
+        '.pdf': 'application/pdf',
+        '.jpg': 'image/jpeg',
+        '.jpeg': 'image/jpeg',
+        '.png': 'image/png',
+        '.gif': 'image/gif',
+        '.doc': 'application/msword',
+        '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        '.xls': 'application/vnd.ms-excel',
+        '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        '.ppt': 'application/vnd.ms-powerpoint',
+        '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+        '.zip': 'application/zip',
+        '.etcr': 'application/octet-stream',
+        '.enc': 'application/octet-stream'
+      };
+      mimeType = mimeTypes[fileExtension] || 'application/octet-stream';
+    }
+    
+    // Prepare upload metadata
+    const uploadMetadata = {
+      name: fileName,
+      parents: targetFolderId ? [targetFolderId] : undefined
+    };
+    
+    // Create file stream
+    const fileStream = fs.createReadStream(filePath);
+    
+    // Upload to Google Drive
+    const response = await googleDrive.files.create({
+      requestBody: uploadMetadata,
+      media: {
+        mimeType: mimeType,
+        body: fileStream
+      },
+      fields: 'id, name, size, modifiedTime, mimeType'
+    });
+    
+    console.log(`[main.js] Successfully uploaded file to Google Drive:`, response.data);
+    
+    return {
+      success: true,
+      file: response.data,
+      message: `Successfully uploaded ${fileName} to Google Drive`
+    };
+    
+  } catch (error) {
+    console.error('[main.js] Error uploading file:', error);
+    return { success: false, error: `Upload failed: ${error.message}` };
+  }
+});
+
+// Add IPC handler for creating folders in Google Drive
+ipcMain.handle('gdrive-create-folder', async (event, { folderName, parentFolderId = null }) => {
+  try {
+    console.log(`[main.js] gdrive-create-folder called: ${folderName}`);
+    
+    // Ensure tokens are refreshed
+    const refreshSuccess = await refreshGoogleTokensIfNeeded();
+    if (!refreshSuccess) {
+      return { success: false, error: 'Authentication expired. Please reconnect to Google Drive.' };
+    }
+    
+    getGoogleAuthClient();
+    if (!googleDrive) {
+      return { success: false, error: 'Google Drive client not available.' };
+    }
+    
+    // Prepare folder metadata
+    const folderMetadata = {
+      name: folderName,
+      mimeType: 'application/vnd.google-apps.folder',
+      parents: parentFolderId ? [parentFolderId] : undefined
+    };
+    
+    // Create folder in Google Drive
+    const response = await googleDrive.files.create({
+      requestBody: folderMetadata,
+      fields: 'id, name, mimeType, modifiedTime'
+    });
+    
+    console.log(`[main.js] Successfully created folder in Google Drive:`, response.data);
+    
+    return {
+      success: true,
+      folder: response.data,
+      message: `Successfully created folder: ${folderName}`
+    };
+    
+  } catch (error) {
+    console.error('[main.js] Error creating folder:', error);
+    return { success: false, error: `Failed to create folder: ${error.message}` };
   }
 });
 

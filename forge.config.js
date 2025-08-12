@@ -41,6 +41,11 @@ module.exports = {
                 js: './src/preload/preload.js',
               },
             },
+            {
+              html: './src/renderer/cloud.html',
+              js: './src/renderer/js/cloud.js',
+              name: 'cloud_window',
+            },
           ],
         },
         devContentSecurityPolicy: "default-src 'self' 'unsafe-inline' 'unsafe-eval'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com;",

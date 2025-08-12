@@ -21,6 +21,14 @@ module.exports = [
     test: /\.css$/,
     use: ['style-loader', 'css-loader'],
   },
+  // Fonts & assets for local icon packs (Font Awesome)
+  {
+    test: /\.(woff2?|ttf|eot|svg)$/i,
+    type: 'asset/resource',
+    generator: {
+      filename: 'assets/fonts/[name][ext]'
+    }
+  },
   // Put your webpack loader rules in this array.  This is where you would put
   // your ts-loader configuration for instance:
   /**

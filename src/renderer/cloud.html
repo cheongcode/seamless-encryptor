@@ -3,11 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' https://drive-thirdparty.googleusercontent.com https://lh3.googleusercontent.com data: file:; font-src 'self' https://fonts.gstatic.com; connect-src 'self';">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com; img-src 'self' https://drive-thirdparty.googleusercontent.com https://lh3.googleusercontent.com data: file:; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; connect-src 'self';">
     <title>Google Drive - Seamless Encryptor</title>
-    <link rel="stylesheet" href="styles.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Google+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="fontawesome/css/all.min.css">
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <!-- Removed external Font Awesome to satisfy CSP -->
     <style>
         /* Google Drive-like styling */
         .gdrive-container {
@@ -141,8 +143,9 @@
         
         .gdrive-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
             gap: 16px;
+            padding: 16px;
         }
         
         .gdrive-list {
@@ -389,26 +392,38 @@
         </div>
     </div>
 
-    <!-- Auth Code Section (Hidden by default) -->
-    <div id="gdrive-auth-code-section" class="hidden bg-gray-800 p-4 mx-6 rounded-lg">
-        <div class="text-sm text-gray-300 mb-2">Enter the authorization code from your browser:</div>
-        <div class="flex gap-2">
-            <input type="text" id="gdrive-auth-code" class="flex-1 p-2 bg-gray-700 border border-gray-600 rounded text-white" placeholder="Authorization Code">
-            <button id="submit-gdrive-auth-code" class="bg-green-600 hover:bg-green-700 px-4 py-2 rounded text-sm">
-                Connect
-            </button>
-        </div>
-    </div>
+
 
     <!-- Google Drive Content -->
     <div class="gdrive-content">
         <!-- Sidebar -->
         <div class="gdrive-sidebar">
             <div style="padding: 0 16px;">
-                <button id="new-upload-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg mb-4 flex items-center gap-2">
-                    <span class="material-icons">add</span>
-                    New Upload
-                </button>
+                <div class="upload-dropdown">
+                    <button id="new-upload-btn" class="new-upload-btn">
+                        <i class="fas fa-plus"></i>
+                        New
+                    </button>
+                    <div id="upload-options" class="upload-options hidden">
+                        <button id="upload-files-btn" class="upload-option">
+                            <i class="fas fa-upload"></i>
+                            Upload Files
+                        </button>
+                        <button id="upload-encrypted-btn" class="upload-option">
+                            <i class="fas fa-lock"></i>
+                            Upload Encrypted Files
+                        </button>
+                        <button id="create-folder-btn" class="upload-option">
+                            <i class="fas fa-folder-plus"></i>
+                            Create Folder
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Search -->
+                <div class="search-box">
+                    <input type="text" id="search-input" placeholder="Search files..." class="search-input">
+                </div>
             </div>
             
             <div id="sidebar-items">
@@ -436,17 +451,36 @@
             <!-- Toolbar -->
             <div class="gdrive-toolbar">
                 <div class="gdrive-breadcrumb" id="gdrive-breadcrumb">
-                    <span class="material-icons">folder</span>
+                    <i class="fas fa-home"></i>
                     <span class="gdrive-breadcrumb-item current" data-id="root">My Drive</span>
                 </div>
                 
+                <div class="toolbar-center">
+                    <!-- File actions for selected items -->
+                    <div id="selected-actions" class="hidden">
+                        <span id="selected-count">0 selected</span>
+                        <button id="download-selected-btn" class="toolbar-btn" title="Download Selected">
+                            <i class="fas fa-download"></i>
+                        </button>
+                        <button id="delete-selected-btn" class="toolbar-btn" title="Delete Selected">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                </div>
+                
                 <div class="gdrive-view-toggle">
-                    <div class="gdrive-view-btn active" id="grid-view-btn" title="Grid view">
-                        <span class="material-icons">grid_view</span>
-                    </div>
-                    <div class="gdrive-view-btn" id="list-view-btn" title="List view">
-                        <span class="material-icons">view_list</span>
-                    </div>
+                    <button id="refresh-btn" class="gdrive-view-btn" title="Refresh">
+                        <i class="fas fa-sync"></i>
+                    </button>
+                    <button class="gdrive-view-btn active" id="grid-view-btn" title="Grid view">
+                        <i class="fas fa-th"></i>
+                    </button>
+                    <button class="gdrive-view-btn" id="list-view-btn" title="List view">
+                        <i class="fas fa-list"></i>
+                    </button>
+                    <button id="sort-btn" class="gdrive-view-btn" title="Sort">
+                        <i class="fas fa-sort"></i>
+                    </button>
                 </div>
             </div>
 
@@ -532,7 +566,11 @@
     <!-- Hidden elements for file operations -->
     <input type="file" id="hidden-file-input" multiple style="display: none;">
 
-    <script src="js/cloud.js" type="module"></script>
+    <script>
+        console.log('=== CLOUD.HTML LOADING ===');
+        alert('Cloud HTML is loading! Check console for more details.');
+    </script>
+    <script src="js/cloud.js"></script>
     
     <style>
         .sidebar-item {
@@ -562,6 +600,210 @@
         
         .sidebar-item.active .material-icons {
             color: white;
+        }
+        
+        /* Enhanced UI Components */
+        .upload-dropdown {
+            position: relative;
+            margin-bottom: 16px;
+        }
+        
+        .new-upload-btn {
+            width: 100%;
+            background: #4285f4;
+            color: white;
+            border: none;
+            padding: 12px 16px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: background 0.2s;
+        }
+        
+        .new-upload-btn:hover {
+            background: #3367d6;
+        }
+        
+        .upload-options {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: #2d2d2d;
+            border: 1px solid #444;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            z-index: 1000;
+            margin-top: 4px;
+        }
+        
+        .upload-options.hidden {
+            display: none;
+        }
+        
+        .upload-option {
+            width: 100%;
+            background: none;
+            border: none;
+            color: #e8eaed;
+            padding: 12px 16px;
+            text-align: left;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 14px;
+            transition: background 0.2s;
+        }
+        
+        .upload-option:hover {
+            background: #404040;
+        }
+        
+        .upload-option:first-child {
+            border-radius: 8px 8px 0 0;
+        }
+        
+        .upload-option:last-child {
+            border-radius: 0 0 8px 8px;
+        }
+        
+        .search-box {
+            margin-bottom: 16px;
+        }
+        
+        .search-input {
+            width: 100%;
+            background: #2d2d2d;
+            border: 1px solid #444;
+            border-radius: 8px;
+            color: #e8eaed;
+            padding: 10px 12px;
+            font-size: 14px;
+        }
+        
+        .search-input:focus {
+            outline: none;
+            border-color: #4285f4;
+        }
+        
+        .search-input::placeholder {
+            color: #9aa0a6;
+        }
+        
+        /* Toolbar enhancements */
+        .toolbar-center {
+            flex: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .toolbar-btn {
+            background: none;
+            border: none;
+            color: #9aa0a6;
+            padding: 8px;
+            cursor: pointer;
+            border-radius: 4px;
+            transition: all 0.2s;
+            margin: 0 4px;
+        }
+        
+        .toolbar-btn:hover {
+            background: #333;
+            color: #e8eaed;
+        }
+        
+        #selected-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: #e8eaed;
+            font-size: 14px;
+        }
+        
+        #selected-actions.hidden {
+            display: none;
+        }
+        
+        #selected-count {
+            margin-right: 12px;
+            font-weight: 500;
+        }
+        
+        /* File card styling */
+        .file-card {
+            background: #2d2d2d;
+            border: 1px solid #444;
+            border-radius: 8px;
+            padding: 16px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        
+        .file-card:hover {
+            background: #333;
+            border-color: #4285f4;
+        }
+        
+        .file-card.selected {
+            background: #1a4480;
+            border-color: #4285f4;
+        }
+        
+        .file-icon {
+            font-size: 24px;
+            text-align: center;
+            margin-bottom: 8px;
+        }
+        
+        .file-name {
+            font-size: 14px;
+            font-weight: 500;
+            color: #e8eaed;
+            text-align: center;
+            word-break: break-word;
+        }
+        
+        .file-info {
+            font-size: 12px;
+            color: #9aa0a6;
+            text-align: center;
+        }
+        
+        .file-actions {
+            display: flex;
+            justify-content: center;
+            gap: 8px;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+        
+        .file-card:hover .file-actions {
+            opacity: 1;
+        }
+        
+        .action-btn {
+            background: rgba(255,255,255,0.1);
+            border: none;
+            color: #e8eaed;
+            padding: 6px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: background 0.2s;
+        }
+        
+        .action-btn:hover {
+            background: rgba(255,255,255,0.2);
         }
     </style>
 </body>

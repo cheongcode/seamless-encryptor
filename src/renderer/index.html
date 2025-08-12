@@ -4,23 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Seamless Encryptor Pro</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        primary: '#3b82f6',
-                        secondary: '#1e40af',
-                        accent: '#06b6d4',
-                        dark: '#0f172a',
-                        'dark-light': '#1e293b'
-                    }
-                }
-            }
-        }
-    </script>
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <!-- Explicit CSS links to ensure styling loads even if JS style injection is blocked -->
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="fontawesome/css/all.min.css">
+    <!-- Removed external Font Awesome to satisfy CSP; using local icons already present -->
 </head>
 <body class="bg-gradient-to-br from-dark via-slate-900 to-dark-light text-white min-h-screen">
     <!-- Loading Screen -->
@@ -68,7 +55,7 @@
                     <i class="fas fa-folder-open w-5"></i>
                     <span>Encrypted Files</span>
                 </a>
-                <a href="#" class="nav-item flex items-center space-x-3 px-4 py-3 rounded-lg hover:bg-slate-700 text-slate-300 hover:text-white transition-all" data-section="cloud">
+                <a href="#" id="nav-google-drive" class="nav-item flex items-center space-x-3 px-4 py-3 rounded-lg hover:bg-slate-700 text-slate-300 hover:text-white transition-all" data-section="cloud">
                     <i class="fab fa-google-drive w-5"></i>
                     <span>Google Drive</span>
                 </a>
@@ -300,16 +287,129 @@
                             </div>
                         </div>
 
-                        <!-- Drive Files -->
-                        <div id="drive-files-container" class="hidden">
+                        <!-- Enhanced Drive Interface -->
+                        <div id="enhanced-drive-interface" class="bg-dark-light border border-slate-700 rounded-xl overflow-hidden" style="display: none;">
+                            <!-- Toolbar -->
+                            <div class="flex items-center justify-between p-4 border-b border-slate-700">
+                                <!-- Left: Upload & Actions -->
+                                <div class="flex items-center gap-3">
+                                    <div class="relative">
+                                        <button id="new-upload-btn" class="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/80 text-white rounded-lg transition-colors">
+                                            <i class="fas fa-plus"></i>
+                                            New
+                                        </button>
+                                        <div id="upload-options" class="hidden absolute top-full left-0 mt-1 bg-slate-800 border border-slate-600 rounded-lg shadow-lg z-10 min-w-48">
+                                            <button id="upload-files-btn" class="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-slate-700 transition-colors">
+                                                <i class="fas fa-upload text-blue-400"></i>
+                                                Upload Files
+                                            </button>
+                                            <button id="upload-encrypted-btn" class="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-slate-700 transition-colors">
+                                                <i class="fas fa-lock text-green-400"></i>
+                                                Upload Encrypted
+                                            </button>
+                                            <button id="create-folder-btn" class="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-slate-700 transition-colors">
+                                                <i class="fas fa-folder-plus text-yellow-400"></i>
+                                                New Folder
+                                            </button>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Selected Actions -->
+                                    <div id="selected-actions" class="hidden flex items-center gap-2">
+                                        <span id="selected-count" class="text-sm text-slate-400">0 selected</span>
+                                        <button id="download-selected-btn" class="p-2 hover:bg-slate-700 rounded text-slate-400 hover:text-white transition-colors" title="Download Selected">
+                                            <i class="fas fa-download"></i>
+                                        </button>
+                                        <button id="decrypt-selected-btn" class="p-2 hover:bg-slate-700 rounded text-slate-400 hover:text-white transition-colors" title="Decrypt Selected">
+                                            <i class="fas fa-unlock"></i>
+                                        </button>
+                                        <button id="delete-selected-btn" class="p-2 hover:bg-slate-700 rounded text-slate-400 hover:text-white transition-colors" title="Delete Selected">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- Center: Search -->
+                                <div class="flex-1 max-w-md mx-4">
+                                    <div class="relative">
+                                        <input type="text" id="drive-search-input" placeholder="Search in Drive" 
+                                               class="w-full px-4 py-2 bg-slate-800 border border-slate-600 rounded-lg focus:border-primary focus:outline-none text-white placeholder-slate-400" />
+                                        <i class="fas fa-search absolute right-3 top-1/2 transform -translate-y-1/2 text-slate-400"></i>
+                                    </div>
+                                </div>
+
+                                <!-- Right: View Toggle & Refresh -->
+                                <div class="flex items-center gap-2">
+                                    <button id="refresh-drive" class="p-2 hover:bg-slate-700 rounded text-slate-400 hover:text-white transition-colors" title="Refresh">
+                                        <i class="fas fa-sync-alt"></i>
+                                    </button>
+                                    <div class="flex border border-slate-600 rounded-lg overflow-hidden">
+                                        <button id="grid-view-btn" class="p-2 bg-primary text-white" title="Grid View">
+                                            <i class="fas fa-th"></i>
+                                        </button>
+                                        <button id="list-view-btn" class="p-2 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors" title="List View">
+                                            <i class="fas fa-list"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Breadcrumb -->
+                            <div class="px-4 py-3 border-b border-slate-700 bg-slate-800/50">
+                                <div id="drive-breadcrumb" class="flex items-center gap-2 text-sm">
+                                    <i class="fas fa-home text-slate-400"></i>
+                                    <span class="text-white font-medium cursor-pointer hover:text-primary transition-colors" data-id="root">My Drive</span>
+                                </div>
+                            </div>
+
+                            <!-- File Display Area -->
+                            <div class="p-4">
+                                <!-- Grid View -->
+                                <div id="drive-grid-container" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+                                    <!-- Files will be populated here -->
+                                </div>
+
+                                <!-- List View -->
+                                <div id="drive-list-container" class="hidden">
+                                    <table class="w-full">
+                                        <thead>
+                                            <tr class="border-b border-slate-700 text-left">
+                                                <th class="py-3 px-4 text-slate-400 font-medium">
+                                                    <input type="checkbox" id="select-all-files" class="mr-3">
+                                                    Name
+                                                </th>
+                                                <th class="py-3 px-4 text-slate-400 font-medium">Modified</th>
+                                                <th class="py-3 px-4 text-slate-400 font-medium">Size</th>
+                                                <th class="py-3 px-4 text-slate-400 font-medium">Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="drive-list-body">
+                                            <!-- Files will be populated here -->
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                <!-- Empty State -->
+                                <div id="drive-empty-state" class="hidden text-center py-12 text-slate-400">
+                                    <i class="fab fa-google-drive text-6xl text-slate-600 mb-4"></i>
+                                    <h3 class="text-lg font-semibold mb-2">No files found</h3>
+                                    <p class="mb-4">Upload some files to get started</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Simple Files Section (fallback) -->
+                        <div id="simple-drive-interface">
                             <div class="flex justify-between items-center mb-4">
                                 <h3 class="text-lg font-semibold">Files in Google Drive</h3>
-                                <button id="refresh-drive" class="px-4 py-2 bg-primary hover:bg-blue-600 rounded-lg transition-colors">
+                                <button id="refresh-drive-simple" class="px-4 py-2 bg-primary hover:bg-blue-600 rounded-lg transition-colors">
                                     <i class="fas fa-sync-alt mr-2"></i>
                                     Refresh
                                 </button>
                             </div>
-                            <div id="drive-files-list" class="space-y-3"></div>
+                            <div id="drive-files-list" class="space-y-3">
+                                <!-- Initial content will be populated by loadDriveFiles() -->
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -570,6 +670,9 @@
         document.addEventListener('DOMContentLoaded', async () => {
             console.log('DOM loaded, initializing app...');
             
+            // Initialize enhanced drive interface
+            initializeEnhancedDriveInterface();
+            
             // Simulate loading
             setTimeout(() => {
                 document.getElementById('loading-screen').classList.add('hidden');
@@ -617,6 +720,9 @@
                 // Update dashboard
                 updateDashboard();
                 
+                // Initialize to dashboard section
+                switchSection('dashboard');
+                
                 // Debug: Check API availability
                 console.log('Available APIs:', {
                     api: !!window.api,
@@ -645,7 +751,9 @@
                 item.addEventListener('click', (e) => {
                     e.preventDefault();
                     const section = item.dataset.section;
-                    switchSection(section);
+                    if (section) {
+                        switchSection(section);
+                    }
                 });
             });
 
@@ -836,14 +944,38 @@
                 activeNav.classList.remove('text-slate-300', 'hover:text-white');
             }
 
-            // Update sections
+            // Update sections with smooth transitions
             document.querySelectorAll('.section').forEach(sec => {
-                sec.classList.add('hidden');
+                if (!sec.classList.contains('hidden')) {
+                    sec.style.opacity = '0';
+                    sec.style.transform = 'translateY(10px)';
+                    setTimeout(() => {
+                        sec.classList.add('hidden');
+                        sec.style.opacity = '';
+                        sec.style.transform = '';
+                    }, 150);
+                }
             });
             
             const activeSection = document.getElementById(`${section}-section`);
             if (activeSection) {
-                activeSection.classList.remove('hidden');
+                setTimeout(() => {
+                    activeSection.classList.remove('hidden');
+                    activeSection.style.opacity = '0';
+                    activeSection.style.transform = 'translateY(10px)';
+                    // Force reflow
+                    activeSection.offsetHeight;
+                    activeSection.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
+                    activeSection.style.opacity = '1';
+                    activeSection.style.transform = 'translateY(0)';
+                    
+                    // Clean up after animation
+                    setTimeout(() => {
+                        activeSection.style.transition = '';
+                        activeSection.style.opacity = '';
+                        activeSection.style.transform = '';
+                    }, 300);
+                }, 150);
             }
 
             // Update header
@@ -1422,7 +1554,7 @@
                 if (window.cloudApi?.getGDriveStatus) {
                     const status = await window.cloudApi.getGDriveStatus();
                     isDriveConnected = status?.connected || false;
-                    updateDriveStatus(isDriveConnected, status?.userEmail);
+                    updateDriveStatus(isDriveConnected, status?.email);
                 }
             } catch (error) {
                 console.error('Error checking Drive status:', error);
@@ -1445,7 +1577,6 @@
                 if (driveStatusText) {
                     driveStatusText.textContent = `Connected as ${userEmail || 'Unknown User'}`;
                 }
-                driveFilesContainer?.classList.remove('hidden');
                 loadDriveFiles();
             } else {
                 cloudStatus?.classList.add('hidden');
@@ -1456,7 +1587,8 @@
                 if (driveStatusText) {
                     driveStatusText.textContent = 'Connect your Google Drive to automatically backup encrypted files';
                 }
-                driveFilesContainer?.classList.add('hidden');
+                // Update files list to show connection prompt
+                loadDriveFiles();
             }
             
             isDriveConnected = connected;
@@ -1494,18 +1626,52 @@
             const modal = document.createElement('div');
             modal.className = 'fixed inset-0 bg-black/50 flex items-center justify-center z-50';
             modal.innerHTML = `
-                <div class="bg-dark-light border border-slate-700 rounded-xl p-6 max-w-md w-full mx-4">
+                <div class="bg-dark-light border border-slate-700 rounded-xl p-6 max-w-lg w-full mx-4">
                     <div class="text-center mb-6">
                         <i class="fab fa-google-drive text-4xl text-blue-400 mb-4"></i>
                         <h3 class="text-xl font-semibold mb-2">Google Drive Authorization</h3>
-                        <p class="text-slate-400">Complete the authorization in your browser, then paste the code below:</p>
+                        <p class="text-slate-400">Complete the authorization in your browser, then use one of the methods below:</p>
                     </div>
                     
                     <div class="space-y-4">
-                        <div>
-                            <label class="block text-sm font-medium mb-2">Authorization Code:</label>
-                            <input type="text" id="auth-code-input" class="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg focus:border-primary focus:outline-none" placeholder="Paste authorization code here...">
+                        <!-- Tab selector -->
+                        <div class="flex bg-slate-800 rounded-lg p-1">
+                            <button id="code-tab" class="flex-1 py-2 px-4 text-sm font-medium text-center rounded-lg bg-primary text-white transition-colors">
+                                Code Only
+                            </button>
+                            <button id="url-tab" class="flex-1 py-2 px-4 text-sm font-medium text-center rounded-lg text-slate-400 hover:text-white transition-colors">
+                                Full URL
+                            </button>
                         </div>
+                        
+                        <!-- Code input (default) -->
+                        <div id="code-input-section">
+                            <div>
+                                <label class="block text-sm font-medium mb-2">Authorization Code:</label>
+                                <textarea id="auth-code-input" class="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg focus:border-primary focus:outline-none resize-none" rows="3" placeholder="Paste the authorization code here (e.g., 4/0AX4XfWh...)"></textarea>
+                                <p class="text-xs text-slate-500 mt-1">Just the code portion from the browser</p>
+                            </div>
+                        </div>
+                        
+                        <!-- URL input (hidden by default) -->
+                        <div id="url-input-section" class="hidden">
+                            <div>
+                                <label class="block text-sm font-medium mb-2">Complete Authorization URL:</label>
+                                <textarea id="auth-url-input" class="w-full px-3 py-2 bg-slate-800 border border-slate-600 rounded-lg focus:border-primary focus:outline-none resize-none" rows="4" placeholder="Paste the complete URL from your browser (e.g., http://localhost:3000/oauth2callback?code=4/0AX4...)"></textarea>
+                                <p class="text-xs text-slate-500 mt-1">Copy the entire URL from your browser address bar</p>
+                            </div>
+                        </div>
+                        
+                        <!-- Auto-detect clipboard -->
+                        <div class="bg-slate-800 rounded-lg p-3">
+                            <button id="auto-detect-btn" class="w-full flex items-center justify-center space-x-2 text-sm text-blue-400 hover:text-blue-300 transition-colors">
+                                <i class="fas fa-magic"></i>
+                                <span>Auto-detect from clipboard</span>
+                            </button>
+                            <p class="text-xs text-slate-500 mt-1 text-center">Automatically extract code from copied content</p>
+                        </div>
+                        
+                        <div id="auth-error" class="hidden text-red-400 text-sm bg-red-500/10 border border-red-500/20 rounded-lg p-3"></div>
                         
                         <div class="flex space-x-3">
                             <button onclick="submitAuthCode()" class="flex-1 bg-primary hover:bg-primary/80 text-white px-4 py-2 rounded-lg transition-colors">
@@ -1521,20 +1687,133 @@
             
             document.body.appendChild(modal);
             
-            // Focus the input
+            // Set up tab switching
+            const codeTab = modal.querySelector('#code-tab');
+            const urlTab = modal.querySelector('#url-tab');
+            const codeSection = modal.querySelector('#code-input-section');
+            const urlSection = modal.querySelector('#url-input-section');
+            const autoDetectBtn = modal.querySelector('#auto-detect-btn');
+            
+            codeTab.addEventListener('click', () => {
+                codeTab.classList.add('bg-primary', 'text-white');
+                codeTab.classList.remove('text-slate-400');
+                urlTab.classList.remove('bg-primary', 'text-white');
+                urlTab.classList.add('text-slate-400');
+                codeSection.classList.remove('hidden');
+                urlSection.classList.add('hidden');
+            });
+            
+            urlTab.addEventListener('click', () => {
+                urlTab.classList.add('bg-primary', 'text-white');
+                urlTab.classList.remove('text-slate-400');
+                codeTab.classList.remove('bg-primary', 'text-white');
+                codeTab.classList.add('text-slate-400');
+                urlSection.classList.remove('hidden');
+                codeSection.classList.add('hidden');
+            });
+            
+            // Auto-detect functionality
+            autoDetectBtn.addEventListener('click', async () => {
+                try {
+                    const clipboardText = await navigator.clipboard.readText();
+                    const extractedCode = extractAuthCodeFromText(clipboardText);
+                    
+                    if (extractedCode) {
+                        const codeInput = modal.querySelector('#auth-code-input');
+                        codeInput.value = extractedCode;
+                        showAuthSuccess('✅ Authorization code detected and filled automatically!');
+                    } else {
+                        showAuthError('No authorization code found in clipboard. Please copy the code or URL from your browser.');
+                    }
+                } catch (error) {
+                    showAuthError('Could not access clipboard. Please paste manually.');
+                }
+            });
+            
+            // Focus the appropriate input
             setTimeout(() => {
                 const input = document.getElementById('auth-code-input');
                 if (input) input.focus();
             }, 100);
         }
+        
+        function extractAuthCodeFromText(text) {
+            if (!text) return null;
+            
+            // Method 1: Extract from URL parameters (most common)
+            const urlMatch = text.match(/[?&]code=([^&\s]+)/);
+            if (urlMatch) {
+                return decodeURIComponent(urlMatch[1]);
+            }
+            
+            // Method 2: Look for code pattern (starts with 4/)
+            const codeMatch = text.match(/4\/[0-9A-Za-z_-]+/);
+            if (codeMatch) {
+                return codeMatch[0];
+            }
+            
+            // Method 3: Check if the entire text looks like a code
+            const cleanText = text.trim();
+            if (cleanText.startsWith('4/') && cleanText.length > 10 && !cleanText.includes(' ')) {
+                return cleanText;
+            }
+            
+            return null;
+        }
+        
+        function showAuthError(message) {
+            const errorDiv = document.getElementById('auth-error');
+            if (errorDiv) {
+                errorDiv.textContent = message;
+                errorDiv.classList.remove('hidden');
+                setTimeout(() => errorDiv.classList.add('hidden'), 5000);
+            }
+        }
+        
+        function showAuthSuccess(message) {
+            showToast(message, 'success');
+        }
 
         async function submitAuthCode() {
-            const input = document.getElementById('auth-code-input');
-            const authCode = input?.value?.trim();
+            let authCode = '';
             
-            if (!authCode) {
-                showToast('Please enter the authorization code', 'warning');
-                return;
+            // Check which tab is active and get the appropriate input
+            const codeSection = document.getElementById('code-input-section');
+            const urlSection = document.getElementById('url-input-section');
+            
+            if (!urlSection.classList.contains('hidden')) {
+                // URL tab is active
+                const urlInput = document.getElementById('auth-url-input');
+                const urlValue = urlInput?.value?.trim();
+                
+                if (!urlValue) {
+                    showAuthError('Please paste the authorization URL from your browser');
+                    return;
+                }
+                
+                // Extract code from URL
+                authCode = extractAuthCodeFromText(urlValue);
+                if (!authCode) {
+                    showAuthError('Could not extract authorization code from URL. Please check the URL or use the "Code Only" tab.');
+                    return;
+                }
+                
+                console.log('Extracted code from URL:', authCode);
+            } else {
+                // Code tab is active
+                const codeInput = document.getElementById('auth-code-input');
+                authCode = codeInput?.value?.trim();
+                
+                if (!authCode) {
+                    showAuthError('Please enter the authorization code');
+                    return;
+                }
+                
+                // Validate the code format
+                if (!authCode.startsWith('4/')) {
+                    showAuthError('Authorization code should start with "4/". Please check the code.');
+                    return;
+                }
             }
             
             try {
@@ -1579,21 +1858,115 @@
         }
 
         async function loadDriveFiles() {
-            if (!isDriveConnected) return;
+            const enhancedInterface = document.getElementById('enhanced-drive-interface');
+            const simpleInterface = document.getElementById('simple-drive-interface');
+            const driveFilesList = document.getElementById('drive-files-list');
+            
+            if (!isDriveConnected) {
+                // Hide enhanced interface and show simple interface with connect message
+                if (enhancedInterface) enhancedInterface.style.display = 'none';
+                if (simpleInterface) simpleInterface.style.display = 'block';
+                
+                if (driveFilesList) {
+                    driveFilesList.innerHTML = `
+                        <div class="text-center py-12 text-slate-400">
+                            <i class="fab fa-google-drive text-6xl text-slate-600 mb-4"></i>
+                            <h3 class="text-lg font-semibold mb-2">Connect to Google Drive</h3>
+                            <p class="mb-4">Connect your Google Drive account to view and manage your cloud files</p>
+                            <button onclick="connectGoogleDrive()" class="px-6 py-2 bg-blue-500 hover:bg-blue-600 rounded-lg transition-colors">
+                                <i class="fab fa-google-drive mr-2"></i>
+                                Connect Google Drive
+                            </button>
+                        </div>
+                    `;
+                }
+                return;
+            }
+            
+            // Show enhanced interface once connected
+            if (enhancedInterface) enhancedInterface.style.display = 'block';
+            if (simpleInterface) simpleInterface.style.display = 'none';
+            
+            // Show loading state
+            if (driveFilesList) {
+                driveFilesList.innerHTML = `
+                    <div class="text-center py-12 text-slate-400">
+                        <i class="fas fa-spinner fa-spin text-4xl mb-4"></i>
+                        <p>Loading Google Drive files...</p>
+                    </div>
+                `;
+            }
             
             try {
                 if (window.cloudApi?.listGDriveFiles) {
                     const result = await window.cloudApi.listGDriveFiles();
                     if (result?.success && result.files) {
                         driveFiles = result.files;
-                        updateDriveFilesList();
+                        updateEnhancedDriveFilesList();
+                        updateDriveFilesList(); // Keep for backward compatibility
                         currentStats.cloudFiles = driveFiles.length;
                         updateDashboard();
+                    } else {
+                        // Show error or empty state
+                        if (driveFilesList) {
+                            driveFilesList.innerHTML = `
+                                <div class="text-center py-12 text-slate-400">
+                                    <i class="fas fa-folder-open text-6xl text-slate-600 mb-4"></i>
+                                    <h3 class="text-lg font-semibold mb-2">No files found</h3>
+                                    <p class="mb-4">Your Google Drive appears to be empty or files couldn't be loaded</p>
+                                    <button onclick="loadDriveFiles()" class="px-4 py-2 bg-primary hover:bg-blue-600 rounded-lg transition-colors">
+                                        <i class="fas fa-sync-alt mr-2"></i>
+                                        Retry
+                                    </button>
+                                </div>
+                            `;
+                        }
+                    }
+                } else {
+                    if (driveFilesList) {
+                        driveFilesList.innerHTML = `
+                            <div class="text-center py-12 text-slate-400">
+                                <i class="fas fa-exclamation-triangle text-6xl text-red-600 mb-4"></i>
+                                <h3 class="text-lg font-semibold mb-2">Google Drive API Not Available</h3>
+                                <p>The Google Drive integration is not properly configured</p>
+                            </div>
+                        `;
                     }
                 }
             } catch (error) {
                 console.error('Error loading Drive files:', error);
+                if (driveFilesList) {
+                    driveFilesList.innerHTML = `
+                        <div class="text-center py-12 text-slate-400">
+                            <i class="fas fa-exclamation-triangle text-6xl text-red-600 mb-4"></i>
+                            <h3 class="text-lg font-semibold mb-2">Error Loading Files</h3>
+                            <p class="mb-4">${error.message || 'Failed to load Google Drive files'}</p>
+                            <button onclick="loadDriveFiles()" class="px-4 py-2 bg-primary hover:bg-blue-600 rounded-lg transition-colors">
+                                <i class="fas fa-sync-alt mr-2"></i>
+                                Try Again
+                            </button>
+                        </div>
+                    `;
+                }
             }
+        }
+
+        // Format file size utility function
+        function formatFileSize(bytes) {
+            if (!bytes || bytes === 0 || isNaN(bytes)) return '';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            if (i < 0 || i >= sizes.length) return bytes + ' Bytes';
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        // Format date utility function
+        function formatDate(dateString) {
+            if (!dateString) return 'Unknown';
+            const date = new Date(dateString);
+            if (isNaN(date.getTime())) return 'Unknown';
+            return date.toLocaleDateString();
         }
 
         function updateDriveFilesList() {
@@ -1610,24 +1983,32 @@
                 return;
             }
             
-            driveFilesList.innerHTML = driveFiles.map(file => `
+            driveFilesList.innerHTML = driveFiles.map(file => {
+                // Safe fallbacks for file properties
+                const fileName = file.name || 'Unnamed file';
+                const fileSize = formatFileSize(file.size);
+                const fileDate = formatDate(file.modifiedTime);
+                const fileId = file.id || '';
+                
+                return `
                 <div class="flex items-center justify-between p-4 bg-dark-light border border-slate-700 rounded-lg">
                     <div class="flex items-center space-x-3">
                         <div class="w-10 h-10 bg-blue-500/20 rounded-lg flex items-center justify-center">
                             <i class="fab fa-google-drive text-blue-400"></i>
                         </div>
                         <div>
-                            <p class="font-medium">${file.name}</p>
-                            <p class="text-sm text-slate-400">${formatFileSize(file.size)} • ${formatDate(file.modifiedTime)}</p>
+                                <p class="font-medium">${fileName}</p>
+                                <p class="text-sm text-slate-400">${fileSize}${fileSize && fileDate ? ' • ' : ''}${fileDate}</p>
                         </div>
                     </div>
                     <div class="flex items-center space-x-2">
-                        <button onclick="downloadFromDrive('${file.id}', '${file.name}')" class="p-2 text-green-400 hover:bg-green-500/20 rounded-lg transition-colors">
+                            <button onclick="downloadFromDrive('${fileId}', '${fileName}')" class="p-2 text-green-400 hover:bg-green-500/20 rounded-lg transition-colors">
                             <i class="fas fa-download"></i>
                         </button>
                     </div>
                 </div>
-            `).join('');
+                `;
+            }).join('');
         }
 
         async function uploadToDrive(filePath, fileName) {
@@ -2370,19 +2751,7 @@
         }
 
         // Utility functions
-        function formatFileSize(bytes) {
-            if (bytes === 0) return '0 Bytes';
-            const k = 1024;
-            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-            const i = Math.floor(Math.log(bytes) / Math.log(k));
-            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-        }
-
-        function formatDate(dateString) {
-            if (!dateString) return 'Unknown';
-            const date = new Date(dateString);
-            return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
-        }
+        // Removed duplicate functions - using improved versions above
 
         function formatAlgorithm(algorithm) {
             if (!algorithm) return 'Unknown';
@@ -3316,6 +3685,445 @@
         window.testEncryptedFiles = testEncryptedFiles;
         window.exportKey = exportKey;
         window.deleteKey = deleteKey;
+        // Open cloud window
+        function openCloudWindow() {
+            console.log('Opening cloud window...');
+            if (window.electronAPI && window.electronAPI.openCloudWindow) {
+                window.electronAPI.openCloudWindow();
+            } else {
+                // Fallback: try to navigate directly
+                window.location.href = 'cloud.html';
+            }
+        }
+        window.openCloudWindow = openCloudWindow;
+
+        // Enhanced Drive Interface Functions
+        let selectedFiles = new Set();
+        let currentViewMode = 'grid'; // 'grid' or 'list'
+        let searchQuery = '';
+        
+        function initializeEnhancedDriveInterface() {
+            // Upload dropdown
+            const newUploadBtn = document.getElementById('new-upload-btn');
+            const uploadOptions = document.getElementById('upload-options');
+            
+            if (newUploadBtn && uploadOptions) {
+                newUploadBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    uploadOptions.classList.toggle('hidden');
+                });
+                
+                // Close dropdown when clicking outside
+                document.addEventListener('click', () => {
+                    uploadOptions.classList.add('hidden');
+                });
+            }
+            
+            // View toggle buttons
+            const gridViewBtn = document.getElementById('grid-view-btn');
+            const listViewBtn = document.getElementById('list-view-btn');
+            
+            if (gridViewBtn && listViewBtn) {
+                gridViewBtn.addEventListener('click', () => switchToGridView());
+                listViewBtn.addEventListener('click', () => switchToListView());
+            }
+            
+            // Search functionality
+            const searchInput = document.getElementById('drive-search-input');
+            if (searchInput) {
+                searchInput.addEventListener('input', (e) => {
+                    searchQuery = e.target.value.toLowerCase();
+                    filterAndDisplayFiles();
+                });
+            }
+            
+            // Upload buttons
+            const uploadFilesBtn = document.getElementById('upload-files-btn');
+            const uploadEncryptedBtn = document.getElementById('upload-encrypted-btn');
+            const createFolderBtn = document.getElementById('create-folder-btn');
+            
+            if (uploadFilesBtn) {
+                uploadFilesBtn.addEventListener('click', () => {
+                    uploadOptions.classList.add('hidden');
+                    openFileDialog();
+                });
+            }
+            
+            if (uploadEncryptedBtn) {
+                uploadEncryptedBtn.addEventListener('click', () => {
+                    uploadOptions.classList.add('hidden');
+                    uploadEncryptedFiles();
+                });
+            }
+            
+            if (createFolderBtn) {
+                createFolderBtn.addEventListener('click', () => {
+                    uploadOptions.classList.add('hidden');
+                    createNewFolder();
+                });
+            }
+            
+            // Refresh button (enhanced interface)
+            const refreshBtn = document.getElementById('refresh-drive');
+            if (refreshBtn) {
+                refreshBtn.addEventListener('click', () => loadDriveFiles());
+            }
+            
+            // Select all checkbox
+            const selectAllCheckbox = document.getElementById('select-all-files');
+            if (selectAllCheckbox) {
+                selectAllCheckbox.addEventListener('change', toggleSelectAll);
+            }
+            
+            // Selected actions
+            const downloadSelectedBtn = document.getElementById('download-selected-btn');
+            const decryptSelectedBtn = document.getElementById('decrypt-selected-btn');
+            const deleteSelectedBtn = document.getElementById('delete-selected-btn');
+            
+            if (downloadSelectedBtn) {
+                downloadSelectedBtn.addEventListener('click', downloadSelectedFiles);
+            }
+            if (decryptSelectedBtn) {
+                decryptSelectedBtn.addEventListener('click', decryptSelectedFiles);
+            }
+            if (deleteSelectedBtn) {
+                deleteSelectedBtn.addEventListener('click', deleteSelectedFiles);
+            }
+        }
+        
+        function switchToGridView() {
+            currentViewMode = 'grid';
+            const gridBtn = document.getElementById('grid-view-btn');
+            const listBtn = document.getElementById('list-view-btn');
+            
+            gridBtn.classList.add('bg-primary', 'text-white');
+            gridBtn.classList.remove('hover:bg-slate-700', 'text-slate-400');
+            
+            listBtn.classList.remove('bg-primary', 'text-white');
+            listBtn.classList.add('hover:bg-slate-700', 'text-slate-400');
+            
+            updateEnhancedDriveFilesList();
+        }
+        
+        function switchToListView() {
+            currentViewMode = 'list';
+            const gridBtn = document.getElementById('grid-view-btn');
+            const listBtn = document.getElementById('list-view-btn');
+            
+            listBtn.classList.add('bg-primary', 'text-white');
+            listBtn.classList.remove('hover:bg-slate-700', 'text-slate-400');
+            
+            gridBtn.classList.remove('bg-primary', 'text-white');
+            gridBtn.classList.add('hover:bg-slate-700', 'text-slate-400');
+            
+            updateEnhancedDriveFilesList();
+        }
+        
+        function updateEnhancedDriveFilesList() {
+            const gridContainer = document.getElementById('drive-grid-container');
+            const listContainer = document.getElementById('drive-list-container');
+            const listBody = document.getElementById('drive-list-body');
+            const emptyState = document.getElementById('drive-empty-state');
+            
+            // Filter files based on search query
+            const filteredFiles = driveFiles.filter(file => 
+                file.name.toLowerCase().includes(searchQuery)
+            );
+            
+            if (filteredFiles.length === 0) {
+                gridContainer.innerHTML = '';
+                listContainer.classList.add('hidden');
+                if (searchQuery) {
+                    gridContainer.innerHTML = `
+                        <div class="col-span-full text-center py-12 text-slate-400">
+                            <i class="fas fa-search text-4xl mb-4"></i>
+                            <h3 class="text-lg font-semibold mb-2">No results found</h3>
+                            <p>No files match "${searchQuery}"</p>
+                        </div>
+                    `;
+                } else {
+                    emptyState.classList.remove('hidden');
+                }
+                return;
+            }
+            
+            emptyState.classList.add('hidden');
+            
+            if (currentViewMode === 'grid') {
+                // Show grid view
+                gridContainer.innerHTML = '';
+                listContainer.classList.add('hidden');
+                
+                filteredFiles.forEach(file => {
+                    const fileCard = createEnhancedFileCard(file);
+                    gridContainer.appendChild(fileCard);
+                });
+            } else {
+                // Show list view
+                gridContainer.innerHTML = '';
+                listContainer.classList.remove('hidden');
+                if (listBody) {
+                    listBody.innerHTML = '';
+                    
+                    filteredFiles.forEach(file => {
+                        const fileRow = createEnhancedFileRow(file);
+                        listBody.appendChild(fileRow);
+                    });
+                }
+            }
+        }
+        
+        function createEnhancedFileCard(file) {
+            const card = document.createElement('div');
+            card.className = 'bg-slate-800 border border-slate-700 rounded-lg p-4 cursor-pointer hover:bg-slate-700 transition-colors group';
+            card.dataset.fileId = file.id;
+            card.dataset.fileName = file.name;
+            
+            const isFolder = file.mimeType === 'application/vnd.google-apps.folder';
+            const icon = isFolder ? 'fas fa-folder text-blue-400' : getFileIcon(file.mimeType);
+            const size = file.size ? formatFileSize(file.size) : '';
+            const date = file.modifiedTime ? formatDate(file.modifiedTime) : '';
+            
+            card.innerHTML = `
+                <div class="flex flex-col h-full">
+                    <div class="flex items-center justify-between mb-3">
+                        <i class="${icon} text-2xl"></i>
+                        <input type="checkbox" class="file-checkbox opacity-0 group-hover:opacity-100 transition-opacity" 
+                               onchange="toggleFileSelection('${file.id}')" ${selectedFiles.has(file.id) ? 'checked' : ''}>
+                    </div>
+                    <div class="flex-1">
+                        <h4 class="font-medium text-white text-sm mb-2 line-clamp-2">${file.name}</h4>
+                        <div class="text-xs text-slate-400 space-y-1">
+                            ${size ? `<div>${size}</div>` : ''}
+                            <div>${date}</div>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2 mt-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button class="p-1 hover:bg-slate-600 rounded text-slate-400 hover:text-white transition-colors" 
+                                onclick="event.stopPropagation(); downloadDriveFile('${file.id}', '${file.name}')" title="Download">
+                            <i class="fas fa-download text-xs"></i>
+                        </button>
+                        ${!isFolder ? `<button class="p-1 hover:bg-slate-600 rounded text-slate-400 hover:text-white transition-colors" 
+                                onclick="event.stopPropagation(); decryptDriveFile('${file.id}', '${file.name}')" title="Decrypt">
+                            <i class="fas fa-unlock text-xs"></i>
+                        </button>` : ''}
+                        <button class="p-1 hover:bg-slate-600 rounded text-slate-400 hover:text-white transition-colors" 
+                                onclick="event.stopPropagation(); deleteDriveFile('${file.id}', '${file.name}')" title="Delete">
+                            <i class="fas fa-trash text-xs"></i>
+                        </button>
+                    </div>
+                </div>
+            `;
+            
+            // Add double-click handler
+            card.addEventListener('dblclick', () => {
+                if (isFolder) {
+                    console.log('Navigate to folder:', file.name);
+                } else {
+                    downloadDriveFile(file.id, file.name);
+                }
+            });
+            
+            return card;
+        }
+        
+        function createEnhancedFileRow(file) {
+            const row = document.createElement('tr');
+            row.className = 'hover:bg-slate-700 transition-colors group';
+            row.dataset.fileId = file.id;
+            row.dataset.fileName = file.name;
+            
+            const isFolder = file.mimeType === 'application/vnd.google-apps.folder';
+            const icon = isFolder ? 'fas fa-folder text-blue-400' : getFileIcon(file.mimeType);
+            const size = file.size ? formatFileSize(file.size) : '';
+            const date = file.modifiedTime ? formatDate(file.modifiedTime) : '';
+            
+            row.innerHTML = `
+                <td class="py-3 px-4">
+                    <div class="flex items-center gap-3">
+                        <input type="checkbox" class="file-checkbox" 
+                               onchange="toggleFileSelection('${file.id}')" ${selectedFiles.has(file.id) ? 'checked' : ''}>
+                        <i class="${icon}"></i>
+                        <span class="text-white">${file.name}</span>
+                    </div>
+                </td>
+                <td class="py-3 px-4 text-slate-400">${date}</td>
+                <td class="py-3 px-4 text-slate-400">${size}</td>
+                <td class="py-3 px-4">
+                    <div class="flex items-center gap-2">
+                        <button class="p-1 hover:bg-slate-600 rounded text-slate-400 hover:text-white transition-colors" 
+                                onclick="downloadDriveFile('${file.id}', '${file.name}')" title="Download">
+                            <i class="fas fa-download"></i>
+                        </button>
+                        ${!isFolder ? `<button class="p-1 hover:bg-slate-600 rounded text-slate-400 hover:text-white transition-colors" 
+                                onclick="decryptDriveFile('${file.id}', '${file.name}')" title="Decrypt">
+                            <i class="fas fa-unlock"></i>
+                        </button>` : ''}
+                        <button class="p-1 hover:bg-slate-600 rounded text-slate-400 hover:text-white transition-colors" 
+                                onclick="deleteDriveFile('${file.id}', '${file.name}')" title="Delete">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                </td>
+            `;
+            
+            return row;
+        }
+        
+        function getFileIcon(mimeType) {
+            if (!mimeType) return 'fas fa-file text-slate-400';
+            
+            if (mimeType.includes('image')) return 'fas fa-image text-green-400';
+            if (mimeType.includes('video')) return 'fas fa-video text-red-400';
+            if (mimeType.includes('audio')) return 'fas fa-music text-purple-400';
+            if (mimeType.includes('pdf')) return 'fas fa-file-pdf text-red-400';
+            if (mimeType.includes('document') || mimeType.includes('text')) return 'fas fa-file-alt text-blue-400';
+            if (mimeType.includes('spreadsheet')) return 'fas fa-file-excel text-green-400';
+            if (mimeType.includes('presentation')) return 'fas fa-file-powerpoint text-orange-400';
+            if (mimeType.includes('zip') || mimeType.includes('archive')) return 'fas fa-file-archive text-yellow-400';
+            
+            return 'fas fa-file text-slate-400';
+        }
+        
+        function toggleFileSelection(fileId) {
+            if (selectedFiles.has(fileId)) {
+                selectedFiles.delete(fileId);
+            } else {
+                selectedFiles.add(fileId);
+            }
+            updateSelectedActions();
+        }
+        
+        function toggleSelectAll() {
+            const selectAllCheckbox = document.getElementById('select-all-files');
+            const fileCheckboxes = document.querySelectorAll('.file-checkbox');
+            
+            if (selectAllCheckbox.checked) {
+                driveFiles.forEach(file => selectedFiles.add(file.id));
+                fileCheckboxes.forEach(checkbox => checkbox.checked = true);
+            } else {
+                selectedFiles.clear();
+                fileCheckboxes.forEach(checkbox => checkbox.checked = false);
+            }
+            updateSelectedActions();
+        }
+        
+        function updateSelectedActions() {
+            const selectedActions = document.getElementById('selected-actions');
+            const selectedCount = document.getElementById('selected-count');
+            
+            if (selectedFiles.size > 0) {
+                selectedActions.classList.remove('hidden');
+                selectedCount.textContent = `${selectedFiles.size} selected`;
+            } else {
+                selectedActions.classList.add('hidden');
+            }
+        }
+        
+        function filterAndDisplayFiles() {
+            updateEnhancedDriveFilesList();
+        }
+        
+        // Enhanced file operations
+        async function downloadDriveFile(fileId, fileName) {
+            try {
+                showToast(`Downloading ${fileName}...`, 'info');
+                if (window.cloudApi?.downloadGDriveFile) {
+                    const result = await window.cloudApi.downloadGDriveFile(fileId, fileName);
+                    if (result?.success) {
+                        showToast(`Successfully downloaded ${fileName}`, 'success');
+                    } else {
+                        showToast(`Failed to download ${fileName}`, 'error');
+                    }
+                }
+            } catch (error) {
+                console.error('Error downloading file:', error);
+                showToast(`Error downloading ${fileName}`, 'error');
+            }
+        }
+        
+        async function decryptDriveFile(fileId, fileName) {
+            try {
+                showToast(`Decrypting ${fileName}...`, 'info');
+                // TODO: Implement decrypt functionality
+                showToast(`Decrypt functionality coming soon`, 'info');
+            } catch (error) {
+                console.error('Error decrypting file:', error);
+                showToast(`Error decrypting ${fileName}`, 'error');
+            }
+        }
+        
+        async function deleteDriveFile(fileId, fileName) {
+            if (!confirm(`Are you sure you want to delete "${fileName}"?`)) {
+                return;
+            }
+            
+            try {
+                showToast(`Deleting ${fileName}...`, 'info');
+                // TODO: Implement delete functionality
+                showToast(`Delete functionality coming soon`, 'info');
+            } catch (error) {
+                console.error('Error deleting file:', error);
+                showToast(`Error deleting ${fileName}`, 'error');
+            }
+        }
+        
+        async function downloadSelectedFiles() {
+            if (selectedFiles.size === 0) return;
+            
+            showToast(`Downloading ${selectedFiles.size} files...`, 'info');
+            for (const fileId of selectedFiles) {
+                const file = driveFiles.find(f => f.id === fileId);
+                if (file) {
+                    await downloadDriveFile(fileId, file.name);
+                }
+            }
+        }
+        
+        async function decryptSelectedFiles() {
+            if (selectedFiles.size === 0) return;
+            
+            showToast(`Decrypting ${selectedFiles.size} files...`, 'info');
+            // TODO: Implement bulk decrypt
+        }
+        
+        async function deleteSelectedFiles() {
+            if (selectedFiles.size === 0) return;
+            
+            if (!confirm(`Are you sure you want to delete ${selectedFiles.size} selected files?`)) {
+                return;
+            }
+            
+            showToast(`Deleting ${selectedFiles.size} files...`, 'info');
+            // TODO: Implement bulk delete
+        }
+        
+        async function openFileDialog() {
+            try {
+                if (window.api?.openFileDialog) {
+                    const result = await window.api.openFileDialog();
+                    if (result && !result.canceled && result.filePaths.length > 0) {
+                        // TODO: Upload selected files
+                        showToast(`Upload functionality coming soon`, 'info');
+                    }
+                }
+            } catch (error) {
+                console.error('Error opening file dialog:', error);
+                showToast('Error opening file dialog', 'error');
+            }
+        }
+        
+        async function uploadEncryptedFiles() {
+            showToast('Encrypted upload functionality coming soon', 'info');
+        }
+        
+        async function createNewFolder() {
+            const folderName = prompt('Enter folder name:');
+            if (folderName) {
+                showToast('Create folder functionality coming soon', 'info');
+            }
+        }
+
     </script>
 </body>
 </html>

@@ -3,6 +3,10 @@
  * Main application logic for the renderer process
  */
 
+// Import styles and local icons
+import './styles.css';
+import '@fortawesome/fontawesome-free/css/all.min.css';
+
 console.log('[Renderer] Starting renderer.js execution...');
 console.log('[Renderer] JavaScript is loading successfully!');
 

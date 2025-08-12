@@ -19,6 +19,8 @@ module.exports = {
           800: '#003F8F',
           900: '#002557',
         },
+        dark: '#1A1D2E',
+        'dark-light': '#1F2233',
         carbon: {
           black: '#0C0F1E',
           dark: '#1A1D2E',

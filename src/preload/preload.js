@@ -217,6 +217,10 @@ try {
     saveTemporaryFile: (fileName, buffer) => {
       console.log(`preload: saveTemporaryFile called with fileName: ${fileName}`);
       return safeInvoke('save-temporary-file', fileName, buffer);
+    },
+    openCloudWindow: () => {
+      console.log('preload: openCloudWindow called');
+      return safeInvoke('open-cloud-window');
     }
   };
   
@@ -262,14 +266,16 @@ try {
 
   // Cloud API (for Google Drive)
   contextBridge.exposeInMainWorld('cloudApi', {
-    connectGDrive: () => safeInvoke('gdrive-connect'),
+    connectGDrive: (options) => safeInvoke('gdrive-connect', options),
     exchangeGDriveAuthCode: (authCode) => safeInvoke('gdrive-exchange-auth-code', authCode),
+    waitForGDriveAuth: () => safeInvoke('gdrive-wait-for-auth'),
     getGDriveStatus: () => safeInvoke('gdrive-status'),
     listGDriveFiles: (options) => safeInvoke('gdrive-list-files', options),
     disconnectGDrive: () => safeInvoke('gdrive-disconnect'),
-    uploadFileToGDrive: (filePath, fileName, parentFolderId) => safeInvoke('gdrive-upload-file', { filePath, fileName, parentFolderId }),
-    uploadEncryptedFileToGDrive: (fileId) => safeInvoke('gdrive-upload-encrypted-file', fileId),
+    uploadFileToGDrive: (options) => safeInvoke('gdrive-upload-file', options),
+    uploadEncryptedToGDrive: (options) => safeInvoke('gdrive-upload-encrypted', options),
     downloadGDriveFile: (options) => safeInvoke('gdrive-download-file', options),
+    createGDriveFolder: (options) => safeInvoke('gdrive-create-folder', options),
     uploadToVault: (options) => safeInvoke('upload-to-gdrive', options),
     getVaultInfo: () => safeInvoke('get-vault-info'),
     createDEKBackup: (options) => safeInvoke('create-dek-backup', options),
