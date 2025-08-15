@@ -94,8 +94,8 @@ function setupEventListeners() {
         dashboardSettingsBtn.addEventListener('click', () => switchSection('settings'));
     }
     
-    // File operations
-    const browseFilesBtn = document.getElementById('browse-files-btn');
+    // File operations - handle the browse button (browse-btn ID in the HTML)
+    const browseFilesBtn = document.getElementById('browse-btn');
     if (browseFilesBtn) {
         browseFilesBtn.addEventListener('click', () => openFileDialog());
     }

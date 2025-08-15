@@ -422,81 +422,117 @@ function safeRequire(modulePath, fallback) {
 }
 
 // Load required modules with fallbacks
-const keyManager = safeRequire('../config/keyManager', {
-  getKey: async () => {
-    try {
-      return encryptionKey || null;
-    } catch (error) {
-      console.error('Error in keyManager.getKey:', error);
-      return null;
-    }
-  },
-  setKey: async (key) => {
-    try {
-      encryptionKey = key;
-      return true;
-    } catch (error) {
-      console.error('Error in keyManager.setKey:', error);
-      return false;
-    }
-  },
-  getMasterKey: async () => encryptionKey || null
-});
-
-const encryptionMethods = safeRequire('../crypto/encryptionMethods', {
-  encrypt: async (data, key, algorithm = 'aes-256-gcm') => {
-    const iv = crypto.randomBytes(16);
-    const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
-    const encrypted = Buffer.concat([cipher.update(data), cipher.final()]);
-    const authTag = cipher.getAuthTag();
-    return {
-      algorithm: 'aes-256-gcm',
-      encryptedData: Buffer.concat([iv, authTag, encrypted])
-    };
-  },
-  decrypt: async ({ encryptedData, algorithm }, key) => {
-    const iv = encryptedData.slice(0, 16);
-    const authTag = encryptedData.slice(16, 32);
-    const encrypted = encryptedData.slice(32);
-    const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
-    decipher.setAuthTag(authTag);
-    return Buffer.concat([decipher.update(encrypted), decipher.final()]);
-  },
-  getAllEncryptionMethods: () => ['aes-256-gcm'],
-  getEncryptionMethod: () => 'aes-256-gcm',
-  setEncryptionMethod: () => true
-});
-
-const entropyAnalyzer = safeRequire('../crypto/entropyAnalyzer', {
-  calculateEntropy: (data) => {
-    // Simple entropy calculation fallback
-    if (!data || data.length === 0) return 0;
-    const freqs = new Array(256).fill(0);
-    for (let i = 0; i < data.length; i++) freqs[data[i]]++;
-    let entropy = 0;
-    for (let i = 0; i < 256; i++) {
-      if (freqs[i] > 0) {
-        const p = freqs[i] / data.length;
-        entropy -= p * (Math.log(p) / Math.log(2));
+// Direct require instead of safeRequire to ensure proper webpack bundling
+let keyManager;
+try {
+  keyManager = require('../config/keyManager');
+  console.log('Successfully loaded keyManager module');
+} catch (error) {
+  console.error('Failed to load keyManager module:', error.message);
+  // Fallback implementation
+  keyManager = {
+    getKey: async () => {
+      try {
+        return encryptionKey || null;
+      } catch (error) {
+        console.error('Error in keyManager.getKey:', error);
+        return null;
       }
+    },
+    setKey: async (key) => {
+      try {
+        encryptionKey = key;
+        return true;
+      } catch (error) {
+        console.error('Error in keyManager.setKey:', error);
+        return false;
+      }
+    },
+    getMasterKey: async () => encryptionKey || null
+  };
+}
+
+// Direct require instead of safeRequire to ensure proper webpack bundling
+let encryptionMethods;
+try {
+  encryptionMethods = require('../crypto/encryptionMethods');
+  console.log('Successfully loaded encryptionMethods module');
+} catch (error) {
+  console.error('Failed to load encryptionMethods module:', error.message);
+  // Fallback implementation with only AES support
+  encryptionMethods = {
+    encrypt: async (data, key, algorithm = 'aes-256-gcm') => {
+      const iv = crypto.randomBytes(16);
+      const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+      const encrypted = Buffer.concat([cipher.update(data), cipher.final()]);
+      const authTag = cipher.getAuthTag();
+      return {
+        algorithm: 'aes-256-gcm',
+        encryptedData: Buffer.concat([iv, authTag, encrypted])
+      };
+    },
+    decrypt: async ({ encryptedData, algorithm }, key) => {
+      const iv = encryptedData.slice(0, 16);
+      const authTag = encryptedData.slice(16, 32);
+      const encrypted = encryptedData.slice(32);
+      const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
+      decipher.setAuthTag(authTag);
+      return Buffer.concat([decipher.update(encrypted), decipher.final()]);
+    },
+    getAllEncryptionMethods: () => ['aes-256-gcm'],
+    getEncryptionMethod: () => 'aes-256-gcm',
+    setEncryptionMethod: () => true
+  };
+}
+
+// Direct require instead of safeRequire to ensure proper webpack bundling
+let entropyAnalyzer;
+try {
+  entropyAnalyzer = require('../crypto/entropyAnalyzer');
+  console.log('Successfully loaded entropyAnalyzer module');
+} catch (error) {
+  console.error('Failed to load entropyAnalyzer module:', error.message);
+  // Fallback implementation
+  entropyAnalyzer = {
+    calculateEntropy: (data) => {
+      // Simple entropy calculation fallback
+      if (!data || data.length === 0) return 0;
+      const freqs = new Array(256).fill(0);
+      for (let i = 0; i < data.length; i++) freqs[data[i]]++;
+      let entropy = 0;
+      for (let i = 0; i < 256; i++) {
+        if (freqs[i] > 0) {
+          const p = freqs[i] / data.length;
+          entropy -= p * (Math.log(p) / Math.log(2));
+        }
+      }
+      return entropy;
+    },
+    analyzeEntropyInChunks: (data) => ({
+      overallEntropy: entropyAnalyzer?.calculateEntropy ? entropyAnalyzer.calculateEntropy(data) : 0,
+      rating: 'Analysis Limited',
+      isGoodEncryption: null
+    }),
+    generateHistogram: (data) => {
+      // Implementation of generateHistogram method
+      // This is a placeholder and should be implemented based on the actual implementation
+      return new Array(256).fill(0);
     }
-    return entropy;
-  },
-  analyzeEntropyInChunks: (data) => ({
-    overallEntropy: entropyAnalyzer.calculateEntropy(data),
-    rating: 'Analysis Limited',
-    isGoodEncryption: null
-  }),
-  generateHistogram: (data) => {
-    // Implementation of generateHistogram method
-    // This is a placeholder and should be implemented based on the actual implementation
-    return new Array(256).fill(0);
-  }
-});
+  };
+}
 
-const cryptoUtil = safeRequire('../crypto/cryptoUtil', {});
+// Direct require instead of safeRequire to ensure proper webpack bundling
+let cryptoUtil;
+try {
+  cryptoUtil = require('../crypto/cryptoUtil');
+  console.log('Successfully loaded cryptoUtil module');
+} catch (error) {
+  console.error('Failed to load cryptoUtil module:', error.message);
+  cryptoUtil = {};
+}
 
-const { analyzeFileEntropy } = safeRequire('../crypto/entropyAnalyzer', {});
+// Get analyzeFileEntropy from the already loaded entropyAnalyzer module
+const { analyzeFileEntropy } = entropyAnalyzer || {};
 
 // Global variables
 let mainWindow;
@@ -2890,13 +2926,16 @@ ipcMain.handle('get-encrypted-files', async (event) => {
           const formatVersion = fileBuffer[4];
           if (formatVersion === 0x01) { // Check if we support this version
             const algorithmId = fileBuffer[5];
-            if (algorithmId === 1) {
-              algorithm = 'aes-256-gcm';
-            } else if (algorithmId === 2) {
-              algorithm = 'chacha20-poly1305';
-            } else if (algorithmId === 3) {
-              algorithm = 'xchacha20-poly1305';
-            }
+            // Map algorithm ID to algorithm name (must match getAlgorithmId function)
+            const algorithmMap = {
+              1: 'aes-256-gcm',
+              2: 'aes-256-cbc', 
+              3: 'chacha20-poly1305',
+              4: 'xchacha20-poly1305',
+              5: 'aes-256-ctr',
+              6: 'aes-256-ofb'
+            };
+            algorithm = algorithmMap[algorithmId] || 'aes-256-gcm';
             // Note: Original name is not stored in this binary header format
             // It would rely on the encrypted filename or a separate metadata store if needed beyond just fileName
           }
@@ -3647,8 +3686,24 @@ ipcMain.handle('gdrive-status', async () => {
 // Duplicate handler removed - using the first registration earlier in the file
 
 // IPC handler to list files from Google Drive
-ipcMain.handle('gdrive-list-files', async (event, { parentFolderId = null, pageToken = null } = {}) => {
+ipcMain.handle('gdrive-list-files', async (event, arg1, arg2) => {
   try {
+    // Handle both calling styles:
+    // 1. listGDriveFiles(folderId) - direct folder ID
+    // 2. listGDriveFiles({ parentFolderId, pageToken }) - object
+    let parentFolderId = null;
+    let pageToken = null;
+    
+    if (typeof arg1 === 'string' || arg1 === null) {
+      // Direct folder ID style
+      parentFolderId = arg1;
+      pageToken = arg2 || null;
+    } else if (typeof arg1 === 'object' && arg1 !== null) {
+      // Object style
+      parentFolderId = arg1.parentFolderId || null;
+      pageToken = arg1.pageToken || null;
+    }
+    
     console.log(`[main.js] gdrive-list-files called with parentFolderId: ${parentFolderId}, pageToken: ${pageToken}`);
     
     // Ensure tokens are refreshed before API call
@@ -4623,13 +4678,64 @@ ipcMain.handle('gdrive-download-file', async (event, { fileId, fileName }) => {
       return { success: false, error: 'Google Drive not connected' };
     }
     
-    // Get the file content with proper response type handling
-    const response = await googleDrive.files.get({
+    // First, get file metadata to check if it's a Google Docs file
+    console.log(`[main.js] Getting metadata for fileId: ${fileId}`);
+    const metadata = await googleDrive.files.get({
       fileId: fileId,
-      alt: 'media'
-    }, {
-      responseType: 'arraybuffer' // Ensure we get binary data
+      fields: 'id,name,mimeType,size'
     });
+    
+    const mimeType = metadata.data.mimeType;
+    console.log(`[main.js] File mime type: ${mimeType}`);
+    
+    let response;
+    let actualFileName = fileName;
+    
+    // Check for folders first
+    if (mimeType === 'application/vnd.google-apps.folder') {
+      console.log(`[main.js] Cannot download folder: ${fileName}`);
+      return { success: false, error: 'Cannot download folders. Please select a file instead.' };
+    }
+    
+    // Check if it's a Google Docs file that needs to be exported
+    const googleDocsTypes = {
+      'application/vnd.google-apps.document': { ext: '.docx', exportType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' },
+      'application/vnd.google-apps.spreadsheet': { ext: '.xlsx', exportType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' },
+      'application/vnd.google-apps.presentation': { ext: '.pptx', exportType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation' },
+      'application/vnd.google-apps.drawing': { ext: '.png', exportType: 'image/png' },
+      'application/vnd.google-apps.script': { ext: '.zip', exportType: 'application/vnd.google-apps.script+zip' }
+    };
+    
+    if (googleDocsTypes[mimeType]) {
+      console.log(`[main.js] Detected Google Docs file with mime type: ${mimeType}`);
+      console.log(`[main.js] Exporting Google Docs file as ${googleDocsTypes[mimeType].ext}`);
+      
+      // Add appropriate extension if not present
+      if (!actualFileName.includes('.')) {
+        actualFileName += googleDocsTypes[mimeType].ext;
+        console.log(`[main.js] Updated filename to: ${actualFileName}`);
+      }
+      
+      // Export the file
+      console.log(`[main.js] Calling files.export with mimeType: ${googleDocsTypes[mimeType].exportType}`);
+      response = await googleDrive.files.export({
+        fileId: fileId,
+        mimeType: googleDocsTypes[mimeType].exportType
+      }, {
+        responseType: 'arraybuffer'
+      });
+      console.log(`[main.js] Export response received, data length: ${response?.data?.byteLength || 'unknown'}`);
+    } else {
+      // Regular file download
+      console.log(`[main.js] Not a Google Docs file, downloading regular file`);
+      response = await googleDrive.files.get({
+        fileId: fileId,
+        alt: 'media'
+      }, {
+        responseType: 'arraybuffer' // Ensure we get binary data
+      });
+      console.log(`[main.js] Regular download response received, data length: ${response?.data?.byteLength || 'unknown'}`);
+    }
     
     if (!response || !response.data) {
       return { success: false, error: 'No file data received from Google Drive' };
@@ -4642,7 +4748,7 @@ ipcMain.handle('gdrive-download-file', async (event, { fileId, fileName }) => {
     }
     
     // Generate unique filename if file already exists
-    let finalFileName = fileName;
+    let finalFileName = actualFileName; // Use the potentially modified filename
     let filePath = path.join(outputDir, finalFileName);
     let counter = 1;
     

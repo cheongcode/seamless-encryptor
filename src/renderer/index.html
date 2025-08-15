@@ -791,7 +791,8 @@
             const clearQueueBtn = document.getElementById('clear-queue');
             const refreshFilesBtn = document.getElementById('refresh-files');
 
-            browseBtn?.addEventListener('click', openFileDialog);
+            // Event listener is handled by renderer.js main entry point to avoid duplicates
+            // browseBtn?.addEventListener('click', openFileDialog);
             encryptAllBtn?.addEventListener('click', encryptAllFiles);
             clearQueueBtn?.addEventListener('click', clearFileQueue);
             refreshFilesBtn?.addEventListener('click', loadEncryptedFiles);
@@ -1857,7 +1858,22 @@
             }
         }
 
-        async function loadDriveFiles() {
+        // Folder navigation state
+        let currentFolderId = null;
+        let currentFolderName = 'My Drive';
+        let folderHistory = []; // Stack for navigation history
+        
+        async function loadDriveFiles(folderId = null, folderName = null) {
+            if (folderId) {
+                currentFolderId = folderId;
+                currentFolderName = folderName || 'Unknown Folder';
+            } else {
+                currentFolderId = null;
+                currentFolderName = 'My Drive';
+            }
+            
+            updateBreadcrumb();
+            
             const enhancedInterface = document.getElementById('enhanced-drive-interface');
             const simpleInterface = document.getElementById('simple-drive-interface');
             const driveFilesList = document.getElementById('drive-files-list');
@@ -1899,7 +1915,7 @@
             
             try {
                 if (window.cloudApi?.listGDriveFiles) {
-                    const result = await window.cloudApi.listGDriveFiles();
+                    const result = await window.cloudApi.listGDriveFiles(currentFolderId);
                     if (result?.success && result.files) {
                         driveFiles = result.files;
                         updateEnhancedDriveFilesList();
@@ -3745,7 +3761,7 @@
             if (uploadFilesBtn) {
                 uploadFilesBtn.addEventListener('click', () => {
                     uploadOptions.classList.add('hidden');
-                    openFileDialog();
+                    openFileDialogForUpload();
                 });
             }
             
@@ -3899,10 +3915,10 @@
                         </div>
                     </div>
                     <div class="flex items-center gap-2 mt-3 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button class="p-1 hover:bg-slate-600 rounded text-slate-400 hover:text-white transition-colors" 
+                        ${!isFolder ? `<button class="p-1 hover:bg-slate-600 rounded text-slate-400 hover:text-white transition-colors" 
                                 onclick="event.stopPropagation(); downloadDriveFile('${file.id}', '${file.name}')" title="Download">
                             <i class="fas fa-download text-xs"></i>
-                        </button>
+                        </button>` : ''}
                         ${!isFolder ? `<button class="p-1 hover:bg-slate-600 rounded text-slate-400 hover:text-white transition-colors" 
                                 onclick="event.stopPropagation(); decryptDriveFile('${file.id}', '${file.name}')" title="Decrypt">
                             <i class="fas fa-unlock text-xs"></i>
@@ -3919,6 +3935,7 @@
             card.addEventListener('dblclick', () => {
                 if (isFolder) {
                     console.log('Navigate to folder:', file.name);
+                    navigateToFolder(file.id, file.name);
                 } else {
                     downloadDriveFile(file.id, file.name);
                 }
@@ -3951,10 +3968,10 @@
                 <td class="py-3 px-4 text-slate-400">${size}</td>
                 <td class="py-3 px-4">
                     <div class="flex items-center gap-2">
-                        <button class="p-1 hover:bg-slate-600 rounded text-slate-400 hover:text-white transition-colors" 
+                        ${!isFolder ? `<button class="p-1 hover:bg-slate-600 rounded text-slate-400 hover:text-white transition-colors" 
                                 onclick="downloadDriveFile('${file.id}', '${file.name}')" title="Download">
                             <i class="fas fa-download"></i>
-                        </button>
+                        </button>` : ''}
                         ${!isFolder ? `<button class="p-1 hover:bg-slate-600 rounded text-slate-400 hover:text-white transition-colors" 
                                 onclick="decryptDriveFile('${file.id}', '${file.name}')" title="Decrypt">
                             <i class="fas fa-unlock"></i>
@@ -3966,6 +3983,16 @@
                     </div>
                 </td>
             `;
+            
+            // Add double-click handler for list view
+            row.addEventListener('dblclick', () => {
+                if (isFolder) {
+                    console.log('Navigate to folder:', file.name);
+                    navigateToFolder(file.id, file.name);
+                } else {
+                    downloadDriveFile(file.id, file.name);
+                }
+            });
             
             return row;
         }
@@ -4024,12 +4051,57 @@
             updateEnhancedDriveFilesList();
         }
         
+        // Folder navigation functions
+        function navigateToFolder(folderId, folderName) {
+            // Add current location to history before navigating
+            if (currentFolderId !== folderId) {
+                folderHistory.push({
+                    id: currentFolderId,
+                    name: currentFolderName
+                });
+            }
+            
+            loadDriveFiles(folderId, folderName);
+        }
+        
+        function navigateBack() {
+            if (folderHistory.length > 0) {
+                const previousFolder = folderHistory.pop();
+                loadDriveFiles(previousFolder.id, previousFolder.name);
+            }
+        }
+        
+        function navigateToRoot() {
+            folderHistory = []; // Clear history when going to root
+            loadDriveFiles(null, 'My Drive');
+        }
+        
+        function updateBreadcrumb() {
+            const breadcrumb = document.getElementById('drive-breadcrumb');
+            if (!breadcrumb) return;
+            
+            let breadcrumbHTML = `
+                <i class="fas fa-home text-slate-400"></i>
+                <span class="text-white font-medium cursor-pointer hover:text-primary transition-colors" 
+                      onclick="navigateToRoot()">My Drive</span>
+            `;
+            
+            if (currentFolderId && currentFolderName !== 'My Drive') {
+                breadcrumbHTML += `
+                    <i class="fas fa-chevron-right text-slate-500 mx-2"></i>
+                    <span class="text-white font-medium">${currentFolderName}</span>
+                `;
+            }
+            
+            breadcrumb.innerHTML = breadcrumbHTML;
+        }
+        
         // Enhanced file operations
         async function downloadDriveFile(fileId, fileName) {
             try {
                 showToast(`Downloading ${fileName}...`, 'info');
                 if (window.cloudApi?.downloadGDriveFile) {
-                    const result = await window.cloudApi.downloadGDriveFile(fileId, fileName);
+                    const result = await window.cloudApi.downloadGDriveFile({ fileId, fileName });
                     if (result?.success) {
                         showToast(`Successfully downloaded ${fileName}`, 'success');
                     } else {
@@ -4098,17 +4170,20 @@
             // TODO: Implement bulk delete
         }
         
-        async function openFileDialog() {
+        // Removed duplicate openFileDialog function - using the main one defined earlier
+        
+        async function openFileDialogForUpload() {
             try {
                 if (window.api?.openFileDialog) {
                     const result = await window.api.openFileDialog();
-                    if (result && !result.canceled && result.filePaths.length > 0) {
-                        // TODO: Upload selected files
-                        showToast(`Upload functionality coming soon`, 'info');
+                    if (result && !result.canceled && result.filePaths && result.filePaths.length > 0) {
+                        // TODO: Upload selected files to Google Drive
+                        showToast(`Upload functionality coming soon - ${result.filePaths.length} files selected`, 'info');
+                        console.log('Files selected for upload:', result.filePaths);
                     }
                 }
             } catch (error) {
-                console.error('Error opening file dialog:', error);
+                console.error('Error opening file dialog for upload:', error);
                 showToast('Error opening file dialog', 'error');
             }
         }
