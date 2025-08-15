@@ -9,8 +9,8 @@ module.exports = {
    */
   entry: './src/main/main.js',
   output: {
-    path: path.resolve(__dirname, '.webpack/main'),
-    filename: 'main.js',
+    path: path.resolve(__dirname, '.webpack'),
+    filename: 'main/index.js',
     library: {
       type: 'commonjs2'
     }
@@ -20,15 +20,15 @@ module.exports = {
     rules: require('./webpack.rules'),
   },
   resolve: {
-    extensions: ['.js', '.json']
+    extensions: ['.js', '.json'],
+    alias: {
+      '@config': path.resolve(__dirname, 'src/config'),
+      '@crypto': path.resolve(__dirname, 'src/crypto')
+    }
   },
   // Exclude certain modules from bundling that cause problems
   externals: {
-    'sodium-native': 'commonjs2 sodium-native',
     'keytar': 'commonjs2 keytar',
-    'sqlite3': 'commonjs2 sqlite3',
-    'better-sqlite3': 'commonjs2 better-sqlite3',
-    'serialport': 'commonjs2 serialport',
     'electron': 'commonjs2 electron'
   },
   target: 'electron-main',

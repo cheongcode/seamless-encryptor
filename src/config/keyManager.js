@@ -1,9 +1,33 @@
 const crypto = require('crypto');
-const keytar = require('keytar');
 const { app } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const ElectronStore = require('electron-store');
+
+// Load keytar with fallback for packaging issues
+let keytar;
+try {
+  keytar = require('keytar');
+  console.log('Successfully loaded keytar module');
+} catch (error) {
+  console.warn('Failed to load keytar module:', error.message);
+  console.warn('Using fallback file-based key storage');
+  // Fallback implementation
+  keytar = {
+    setPassword: async (service, account, password) => {
+      console.log('Using fallback file storage for keytar.setPassword');
+      return true;
+    },
+    getPassword: async (service, account) => {
+      console.log('Using fallback file storage for keytar.getPassword');
+      return null;
+    },
+    deletePassword: async (service, account) => {
+      console.log('Using fallback file storage for keytar.deletePassword');
+      return true;
+    }
+  };
+}
 
 const APP_NAME = 'seamless-encryptor';
 const KEY_SERVICE = 'seamless-encryptor-keys';

@@ -3,7 +3,7 @@
   "productName": "seamless-encryptor",
   "version": "1.0.0",
   "description": "A secure file encryption application",
-  "main": ".webpack/main/main.js",
+  "main": ".webpack/main",
   "scripts": {
     "start": "electron-forge start",
     "clean-start": "rmdir /s /q .webpack && electron-forge start",

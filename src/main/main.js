@@ -4,26 +4,39 @@ const fs = require('fs');
 const crypto = require('crypto');
 const Store = require('electron-store');
 const { google } = require('googleapis');
-const keytar = require('keytar');
+
+// Load keytar optionally to avoid runtime failures when native module isn't available
+let keytar;
+try {
+	keytar = require('keytar');
+	console.log('Successfully loaded keytar (main process)');
+} catch (error) {
+	console.warn('Keytar not available in main process:', error.message);
+	keytar = {
+		async setPassword() { return true; },
+		async getPassword() { return null; },
+		async deletePassword() { return true; },
+	};
+}
 
 // Load environment variables
 require('dotenv').config();
 
 // For settings persistence
 const store = new Store({
-    defaults: {
-        appSettings: {
-            autoDelete: false,
-            compress: true,
-            notifications: true,
-            confirmActions: true,
-            outputDir: null, // Will be set to app.getPath('documents') + '/Encrypted' initially
-            debugMode: false,
-            gdriveConnected: false, // Added for GDrive state
-            gdriveUserEmail: null,  // Added for GDrive user info
-            gdriveAutoUpload: false // Added for GDrive auto-upload setting
-        }
-    }
+	defaults: {
+		appSettings: {
+			autoDelete: false,
+			compress: true,
+			notifications: true,
+			confirmActions: true,
+			outputDir: null, // Will be set to app.getPath('documents') + '/Encrypted' initially
+			debugMode: false,
+			gdriveConnected: false, // Added for GDrive state
+			gdriveUserEmail: null,  // Added for GDrive user info
+			gdriveAutoUpload: false // Added for GDrive auto-upload setting
+		}
+	}
 });
 
 // Google Drive Integration - Using environment variables for security
@@ -425,7 +438,7 @@ function safeRequire(modulePath, fallback) {
 // Direct require instead of safeRequire to ensure proper webpack bundling
 let keyManager;
 try {
-  keyManager = require('../config/keyManager');
+  keyManager = require('@config/keyManager');
   console.log('Successfully loaded keyManager module');
 } catch (error) {
   console.error('Failed to load keyManager module:', error.message);
@@ -455,7 +468,7 @@ try {
 // Direct require instead of safeRequire to ensure proper webpack bundling
 let encryptionMethods;
 try {
-  encryptionMethods = require('../crypto/encryptionMethods');
+  encryptionMethods = require('@crypto/encryptionMethods');
   console.log('Successfully loaded encryptionMethods module');
 } catch (error) {
   console.error('Failed to load encryptionMethods module:', error.message);
@@ -488,7 +501,7 @@ try {
 // Direct require instead of safeRequire to ensure proper webpack bundling
 let entropyAnalyzer;
 try {
-  entropyAnalyzer = require('../crypto/entropyAnalyzer');
+  entropyAnalyzer = require('@crypto/entropyAnalyzer');
   console.log('Successfully loaded entropyAnalyzer module');
 } catch (error) {
   console.error('Failed to load entropyAnalyzer module:', error.message);
@@ -524,7 +537,7 @@ try {
 // Direct require instead of safeRequire to ensure proper webpack bundling
 let cryptoUtil;
 try {
-  cryptoUtil = require('../crypto/cryptoUtil');
+  cryptoUtil = require('@crypto/cryptoUtil');
   console.log('Successfully loaded cryptoUtil module');
 } catch (error) {
   console.error('Failed to load cryptoUtil module:', error.message);

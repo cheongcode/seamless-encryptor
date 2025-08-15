@@ -4,7 +4,9 @@ const path = require('path');
 
 module.exports = {
   packagerConfig: {
-    asar: true,
+    asar: false,
+    osxSign: false,
+    osxNotarize: false
   },
   rebuildConfig: {},
   makers: [
