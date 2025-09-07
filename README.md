@@ -95,9 +95,4 @@ npm run package        # create OS-specific distributables
 - `npm run package` – package the app for your platform.
 - `npm run make` – create distributables (DMG/ZIP/DEB/RPM depending on OS).
 
-## Notes
-
-- Unused modules were removed and code/comments were simplified for clarity.
-- The UI is intentionally minimal. You can extend it by calling the existing `window.api` methods.
-
 
