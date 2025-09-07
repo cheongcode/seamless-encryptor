@@ -905,23 +905,22 @@ const { app } = __webpack_require__(/*! electron */ "electron");
 const fs = __webpack_require__(/*! fs */ "fs");
 const path = __webpack_require__(/*! path */ "path");
 
-// Key storage path
-const KEY_STORAGE_PATH = app ? path.join(app.getPath('userData'), 'keys') : '';
+// Key storage directory
+function getKeyStoragePath() {
+  if (!app) return '';
+  return path.join(app.getPath('userData'), 'keys');
+}
 
-/**
- * Make sure we have a place to store keys
- */
+// Ensure storage exists
 function ensureKeyStorageExists() {
-  if (!KEY_STORAGE_PATH) return;
-  
-  if (!fs.existsSync(KEY_STORAGE_PATH)) {
-    fs.mkdirSync(KEY_STORAGE_PATH, { recursive: true });
+  const storagePath = getKeyStoragePath();
+  if (!storagePath) return;
+  if (!fs.existsSync(storagePath)) {
+    fs.mkdirSync(storagePath, { recursive: true });
   }
 }
 
-/**
- * Create a new master encryption key
- */
+// Generate master key
 function generateMasterKey() {
   return crypto.randomBytes(32);
 }
@@ -929,15 +928,13 @@ function generateMasterKey() {
 // Keep master key in memory for quick access
 let masterKey = null;
 
-/**
- * Get or create master key
- */
+// Load or create master key
 async function getMasterKey() {
   if (masterKey) return masterKey;
   
   try {
     ensureKeyStorageExists();
-    const keyPath = path.join(KEY_STORAGE_PATH, 'master.key');
+    const keyPath = path.join(getKeyStoragePath(), 'master.key');
     
     if (fs.existsSync(keyPath)) {
       masterKey = await fs.promises.readFile(keyPath);
@@ -953,143 +950,27 @@ async function getMasterKey() {
   }
 }
 
-/**
- * Save an encrypted file key
- */
-function storeFileKey(fileId, encryptedKey) {
+// Persist master key
+async function setMasterKey(keyBuffer) {
   try {
+    if (!Buffer.isBuffer(keyBuffer) || keyBuffer.length !== 32) {
+      throw new Error('Master key must be a 32-byte Buffer');
+    }
     ensureKeyStorageExists();
-    const keyPath = path.join(KEY_STORAGE_PATH, `${fileId}.key`);
-    fs.writeFileSync(keyPath, JSON.stringify(encryptedKey));
+    const keyPath = path.join(getKeyStoragePath(), 'master.key');
+    await fs.promises.writeFile(keyPath, keyBuffer);
+    masterKey = keyBuffer;
+    return true;
   } catch (error) {
-    console.error('Error storing file key:', error);
+    console.error('Error setting master key:', error);
     throw error;
-  }
-}
-
-/**
- * Retrieve an encrypted file key
- */
-function getFileKey(fileId) {
-  try {
-    ensureKeyStorageExists();
-    const keyPath = path.join(KEY_STORAGE_PATH, `${fileId}.key`);
-    
-    if (fs.existsSync(keyPath)) {
-      const data = fs.readFileSync(keyPath, 'utf8');
-      return JSON.parse(data);
-    }
-    
-    return null;
-  } catch (error) {
-    console.error('Error getting file key:', error);
-    return null;
-  }
-}
-
-/**
- * Delete a file key
- */
-function removeFileKey(fileId) {
-  try {
-    ensureKeyStorageExists();
-    const keyPath = path.join(KEY_STORAGE_PATH, `${fileId}.key`);
-    
-    if (fs.existsSync(keyPath)) {
-      fs.unlinkSync(keyPath);
-      return true;
-    }
-    
-    return false;
-  } catch (error) {
-    console.error('Error removing file key:', error);
-    return false;
   }
 }
 
 module.exports = {
   generateMasterKey,
   getMasterKey,
-  storeFileKey,
-  getFileKey,
-  removeFileKey
-}; 
-
-/***/ }),
-
-/***/ "./src/crypto/encryption.js":
-/*!**********************************!*\
-  !*** ./src/crypto/encryption.js ***!
-  \**********************************/
-/***/ ((module, __unused_webpack_exports, __webpack_require__) => {
-
-const crypto = __webpack_require__(/*! crypto */ "crypto");
-
-/**
- * Generate a random encryption key
- */
-function generateKey() {
-    return crypto.randomBytes(32);
-}
-
-/**
- * Encrypt data using AES-256-GCM
- */
-function encrypt(data, key) {
-    const iv = crypto.randomBytes(16);
-    const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
-    
-    const encrypted = Buffer.concat([
-        cipher.update(data),
-        cipher.final()
-    ]);
-    
-    const authTag = cipher.getAuthTag();
-    
-    return {
-        encryptedData: encrypted,
-        iv,
-        tag: authTag
-    };
-}
-
-/**
- * Decrypt data using AES-256-GCM
- */
-function decrypt(encryptedObj, key) {
-    const { encryptedData, iv, tag } = encryptedObj;
-    const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
-    decipher.setAuthTag(tag);
-    
-    return Buffer.concat([
-        decipher.update(encryptedData),
-        decipher.final()
-    ]);
-}
-
-/**
- * Encrypt a file key with the master key
- */
-function encryptKey(fileKey, masterKey) {
-    return encrypt(fileKey, masterKey);
-}
-
-/**
- * Decrypt a file key with the master key
- */
-function decryptKey(encryptedKey, masterKey) {
-    return decrypt(encryptedKey, masterKey);
-}
-
-module.exports = {
-    generateKey,
-    encrypt,
-    decrypt,
-    encryptKey,
-    decryptKey,
-    randomBytes: crypto.randomBytes,
-    createCipheriv: crypto.createCipheriv,
-    createDecipheriv: crypto.createDecipheriv
+  setMasterKey
 }; 
 
 /***/ }),
@@ -1224,8 +1105,7 @@ const { app, BrowserWindow, ipcMain, dialog } = __webpack_require__(/*! electron
 const path = __webpack_require__(/*! path */ "path");
 const fs = __webpack_require__(/*! fs */ "fs");
 const crypto = __webpack_require__(/*! crypto */ "crypto");
-// Import utility modules
-const cryptoUtil = __webpack_require__(/*! ../crypto/encryption */ "./src/crypto/encryption.js");
+// Key management
 const keyManager = __webpack_require__(/*! ../config/keyManager */ "./src/config/keyManager.js");
 
 let mainWindow;
@@ -1242,13 +1122,13 @@ function createWindow() {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
-      preload: 'C:\\Users\\brand\\GitHub\\seamless-encryptor\\.webpack\\renderer\\main_window\\preload.js',
+      preload: '/Users/brand/Documents/GitHub/seamless-encryptor/.webpack/renderer/main_window/preload.js',
       sandbox: true,
       webSecurity: true
     },
   });
 
-  // Load the index.html from webpack
+  // Load UI from webpack
   mainWindow.loadURL('http://localhost:3000/main_window');
 
   // Open DevTools in development mode
@@ -1256,7 +1136,7 @@ function createWindow() {
     mainWindow.webContents.openDevTools();
   }
 
-  // Set proper CSP headers
+  // Set CSP headers
   mainWindow.webContents.session.webRequest.onHeadersReceived((details, callback) => {
     callback({
       responseHeaders: {
@@ -1301,18 +1181,15 @@ app.on('window-all-closed', () => {
   }
 });
 
-// Storage service for saving encrypted files
+// Save/read/delete encrypted blobs under userData/encrypted
 const storageService = {
   uploadFile: async (key, data) => {
-    // For now, just save to the app's user data folder
     const storageDir = path.join(app.getPath('userData'), 'encrypted');
     
-    // Create base directory if needed
     if (!fs.existsSync(storageDir)) {
       fs.mkdirSync(storageDir, { recursive: true });
     }
     
-    // Create subdirectory for this file
     const keyParts = key.split('/');
     if (keyParts.length > 1) {
       const dirPart = path.join(storageDir, keyParts[0]);
@@ -1348,40 +1225,45 @@ const storageService = {
   }
 };
 
-// Helper function to decrypt data
-async function decryptData(encryptedData, encryptionKey) {
-  try {
-    const key = Buffer.from(encryptionKey, 'hex');
-    const iv = encryptedData.slice(0, 16);
-    const authTag = encryptedData.slice(16, 32);
-    const encrypted = encryptedData.slice(32);
-    
-    const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
-    decipher.setAuthTag(authTag);
-    
-    return Buffer.concat([
-      decipher.update(encrypted),
-      decipher.final()
-    ]);
-  } catch (error) {
-    console.error('Decryption failed:', error);
-    throw new Error(`Decryption failed: ${error.message}`);
+// Decrypts Buffer. Tries [iv|tag|ciphertext] then [iv|ciphertext|tag]
+async function decryptData(encryptedData, encryptionKeyBuffer) {
+  if (!Buffer.isBuffer(encryptedData)) {
+    encryptedData = Buffer.from(encryptedData);
   }
+  if (encryptedData.length < 33) {
+    throw new Error('Invalid encrypted payload');
+  }
+  const tryLayouts = [
+    () => ({ iv: encryptedData.slice(0, 16), tag: encryptedData.slice(16, 32), ct: encryptedData.slice(32) }),
+    () => ({ iv: encryptedData.slice(0, 16), tag: encryptedData.slice(encryptedData.length - 16), ct: encryptedData.slice(16, encryptedData.length - 16) })
+  ];
+  let lastError = null;
+  for (const pick of tryLayouts) {
+    try {
+      const { iv, tag, ct } = pick();
+      const decipher = crypto.createDecipheriv('aes-256-gcm', encryptionKeyBuffer, iv);
+      decipher.setAuthTag(tag);
+      return Buffer.concat([decipher.update(ct), decipher.final()]);
+    } catch (e) {
+      lastError = e;
+    }
+  }
+  throw new Error(`Decryption failed: ${lastError ? lastError.message : 'Unknown error'}`);
 }
 
-// IPC Handlers
+// IPC
 ipcMain.handle('encrypt-file', async (event, filePath) => {
   try {
-    // Start progress tracking
+    // Progress
     event.sender.send('progress', 0);
     
-    // Get the encryption key and read the file
-    const key = getEncryptionKey();
+    // Key + file
+    const key = await getEncryptionKey();
     const inputBuffer = await fs.promises.readFile(filePath);
     
     event.sender.send('progress', 20);
     
-    // Create initialization vector and encrypt the file
+    // Encrypt
     const iv = crypto.randomBytes(16);
     const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
     
@@ -1392,11 +1274,11 @@ ipcMain.handle('encrypt-file', async (event, filePath) => {
     
     event.sender.send('progress', 50);
     
-    // Get the authentication tag and combine everything
+    // Assemble [iv|tag|ciphertext]
     const authTag = cipher.getAuthTag();
     const encryptedData = Buffer.concat([iv, authTag, encrypted]);
     
-    // Generate ID and save encrypted file
+    // Save
     const fileId = crypto.randomBytes(16).toString('hex');
     const fileName = path.basename(filePath);
     const storageKey = `${fileId}/${fileName}.enc`;
@@ -1423,28 +1305,33 @@ ipcMain.handle('encrypt-file', async (event, filePath) => {
   }
 });
 
-ipcMain.handle('decrypt-file', async (event, encryptedData) => {
+ipcMain.handle('decrypt-file', async (_event, encryptedData) => {
   try {
-    const key = getEncryptionKey();
-    const iv = encryptedData.slice(0, 16);
-    const authTag = encryptedData.slice(16, 32);
-    const encrypted = encryptedData.slice(32);
-    
-    const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
-    decipher.setAuthTag(authTag);
-    
-    const decrypted = Buffer.concat([
-      decipher.update(encrypted),
-      decipher.final()
-    ]);
-    
-    return decrypted;
+    const key = await getEncryptionKey();
+    return await decryptData(Buffer.from(encryptedData), key);
   } catch (error) {
-    event.sender.send('error', `Decryption failed: ${error.message}`);
+    console.error('Decryption failed:', error);
     return {
       success: false,
       error: error.message
     };
+  }
+});
+
+// Decrypt an encrypted .enc file by path and return a temp file path
+ipcMain.handle('decrypt-file-from-path', async (_event, encryptedFilePath) => {
+  try {
+    const key = await getEncryptionKey();
+    const encryptedData = await fs.promises.readFile(encryptedFilePath);
+    const decrypted = await decryptData(encryptedData, key);
+    const defaultName = path.basename(encryptedFilePath).replace(/\.enc$/i, '');
+    const tempDir = path.join(app.getPath('temp'), 'seamless-encryptor');
+    if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
+    const tempOut = path.join(tempDir, `${Date.now()}-${defaultName || 'decrypted'}`);
+    await fs.promises.writeFile(tempOut, decrypted);
+    return { success: true, path: tempOut };
+  } catch (error) {
+    return { success: false, error: error.message };
   }
 });
 
@@ -1454,7 +1341,7 @@ ipcMain.handle('download-file', async (event, { fileId, fileName }) => {
         event.sender.send('download-progress', { progress: 0, status: 'Starting download...' });
         
         // Get encryption key
-        const encryptionKey = getEncryptionKey();
+        const encryptionKey = await getEncryptionKey();
         if (!encryptionKey) {
             throw new Error('Encryption key not found');
         }
@@ -1468,7 +1355,7 @@ ipcMain.handle('download-file', async (event, { fileId, fileName }) => {
 
         // Decrypt the data
         event.sender.send('download-progress', { progress: 50, status: 'Decrypting file...' });
-        const decryptedData = await decryptData(encryptedData, encryptionKey.toString('hex'));
+        const decryptedData = await decryptData(encryptedData, encryptionKey);
 
         // Save the decrypted file
         event.sender.send('download-progress', { progress: 75, status: 'Saving file...' });
@@ -1554,26 +1441,32 @@ ipcMain.handle('delete-file', async (event, fileId) => {
   }
 });
 
-ipcMain.handle('generate-key', () => {
-  const key = crypto.randomBytes(32);
+ipcMain.handle('generate-key', async () => {
+  const key = keyManager.generateMasterKey();
+  await keyManager.setMasterKey(key);
   return key.toString('hex');
 });
 
-let encryptionKey = null;
-
-ipcMain.handle('set-key', (event, key) => {
-  encryptionKey = Buffer.from(key, 'hex');
+ipcMain.handle('set-key', async (event, key) => {
+  const keyBuffer = Buffer.from(key, 'hex');
+  if (keyBuffer.length !== 32) {
+    throw new Error('Invalid key length: expected 32 bytes');
+  }
+  await keyManager.setMasterKey(keyBuffer);
+  return true;
 });
 
-ipcMain.handle('get-key', () => {
-  return encryptionKey ? encryptionKey.toString('hex') : null;
+ipcMain.handle('get-key', async () => {
+  const key = await keyManager.getMasterKey();
+  return key ? key.toString('hex') : null;
 });
 
-function getEncryptionKey() {
-  if (!encryptionKey) {
+async function getEncryptionKey() {
+  const key = await keyManager.getMasterKey();
+  if (!key || key.length !== 32) {
     throw new Error('Encryption key not set');
   }
-  return encryptionKey;
+  return key;
 }
 
 ipcMain.handle('open-file-dialog', async () => {

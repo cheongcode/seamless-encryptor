@@ -122,24 +122,30 @@ const storageService = {
   }
 };
 
-// Decrypt payload Buffer laid out as [iv(16)][tag(16)][ciphertext]
+// Decrypts Buffer. Tries [iv|tag|ciphertext] then [iv|ciphertext|tag]
 async function decryptData(encryptedData, encryptionKeyBuffer) {
-  try {
-    const iv = encryptedData.slice(0, 16);
-    const authTag = encryptedData.slice(16, 32);
-    const encrypted = encryptedData.slice(32);
-    
-    const decipher = crypto.createDecipheriv('aes-256-gcm', encryptionKeyBuffer, iv);
-    decipher.setAuthTag(authTag);
-    
-    return Buffer.concat([
-      decipher.update(encrypted),
-      decipher.final()
-    ]);
-  } catch (error) {
-    console.error('Decryption failed:', error);
-    throw new Error(`Decryption failed: ${error.message}`);
+  if (!Buffer.isBuffer(encryptedData)) {
+    encryptedData = Buffer.from(encryptedData);
   }
+  if (encryptedData.length < 33) {
+    throw new Error('Invalid encrypted payload');
+  }
+  const tryLayouts = [
+    () => ({ iv: encryptedData.slice(0, 16), tag: encryptedData.slice(16, 32), ct: encryptedData.slice(32) }),
+    () => ({ iv: encryptedData.slice(0, 16), tag: encryptedData.slice(encryptedData.length - 16), ct: encryptedData.slice(16, encryptedData.length - 16) })
+  ];
+  let lastError = null;
+  for (const pick of tryLayouts) {
+    try {
+      const { iv, tag, ct } = pick();
+      const decipher = crypto.createDecipheriv('aes-256-gcm', encryptionKeyBuffer, iv);
+      decipher.setAuthTag(tag);
+      return Buffer.concat([decipher.update(ct), decipher.final()]);
+    } catch (e) {
+      lastError = e;
+    }
+  }
+  throw new Error(`Decryption failed: ${lastError ? lastError.message : 'Unknown error'}`);
 }
 
 // IPC
@@ -196,28 +202,33 @@ ipcMain.handle('encrypt-file', async (event, filePath) => {
   }
 });
 
-ipcMain.handle('decrypt-file', async (event, encryptedData) => {
+ipcMain.handle('decrypt-file', async (_event, encryptedData) => {
   try {
     const key = await getEncryptionKey();
-    const iv = encryptedData.slice(0, 16);
-    const authTag = encryptedData.slice(16, 32);
-    const encrypted = encryptedData.slice(32);
-    
-    const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
-    decipher.setAuthTag(authTag);
-    
-    const decrypted = Buffer.concat([
-      decipher.update(encrypted),
-      decipher.final()
-    ]);
-    
-    return decrypted;
+    return await decryptData(Buffer.from(encryptedData), key);
   } catch (error) {
-    event.sender.send('error', `Decryption failed: ${error.message}`);
+    console.error('Decryption failed:', error);
     return {
       success: false,
       error: error.message
     };
+  }
+});
+
+// Decrypt an encrypted .enc file by path and return a temp file path
+ipcMain.handle('decrypt-file-from-path', async (_event, encryptedFilePath) => {
+  try {
+    const key = await getEncryptionKey();
+    const encryptedData = await fs.promises.readFile(encryptedFilePath);
+    const decrypted = await decryptData(encryptedData, key);
+    const defaultName = path.basename(encryptedFilePath).replace(/\.enc$/i, '');
+    const tempDir = path.join(app.getPath('temp'), 'seamless-encryptor');
+    if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
+    const tempOut = path.join(tempDir, `${Date.now()}-${defaultName || 'decrypted'}`);
+    await fs.promises.writeFile(tempOut, decrypted);
+    return { success: true, path: tempOut };
+  } catch (error) {
+    return { success: false, error: error.message };
   }
 });
 

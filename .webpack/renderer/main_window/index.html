@@ -177,7 +177,10 @@
         
         <div class="drop-zone" id="dropZone">
             <p>Drag and drop files here or</p>
-            <button id="selectFile">Select File</button>
+            <div style="display:flex; gap: .5rem; justify-content:center; flex-wrap: wrap;">
+                <button id="selectFile">Select File</button>
+                <button id="selectEncrypted">Decrypt .enc</button>
+            </div>
         </div>
 
         <div class="progress-container" id="progressContainer" style="display: none;">
@@ -196,6 +199,6 @@
         </div>
     </div>
 
-    <script src="renderer.js"></script>
+    <script src="/renderer.js"></script>
 </body>
 </html> 

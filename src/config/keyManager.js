@@ -3,13 +3,13 @@ const { app } = require('electron');
 const fs = require('fs');
 const path = require('path');
 
-// Return key storage directory
+// Key storage directory
 function getKeyStoragePath() {
   if (!app) return '';
   return path.join(app.getPath('userData'), 'keys');
 }
 
-// Ensure key storage directory exists
+// Ensure storage exists
 function ensureKeyStorageExists() {
   const storagePath = getKeyStoragePath();
   if (!storagePath) return;
@@ -18,7 +18,7 @@ function ensureKeyStorageExists() {
   }
 }
 
-// Generate 32-byte master key
+// Generate master key
 function generateMasterKey() {
   return crypto.randomBytes(32);
 }
@@ -26,7 +26,7 @@ function generateMasterKey() {
 // Keep master key in memory for quick access
 let masterKey = null;
 
-// Load existing master key or create one
+// Load or create master key
 async function getMasterKey() {
   if (masterKey) return masterKey;
   
@@ -48,7 +48,7 @@ async function getMasterKey() {
   }
 }
 
-// Persist provided master key and cache it
+// Persist master key
 async function setMasterKey(keyBuffer) {
   try {
     if (!Buffer.isBuffer(keyBuffer) || keyBuffer.length !== 32) {

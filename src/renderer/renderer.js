@@ -1,7 +1,8 @@
-// Handle UI events and encryption processes
+// UI handlers
 document.addEventListener('DOMContentLoaded', () => {
   const dropZone = document.getElementById('dropZone');
   const selectFileBtn = document.getElementById('selectFile');
+  const selectEncryptedBtn = document.getElementById('selectEncrypted');
   const progressContainer = document.getElementById('progressContainer');
   const progressBar = document.getElementById('progressBar');
   const status = document.getElementById('status');
@@ -46,6 +47,29 @@ document.addEventListener('DOMContentLoaded', () => {
           await handleSelectedFile(filePath);
       }
   });
+
+  // Decrypt button click
+  if (selectEncryptedBtn) {
+      selectEncryptedBtn.addEventListener('click', async () => {
+          const filePath = await window.api.openFileDialog();
+          if (!filePath) return;
+          try {
+              progressContainer.style.display = 'block';
+              progressBar.style.width = '0%';
+              status.textContent = 'Decrypting file...';
+              const result = await window.api.decryptFileFromPath(filePath);
+              if (result && result.success) {
+                  showSuccess('Decrypted to: ' + result.path);
+              } else {
+                  throw new Error((result && result.error) || 'Failed to decrypt file');
+              }
+          } catch (err) {
+              showError(`Error: ${err.message || 'Unknown error'}`);
+          } finally {
+              setTimeout(() => { progressContainer.style.display = 'none'; }, 1200);
+          }
+      });
+  }
 
   function preventDefaults(e) {
       e.preventDefault();

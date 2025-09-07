@@ -1,27 +1,25 @@
-// Preload script for secure IPC communication
-
 const { contextBridge, ipcRenderer } = require('electron');
 
-// Expose specific API methods to the renderer process
 contextBridge.exposeInMainWorld('api', {
-  // File operations
+  // Files
   encryptFile: (filePath) => ipcRenderer.invoke('encrypt-file', filePath),
   decryptFile: (encryptedData) => ipcRenderer.invoke('decrypt-file', encryptedData),
+  decryptFileFromPath: (filePath) => ipcRenderer.invoke('decrypt-file-from-path', filePath),
   downloadFile: (fileId, fileName) => ipcRenderer.invoke('download-file', { fileId, fileName }),
   downloadEncryptedFile: (fileId, fileName) => ipcRenderer.invoke('download-encrypted-file', { fileId, fileName }),
   deleteFile: (fileId) => ipcRenderer.invoke('delete-file', fileId),
   saveDroppedFile: (fileObject) => ipcRenderer.invoke('save-dropped-file', fileObject),
   
-  // Key management
+  // Keys
   generateKey: () => ipcRenderer.invoke('generate-key'),
   getKey: () => ipcRenderer.invoke('get-key'),
   setKey: (key) => ipcRenderer.invoke('set-key', key),
   
-  // File dialogs
+  // Dialogs
   openFileDialog: () => ipcRenderer.invoke('open-file-dialog'),
   saveFileDialog: () => ipcRenderer.invoke('save-file-dialog'),
   
-  // Event listeners
+  // Events
   onProgress: (callback) => {
     ipcRenderer.on('progress', (_event, value) => callback(value));
     return () => ipcRenderer.removeListener('progress', callback);
