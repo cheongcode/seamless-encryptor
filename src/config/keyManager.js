@@ -3,23 +3,22 @@ const { app } = require('electron');
 const fs = require('fs');
 const path = require('path');
 
-// Key storage path
-const KEY_STORAGE_PATH = app ? path.join(app.getPath('userData'), 'keys') : '';
+// Return key storage directory
+function getKeyStoragePath() {
+  if (!app) return '';
+  return path.join(app.getPath('userData'), 'keys');
+}
 
-/**
- * Make sure we have a place to store keys
- */
+// Ensure key storage directory exists
 function ensureKeyStorageExists() {
-  if (!KEY_STORAGE_PATH) return;
-  
-  if (!fs.existsSync(KEY_STORAGE_PATH)) {
-    fs.mkdirSync(KEY_STORAGE_PATH, { recursive: true });
+  const storagePath = getKeyStoragePath();
+  if (!storagePath) return;
+  if (!fs.existsSync(storagePath)) {
+    fs.mkdirSync(storagePath, { recursive: true });
   }
 }
 
-/**
- * Create a new master encryption key
- */
+// Generate 32-byte master key
 function generateMasterKey() {
   return crypto.randomBytes(32);
 }
@@ -27,15 +26,13 @@ function generateMasterKey() {
 // Keep master key in memory for quick access
 let masterKey = null;
 
-/**
- * Get or create master key
- */
+// Load existing master key or create one
 async function getMasterKey() {
   if (masterKey) return masterKey;
   
   try {
     ensureKeyStorageExists();
-    const keyPath = path.join(KEY_STORAGE_PATH, 'master.key');
+    const keyPath = path.join(getKeyStoragePath(), 'master.key');
     
     if (fs.existsSync(keyPath)) {
       masterKey = await fs.promises.readFile(keyPath);
@@ -51,64 +48,25 @@ async function getMasterKey() {
   }
 }
 
-/**
- * Save an encrypted file key
- */
-function storeFileKey(fileId, encryptedKey) {
+// Persist provided master key and cache it
+async function setMasterKey(keyBuffer) {
   try {
+    if (!Buffer.isBuffer(keyBuffer) || keyBuffer.length !== 32) {
+      throw new Error('Master key must be a 32-byte Buffer');
+    }
     ensureKeyStorageExists();
-    const keyPath = path.join(KEY_STORAGE_PATH, `${fileId}.key`);
-    fs.writeFileSync(keyPath, JSON.stringify(encryptedKey));
+    const keyPath = path.join(getKeyStoragePath(), 'master.key');
+    await fs.promises.writeFile(keyPath, keyBuffer);
+    masterKey = keyBuffer;
+    return true;
   } catch (error) {
-    console.error('Error storing file key:', error);
+    console.error('Error setting master key:', error);
     throw error;
-  }
-}
-
-/**
- * Retrieve an encrypted file key
- */
-function getFileKey(fileId) {
-  try {
-    ensureKeyStorageExists();
-    const keyPath = path.join(KEY_STORAGE_PATH, `${fileId}.key`);
-    
-    if (fs.existsSync(keyPath)) {
-      const data = fs.readFileSync(keyPath, 'utf8');
-      return JSON.parse(data);
-    }
-    
-    return null;
-  } catch (error) {
-    console.error('Error getting file key:', error);
-    return null;
-  }
-}
-
-/**
- * Delete a file key
- */
-function removeFileKey(fileId) {
-  try {
-    ensureKeyStorageExists();
-    const keyPath = path.join(KEY_STORAGE_PATH, `${fileId}.key`);
-    
-    if (fs.existsSync(keyPath)) {
-      fs.unlinkSync(keyPath);
-      return true;
-    }
-    
-    return false;
-  } catch (error) {
-    console.error('Error removing file key:', error);
-    return false;
   }
 }
 
 module.exports = {
   generateMasterKey,
   getMasterKey,
-  storeFileKey,
-  getFileKey,
-  removeFileKey
+  setMasterKey
 }; 

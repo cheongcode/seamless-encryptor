@@ -2,8 +2,7 @@ const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
-// Import utility modules
-const cryptoUtil = require('../crypto/encryption');
+// Key management
 const keyManager = require('../config/keyManager');
 
 let mainWindow;
@@ -26,7 +25,7 @@ function createWindow() {
     },
   });
 
-  // Load the index.html from webpack
+  // Load UI from webpack
   mainWindow.loadURL(MAIN_WINDOW_WEBPACK_ENTRY);
 
   // Open DevTools in development mode
@@ -34,7 +33,7 @@ function createWindow() {
     mainWindow.webContents.openDevTools();
   }
 
-  // Set proper CSP headers
+  // Set CSP headers
   mainWindow.webContents.session.webRequest.onHeadersReceived((details, callback) => {
     callback({
       responseHeaders: {
@@ -79,18 +78,15 @@ app.on('window-all-closed', () => {
   }
 });
 
-// Storage service for saving encrypted files
+// Save/read/delete encrypted blobs under userData/encrypted
 const storageService = {
   uploadFile: async (key, data) => {
-    // For now, just save to the app's user data folder
     const storageDir = path.join(app.getPath('userData'), 'encrypted');
     
-    // Create base directory if needed
     if (!fs.existsSync(storageDir)) {
       fs.mkdirSync(storageDir, { recursive: true });
     }
     
-    // Create subdirectory for this file
     const keyParts = key.split('/');
     if (keyParts.length > 1) {
       const dirPart = path.join(storageDir, keyParts[0]);
@@ -126,15 +122,14 @@ const storageService = {
   }
 };
 
-// Helper function to decrypt data
-async function decryptData(encryptedData, encryptionKey) {
+// Decrypt payload Buffer laid out as [iv(16)][tag(16)][ciphertext]
+async function decryptData(encryptedData, encryptionKeyBuffer) {
   try {
-    const key = Buffer.from(encryptionKey, 'hex');
     const iv = encryptedData.slice(0, 16);
     const authTag = encryptedData.slice(16, 32);
     const encrypted = encryptedData.slice(32);
     
-    const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
+    const decipher = crypto.createDecipheriv('aes-256-gcm', encryptionKeyBuffer, iv);
     decipher.setAuthTag(authTag);
     
     return Buffer.concat([
@@ -147,19 +142,19 @@ async function decryptData(encryptedData, encryptionKey) {
   }
 }
 
-// IPC Handlers
+// IPC
 ipcMain.handle('encrypt-file', async (event, filePath) => {
   try {
-    // Start progress tracking
+    // Progress
     event.sender.send('progress', 0);
     
-    // Get the encryption key and read the file
-    const key = getEncryptionKey();
+    // Key + file
+    const key = await getEncryptionKey();
     const inputBuffer = await fs.promises.readFile(filePath);
     
     event.sender.send('progress', 20);
     
-    // Create initialization vector and encrypt the file
+    // Encrypt
     const iv = crypto.randomBytes(16);
     const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
     
@@ -170,11 +165,11 @@ ipcMain.handle('encrypt-file', async (event, filePath) => {
     
     event.sender.send('progress', 50);
     
-    // Get the authentication tag and combine everything
+    // Assemble [iv|tag|ciphertext]
     const authTag = cipher.getAuthTag();
     const encryptedData = Buffer.concat([iv, authTag, encrypted]);
     
-    // Generate ID and save encrypted file
+    // Save
     const fileId = crypto.randomBytes(16).toString('hex');
     const fileName = path.basename(filePath);
     const storageKey = `${fileId}/${fileName}.enc`;
@@ -203,7 +198,7 @@ ipcMain.handle('encrypt-file', async (event, filePath) => {
 
 ipcMain.handle('decrypt-file', async (event, encryptedData) => {
   try {
-    const key = getEncryptionKey();
+    const key = await getEncryptionKey();
     const iv = encryptedData.slice(0, 16);
     const authTag = encryptedData.slice(16, 32);
     const encrypted = encryptedData.slice(32);
@@ -232,7 +227,7 @@ ipcMain.handle('download-file', async (event, { fileId, fileName }) => {
         event.sender.send('download-progress', { progress: 0, status: 'Starting download...' });
         
         // Get encryption key
-        const encryptionKey = getEncryptionKey();
+        const encryptionKey = await getEncryptionKey();
         if (!encryptionKey) {
             throw new Error('Encryption key not found');
         }
@@ -246,7 +241,7 @@ ipcMain.handle('download-file', async (event, { fileId, fileName }) => {
 
         // Decrypt the data
         event.sender.send('download-progress', { progress: 50, status: 'Decrypting file...' });
-        const decryptedData = await decryptData(encryptedData, encryptionKey.toString('hex'));
+        const decryptedData = await decryptData(encryptedData, encryptionKey);
 
         // Save the decrypted file
         event.sender.send('download-progress', { progress: 75, status: 'Saving file...' });
@@ -332,26 +327,32 @@ ipcMain.handle('delete-file', async (event, fileId) => {
   }
 });
 
-ipcMain.handle('generate-key', () => {
-  const key = crypto.randomBytes(32);
+ipcMain.handle('generate-key', async () => {
+  const key = keyManager.generateMasterKey();
+  await keyManager.setMasterKey(key);
   return key.toString('hex');
 });
 
-let encryptionKey = null;
-
-ipcMain.handle('set-key', (event, key) => {
-  encryptionKey = Buffer.from(key, 'hex');
+ipcMain.handle('set-key', async (event, key) => {
+  const keyBuffer = Buffer.from(key, 'hex');
+  if (keyBuffer.length !== 32) {
+    throw new Error('Invalid key length: expected 32 bytes');
+  }
+  await keyManager.setMasterKey(keyBuffer);
+  return true;
 });
 
-ipcMain.handle('get-key', () => {
-  return encryptionKey ? encryptionKey.toString('hex') : null;
+ipcMain.handle('get-key', async () => {
+  const key = await keyManager.getMasterKey();
+  return key ? key.toString('hex') : null;
 });
 
-function getEncryptionKey() {
-  if (!encryptionKey) {
+async function getEncryptionKey() {
+  const key = await keyManager.getMasterKey();
+  if (!key || key.length !== 32) {
     throw new Error('Encryption key not set');
   }
-  return encryptionKey;
+  return key;
 }
 
 ipcMain.handle('open-file-dialog', async () => {

@@ -27,7 +27,7 @@ module.exports = {
   output: {
     path: path.resolve(__dirname, '.webpack/renderer'),
     filename: '[name].js',
-    publicPath: './',
+    publicPath: '/',
   },
   target: 'web',
 }; 

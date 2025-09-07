@@ -154,4 +154,7 @@ yarn-error.log*
 # Electron-specific
 out/
 release/
+./webpack/
 .webpack/**/preload.js
+  "main": ".webpack/main/main.js",
+

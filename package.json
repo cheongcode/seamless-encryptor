@@ -40,9 +40,6 @@
     "mini-css-extract-plugin": "^2.7.7"
   },
   "dependencies": {
-    "crypto-js": "^4.2.0",
-    "electron-squirrel-startup": "^1.0.1",
-    "electron-store": "^8.1.0",
-    "keytar": "^7.9.0"
+    "electron-squirrel-startup": "^1.0.1"
   }
 }
