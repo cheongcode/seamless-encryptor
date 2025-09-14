@@ -2,16 +2,27 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline';">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://unpkg.com; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: https:;">
     <title>Seamless Encryptor</title>
     <style>
         :root {
-            --primary-color: #4a90e2;
-            --danger-color: #e25555;
-            --success-color: #4caf50;
-            --background-color: #f5f7fa;
-            --text-color: #333;
-            --border-color: #ddd;
+            --primary-color: #667eea;
+            --primary-hover: #5a67d8;
+            --secondary-color: #764ba2;
+            --danger-color: #f56565;
+            --danger-hover: #e53e3e;
+            --success-color: #48bb78;
+            --warning-color: #ed8936;
+            --background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            --card-background: #ffffff;
+            --text-color: #2d3748;
+            --text-muted: #718096;
+            --border-color: #e2e8f0;
+            --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            --shadow-lg: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+            --border-radius: 12px;
+            --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
         * {
@@ -21,132 +32,415 @@
         }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
-            background-color: var(--background-color);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+            background: var(--background);
             color: var(--text-color);
             line-height: 1.6;
-            padding: 2rem;
+            min-height: 100vh;
+            padding: 1rem;
+            overflow-x: hidden;
         }
 
-        .container {
-            max-width: 800px;
+        .app-container {
+            max-width: 1200px;
             margin: 0 auto;
-            background: white;
-            padding: 2rem;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            background: var(--card-background);
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow-lg);
+            overflow: hidden;
+            backdrop-filter: blur(10px);
         }
 
-        h1 {
+        .app-header {
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+            color: white;
+            padding: 2rem;
             text-align: center;
-            margin-bottom: 2rem;
+            position: relative;
+            overflow: hidden;
+        }
+
+
+        .app-header h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+            position: relative;
+            z-index: 1;
+        }
+
+        .app-header .subtitle {
+            opacity: 0.9;
+            font-size: 1.1rem;
+            position: relative;
+            z-index: 1;
+        }
+
+        .nav-tabs {
+            display: flex;
+            background: rgba(248, 250, 252, 0.8);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .nav-tab {
+            flex: 1;
+            padding: 1.25rem 1.5rem;
+            background: none;
+            border: none;
+            font-size: 1rem;
+            font-weight: 500;
+            color: var(--text-muted);
+            cursor: pointer;
+            transition: var(--transition);
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+
+        .nav-tab:hover {
             color: var(--primary-color);
+            background: rgba(102, 126, 234, 0.05);
+        }
+
+        .nav-tab.active {
+            color: var(--primary-color);
+            background: white;
+            box-shadow: var(--shadow);
+        }
+
+        .nav-tab.active::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, var(--primary-color), var(--secondary-color));
+            border-radius: 3px 3px 0 0;
+        }
+
+        .tab-content {
+            display: none;
+            padding: 2rem;
+            min-height: 500px;
+        }
+
+        .tab-content.active {
+            display: block;
+            animation: fadeIn 0.3s ease-in-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
         }
 
         .drop-zone {
             border: 2px dashed var(--border-color);
-            border-radius: 8px;
-            padding: 2rem;
+            border-radius: var(--border-radius);
+            padding: 3rem 2rem;
             text-align: center;
             margin-bottom: 2rem;
-            transition: all 0.3s ease;
+            transition: var(--transition);
+            background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .drop-zone::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(102, 126, 234, 0.1), transparent);
+            transition: left 0.6s;
+        }
+
+        .drop-zone:hover::before {
+            left: 100%;
         }
 
         .drop-zone.dragover {
             border-color: var(--primary-color);
-            background-color: rgba(74, 144, 226, 0.1);
+            background: linear-gradient(135deg, rgba(102, 126, 234, 0.05) 0%, rgba(118, 75, 162, 0.05) 100%);
+            transform: scale(1.02);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .drop-zone-icon {
+            width: 80px;
+            height: 80px;
+            margin: 0 auto 1.5rem;
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 2rem;
+        }
+
+        .drop-zone h3 {
+            font-size: 1.5rem;
+            margin-bottom: 0.5rem;
+            color: var(--text-color);
         }
 
         .drop-zone p {
-            margin-bottom: 1rem;
-            color: #666;
+            margin-bottom: 2rem;
+            color: var(--text-muted);
+            font-size: 1.1rem;
         }
 
-        button {
-            background-color: var(--primary-color);
+        .button-group {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-hover) 100%);
             color: white;
             border: none;
-            padding: 0.5rem 1rem;
-            border-radius: 4px;
+            padding: 0.875rem 1.75rem;
+            border-radius: 8px;
             cursor: pointer;
             font-size: 1rem;
-            transition: background-color 0.3s ease;
-        }
-
-        button:hover {
-            background-color: #357abd;
-        }
-
-        button.delete {
-            background-color: var(--danger-color);
-        }
-
-        button.delete:hover {
-            background-color: #c74444;
-        }
-
-        .progress-container {
-            margin: 1rem 0;
-        }
-
-        .progress-bar {
-            background-color: #eee;
-            border-radius: 4px;
-            height: 8px;
+            font-weight: 500;
+            transition: var(--transition);
+            box-shadow: var(--shadow);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            text-decoration: none;
+            position: relative;
             overflow: hidden;
         }
 
+        .btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+            transition: left 0.6s;
+        }
+
+        .btn:hover::before {
+            left: 100%;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        .btn.secondary {
+            background: linear-gradient(135deg, var(--text-muted) 0%, #4a5568 100%);
+        }
+
+        .btn.danger {
+            background: linear-gradient(135deg, var(--danger-color) 0%, var(--danger-hover) 100%);
+        }
+
+        .btn.success {
+            background: linear-gradient(135deg, var(--success-color) 0%, #38a169 100%);
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .card {
+            background: white;
+            border-radius: var(--border-radius);
+            padding: 2rem;
+            box-shadow: var(--shadow);
+            margin-bottom: 2rem;
+            border: 1px solid var(--border-color);
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 2px solid var(--border-color);
+        }
+
+        .card-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: var(--text-color);
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .progress-container {
+            margin: 2rem 0;
+            padding: 1.5rem;
+            background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+            border-radius: var(--border-radius);
+            border: 1px solid var(--border-color);
+        }
+
+        .progress-bar {
+            background-color: #e2e8f0;
+            border-radius: 8px;
+            height: 12px;
+            overflow: hidden;
+            position: relative;
+        }
+
         .progress {
-            background-color: var(--primary-color);
+            background: linear-gradient(90deg, var(--primary-color), var(--secondary-color));
             height: 100%;
             width: 0;
             transition: width 0.3s ease;
+            border-radius: 8px;
+            position: relative;
+        }
+
+        .progress::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+            animation: shimmer 2s infinite;
+        }
+
+        @keyframes shimmer {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(100%); }
         }
 
         .status {
             text-align: center;
-            margin-top: 0.5rem;
-            color: #666;
+            margin-top: 1rem;
+            color: var(--text-muted);
+            font-weight: 500;
         }
 
-        .error {
-            background-color: #ffebee;
+        .alert {
+            padding: 1rem 1.5rem;
+            border-radius: var(--border-radius);
+            margin: 1.5rem 0;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            border-left: 4px solid;
+        }
+
+        .alert.error {
+            background: linear-gradient(135deg, #fed7d7 0%, #feb2b2 100%);
             color: var(--danger-color);
-            padding: 1rem;
-            border-radius: 4px;
-            margin: 1rem 0;
+            border-left-color: var(--danger-color);
         }
 
-        .success {
-            background-color: #e8f5e9;
+        .alert.success {
+            background: linear-gradient(135deg, #c6f6d5 0%, #9ae6b4 100%);
             color: var(--success-color);
-            padding: 1rem;
-            border-radius: 4px;
-            margin: 1rem 0;
+            border-left-color: var(--success-color);
+        }
+
+        .alert.warning {
+            background: linear-gradient(135deg, #feebc8 0%, #fbd38d 100%);
+            color: var(--warning-color);
+            border-left-color: var(--warning-color);
         }
 
         .file-list {
-            margin-top: 2rem;
-        }
-
-        .file-list h2 {
-            margin-bottom: 1rem;
-            color: var(--text-color);
+            display: grid;
+            gap: 1rem;
         }
 
         .file-item {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 1rem;
+            padding: 1.5rem;
             border: 1px solid var(--border-color);
-            border-radius: 4px;
-            margin-bottom: 0.5rem;
-            background-color: white;
+            border-radius: var(--border-radius);
+            background: white;
+            transition: var(--transition);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .file-item::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 4px;
+            height: 100%;
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            transform: scaleY(0);
+            transition: transform 0.3s ease;
+        }
+
+        .file-item:hover::before {
+            transform: scaleY(1);
+        }
+
+        .file-item:hover {
+            box-shadow: var(--shadow-lg);
+            transform: translateY(-2px);
+        }
+
+        .file-info {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            flex: 1;
+        }
+
+        .file-icon {
+            width: 48px;
+            height: 48px;
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            border-radius: var(--border-radius);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 0.875rem;
+        }
+
+        .file-details {
+            flex: 1;
         }
 
         .file-name {
-            font-weight: 500;
+            font-weight: 600;
+            color: var(--text-color);
+            margin-bottom: 0.25rem;
+        }
+
+        .file-meta {
+            font-size: 0.875rem;
+            color: var(--text-muted);
         }
 
         .file-actions {
@@ -154,13 +448,134 @@
             gap: 0.5rem;
         }
 
-        @media (max-width: 600px) {
+        .file-actions .btn {
+            padding: 0.5rem 1rem;
+            font-size: 0.875rem;
+        }
+
+        .key-section {
+            background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+            border-radius: var(--border-radius);
+            padding: 2rem;
+            border: 1px solid var(--border-color);
+        }
+
+        .key-display {
+            background: white;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin: 1.5rem 0;
+            font-family: 'Monaco', 'Menlo', 'SF Mono', 'Consolas', monospace;
+            font-size: 0.875rem;
+            word-break: break-all;
+            color: var(--text-muted);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .key-display::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(45deg, transparent 40%, rgba(102, 126, 234, 0.03) 50%, transparent 60%);
+            animation: keyShimmer 3s infinite;
+        }
+
+        @keyframes keyShimmer {
+            0%, 100% { transform: translateX(-100%); }
+            50% { transform: translateX(100%); }
+        }
+
+        .key-actions {
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .key-generation-wizard {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: var(--border-radius);
+            padding: 2rem;
+            margin-bottom: 2rem;
+            text-align: center;
+        }
+
+        .key-generation-wizard h3 {
+            margin-bottom: 1rem;
+            font-size: 1.5rem;
+        }
+
+        .key-generation-wizard p {
+            margin-bottom: 2rem;
+            opacity: 0.9;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 4rem 2rem;
+            color: var(--text-muted);
+        }
+
+        .empty-state-icon {
+            width: 80px;
+            height: 80px;
+            margin: 0 auto 1.5rem;
+            background: linear-gradient(135deg, #f1f5f9, #e2e8f0);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2rem;
+        }
+
+        /* Mobile Responsive */
+        @media (max-width: 768px) {
             body {
+                padding: 0.5rem;
+            }
+            
+            .app-container {
+                border-radius: 8px;
+            }
+            
+            .app-header {
+                padding: 1.5rem;
+            }
+            
+            .app-header h1 {
+                font-size: 2rem;
+            }
+            
+            .nav-tabs {
+                flex-direction: column;
+            }
+            
+            .nav-tab {
+                padding: 1rem;
+                border-bottom: 1px solid var(--border-color);
+            }
+            
+            .nav-tab:last-child {
+                border-bottom: none;
+            }
+            
+            .tab-content {
                 padding: 1rem;
             }
             
-            .container {
-                padding: 1rem;
+            .drop-zone {
+                padding: 2rem 1rem;
+            }
+            
+            .drop-zone-icon {
+                width: 60px;
+                height: 60px;
+                font-size: 1.5rem;
             }
             
             .file-item {
@@ -168,37 +583,368 @@
                 gap: 1rem;
                 text-align: center;
             }
+            
+            .file-info {
+                flex-direction: column;
+                text-align: center;
+            }
+            
+            .button-group,
+            .file-actions,
+            .key-actions {
+                flex-direction: column;
+            }
+            
+            .btn {
+                justify-content: center;
+            }
+            
+            .card-header {
+                flex-direction: column;
+                gap: 1rem;
+                text-align: center;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .app-header h1 {
+                font-size: 1.75rem;
+            }
+            
+            .drop-zone h3 {
+                font-size: 1.25rem;
+            }
+            
+            .card {
+                padding: 1rem;
+            }
+            
+            .key-section {
+                padding: 1rem;
+            }
+        }
+
+        /* Dark mode support */
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --card-background: #1a202c;
+                --text-color: #e2e8f0;
+                --text-muted: #a0aec0;
+                --border-color: #2d3748;
+            }
+            
+            .nav-tabs {
+                background: rgba(26, 32, 44, 0.8);
+            }
+            
+            .nav-tab.active {
+                background: #2d3748;
+            }
+            
+            .card {
+                background: #2d3748;
+            }
+            
+            .file-item {
+                background: #2d3748;
+            }
+            
+            .key-display {
+                background: #2d3748;
+            }
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>Seamless Encryptor</h1>
-        
-        <div class="drop-zone" id="dropZone">
-            <p>Drag and drop files here or</p>
-            <div style="display:flex; gap: .5rem; justify-content:center; flex-wrap: wrap;">
-                <button id="selectFile">Select File</button>
-                <button id="selectEncrypted">Decrypt .enc</button>
+    <div class="app-container">
+        <header class="app-header">
+            <h1>🔒 Seamless Encryptor</h1>
+            <p class="subtitle">Secure file encryption with military-grade AES-256 protection</p>
+        </header>
+
+        <nav class="nav-tabs">
+            <button class="nav-tab active" data-tab="encrypt">
+                <i data-feather="shield"></i>
+                Encrypt Files
+            </button>
+            <button class="nav-tab" data-tab="decrypt">
+                <i data-feather="unlock"></i>
+                Decrypt Files
+            </button>
+            <button class="nav-tab" data-tab="manage">
+                <i data-feather="folder"></i>
+                Manage Files
+            </button>
+            <button class="nav-tab" data-tab="keys">
+                <i data-feather="key"></i>
+                Key Management
+            </button>
+            <button class="nav-tab" data-tab="cloud">
+                <i data-feather="cloud"></i>
+                Cloud Sync
+            </button>
+        </nav>
+
+        <!-- Encrypt Tab -->
+        <div id="encrypt-tab" class="tab-content active">
+            <div class="drop-zone" id="dropZone">
+                <div class="drop-zone-icon">
+                    <i data-feather="upload-cloud"></i>
+                </div>
+                <h3 style="color: #2d3748;">Drop Files Here</h3>
+                <p style="color: #2d3748;">Drag and drop files here or choose files to encrypt with military-grade AES-256 encryption</p>
+                <div class="button-group">
+                    <button class="btn" id="selectFile">
+                        <i data-feather="file-plus"></i>
+                        Select File to Encrypt
+                    </button>
+                </div>
+            </div>
+
+            <div class="progress-container" id="progressContainer" style="display: none;">
+                <div class="progress-bar">
+                    <div class="progress" id="progressBar"></div>
+                </div>
+                <div class="status" id="status">Processing...</div>
+            </div>
+
+            <div class="alert error" id="error" style="display: none;">
+                <i data-feather="alert-circle"></i>
+                <span id="errorMessage"></span>
+            </div>
+            <div class="alert success" id="success" style="display: none;">
+                <i data-feather="check-circle"></i>
+                <span id="successMessage"></span>
             </div>
         </div>
 
-        <div class="progress-container" id="progressContainer" style="display: none;">
-            <div class="progress-bar">
-                <div class="progress" id="progressBar"></div>
+        <!-- Decrypt Tab -->
+        <div id="decrypt-tab" class="tab-content">
+            <div class="drop-zone" id="decryptDropZone">
+                <div class="drop-zone-icon">
+                    <i data-feather="unlock"></i>
+                </div>
+                <h3 style="color: #2d3748;">Drop Encrypted Files Here</h3>
+                <p style="color: #2d3748;">Drag and drop .enc files or any encrypted files here to decrypt them</p>
+                <div class="button-group">
+                    <button class="btn" id="selectEncryptedFile">
+                        <i data-feather="file-text"></i>
+                        Select Encrypted File
+                    </button>
+                    <button class="btn secondary" id="selectMultipleEncrypted">
+                        <i data-feather="files"></i>
+                        Select Multiple Files
+                    </button>
+                </div>
             </div>
-            <div class="status" id="status"></div>
+
+            <div class="card" style="margin-top: 2rem;">
+                <div class="card-header">
+                    <h2 class="card-title">
+                        <i data-feather="info"></i>
+                        Supported File Types
+                    </h2>
+                </div>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1rem;">
+                    <div style="padding: 1rem; background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%); border-radius: 8px; border: 1px solid var(--border-color);">
+                        <h4 style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem; color: var(--primary-color);">
+                            <i data-feather="lock"></i>
+                            .enc Files
+                        </h4>
+                        <p style="color: var(--text-muted); font-size: 0.9rem;">Files encrypted by Seamless Encryptor with .enc extension</p>
+                    </div>
+                    <div style="padding: 1rem; background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%); border-radius: 8px; border: 1px solid var(--border-color);">
+                        <h4 style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem; color: var(--primary-color);">
+                            <i data-feather="file"></i>
+                            Encrypted Files
+                        </h4>
+                        <p style="color: var(--text-muted); font-size: 0.9rem;">Any file encrypted with your current encryption key</p>
+                    </div>
+                    <div style="padding: 1rem; background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%); border-radius: 8px; border: 1px solid var(--border-color);">
+                        <h4 style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem; color: var(--primary-color);">
+                            <i data-feather="download"></i>
+                            Downloaded Files
+                        </h4>
+                        <p style="color: var(--text-muted); font-size: 0.9rem;">Files downloaded from the Manage Files section</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="progress-container" id="decryptProgressContainer" style="display: none;">
+                <div class="progress-bar">
+                    <div class="progress" id="decryptProgressBar"></div>
+                </div>
+                <div class="status" id="decryptStatus">Decrypting...</div>
+            </div>
+
+            <div class="alert error" id="decryptError" style="display: none;">
+                <i data-feather="alert-circle"></i>
+                <span id="decryptErrorMessage"></span>
+            </div>
+            <div class="alert success" id="decryptSuccess" style="display: none;">
+                <i data-feather="check-circle"></i>
+                <span id="decryptSuccessMessage"></span>
+            </div>
+
+            <!-- Recent Decryptions -->
+            <div class="card" id="recentDecryptionsCard" style="display: none;">
+                <div class="card-header">
+                    <h2 class="card-title">
+                        <i data-feather="clock"></i>
+                        Recent Decryptions
+                    </h2>
+                    <button class="btn secondary" id="clearDecryptHistory">
+                        <i data-feather="trash-2"></i>
+                        Clear History
+                    </button>
+                </div>
+                <div id="decryptHistoryList">
+                    <!-- Decryption history will be populated here -->
+                </div>
+            </div>
         </div>
 
-        <div class="error" id="error" style="display: none;"></div>
-        <div class="success" id="success" style="display: none;"></div>
+        <!-- Manage Files Tab -->
+        <div id="manage-tab" class="tab-content">
+            <div class="card">
+                <div class="card-header">
+                    <h2 class="card-title">
+                        <i data-feather="archive"></i>
+                        Your Encrypted Files
+                    </h2>
+                    <button class="btn secondary" id="refreshFiles">
+                        <i data-feather="refresh-cw"></i>
+                        Refresh
+                    </button>
+                </div>
+                <div class="file-list" id="fileList">
+                    <div class="empty-state">
+                        <div class="empty-state-icon">
+                            <i data-feather="folder"></i>
+                        </div>
+                        <h3>No encrypted files yet</h3>
+                        <p>Start by encrypting your first file in the Encrypt Files tab</p>
+                    </div>
+                </div>
+            </div>
+        </div>
 
-        <div class="file-list">
-            <h2>Your Encrypted Files</h2>
-            <div id="fileList"></div>
+        <!-- Key Management Tab -->
+        <div id="keys-tab" class="tab-content">
+            <div class="key-generation-wizard" id="keyWizard" style="display: none;">
+                <h3>🎉 Welcome to Seamless Encryptor!</h3>
+                <p>Let's set up your encryption key. This key will be used to encrypt and decrypt all your files.</p>
+                <button class="btn" id="startKeyGeneration" style="background: rgba(255, 255, 255, 0.2); backdrop-filter: blur(10px);">
+                    <i data-feather="key"></i>
+                    Generate My Encryption Key
+                </button>
+            </div>
+            
+            <div class="card" id="keyManagementCard">
+                <div class="card-header">
+                    <h2 class="card-title">
+                        <i data-feather="shield"></i>
+                        Encryption Key Management
+                    </h2>
+                    <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                        <button class="btn danger" id="generateNewKey">
+                            <i data-feather="refresh-ccw"></i>
+                            Generate New Key
+                        </button>
+                        <button class="btn secondary" id="exportKey">
+                            <i data-feather="download"></i>
+                            Export Key
+                        </button>
+                        <button class="btn secondary" id="importKey">
+                            <i data-feather="upload"></i>
+                            Import Key
+                        </button>
+                    </div>
+                </div>
+                <div class="key-section">
+                    <div class="alert warning">
+                        <i data-feather="alert-triangle"></i>
+                        <div>
+                            <strong>Critical Security Notice:</strong> Your encryption key is stored securely on this device using OS-level encryption. 
+                            <strong>Always backup your key</strong> - without it, your encrypted files cannot be recovered!
+                        </div>
+                    </div>
+                    <div>
+                        <label style="display: block; margin-bottom: 1rem; font-weight: 600; color: var(--text-color);">
+                            <i data-feather="key" style="width: 16px; height: 16px; margin-right: 0.5rem;"></i>
+                            Your Encryption Key:
+                        </label>
+                        <div class="key-display" id="currentKey">Loading...</div>
+                    </div>
+                    <div class="key-actions">
+                        <button class="btn secondary" id="copyKey">
+                            <i data-feather="copy"></i>
+                            Copy to Clipboard
+                        </button>
+                        <button class="btn secondary" id="showHideKey">
+                            <i data-feather="eye"></i>
+                            Show Key
+                        </button>
+                        <button class="btn secondary" id="keyStrength">
+                            <i data-feather="zap"></i>
+                            Key Strength: AES-256
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Cloud Tab -->
+        <div id="cloud-tab" class="tab-content">
+            <div class="empty-state">
+                <div class="empty-state-icon">
+                    <i data-feather="cloud-off"></i>
+                </div>
+                <h2 style="margin-bottom: 1rem;">Cloud Sync Coming Soon</h2>
+                <div class="alert warning">
+                    <i data-feather="tool"></i>
+                    <span>We're working hard on secure cloud synchronization features! This will allow you to safely sync your encrypted files across all your devices.</span>
+                </div>
+                <div style="margin-top: 2rem; text-align: left; max-width: 500px; margin-left: auto; margin-right: auto;">
+                    <h3 style="margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem;">
+                        <i data-feather="list"></i>
+                        Planned Features:
+                    </h3>
+                    <ul style="list-style: none; padding: 0;">
+                        <li style="padding: 0.5rem 0; display: flex; align-items: center; gap: 0.5rem;">
+                            <i data-feather="cloud" style="color: var(--primary-color);"></i>
+                            End-to-end encrypted cloud storage
+                        </li>
+                        <li style="padding: 0.5rem 0; display: flex; align-items: center; gap: 0.5rem;">
+                            <i data-feather="smartphone" style="color: var(--primary-color);"></i>
+                            Multi-device synchronization
+                        </li>
+                        <li style="padding: 0.5rem 0; display: flex; align-items: center; gap: 0.5rem;">
+                            <i data-feather="share-2" style="color: var(--primary-color);"></i>
+                            Secure file sharing
+                        </li>
+                        <li style="padding: 0.5rem 0; display: flex; align-items: center; gap: 0.5rem;">
+                            <i data-feather="hard-drive" style="color: var(--primary-color);"></i>
+                            Automatic backup and restore
+                        </li>
+                        <li style="padding: 0.5rem 0; display: flex; align-items: center; gap: 0.5rem;">
+                            <i data-feather="users" style="color: var(--primary-color);"></i>
+                            Team collaboration features
+                        </li>
+                    </ul>
+                </div>
+            </div>
         </div>
     </div>
 
-    <script src="/renderer.js"></script>
+    <script src="https://unpkg.com/feather-icons"></script>
+    <script>
+        // Initialize Feather icons when page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            if (typeof feather !== 'undefined') {
+                feather.replace();
+            }
+        });
+    </script>
 </body>
-</html> 
+</html>

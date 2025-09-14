@@ -1,90 +1,229 @@
-const { app, BrowserWindow, ipcMain, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
-// Key management
 const keyManager = require('../config/keyManager');
+const logger = require('../utils/logger');
 
 let mainWindow;
 
-// Handle creating/removing shortcuts on Windows when installing/uninstalling
+logger.initialize();
+logger.info('App', 'Seamless Encryptor starting up', { 
+  version: app.getVersion(),
+  platform: process.platform,
+  arch: process.arch,
+  nodeVersion: process.version
+});
+
 if (require('electron-squirrel-startup')) {
+  logger.info('App', 'Squirrel startup detected, quitting');
   app.quit();
 }
 
 function createWindow() {
-  mainWindow = new BrowserWindow({
-    width: 1024,
-    height: 768,
-    webPreferences: {
-      nodeIntegration: false,
-      contextIsolation: true,
-      preload: MAIN_WINDOW_PRELOAD_WEBPACK_ENTRY,
-      sandbox: true,
-      webSecurity: true
-    },
-  });
-
-  // Load UI from webpack
-  mainWindow.loadURL(MAIN_WINDOW_WEBPACK_ENTRY);
-
-  // Open DevTools in development mode
-  if (process.env.NODE_ENV === 'development') {
-    mainWindow.webContents.openDevTools();
-  }
-
-  // Set CSP headers
-  mainWindow.webContents.session.webRequest.onHeadersReceived((details, callback) => {
-    callback({
-      responseHeaders: {
-        ...details.responseHeaders,
-        'Content-Security-Policy': ["default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline';"]
-      }
+  try {
+    logger.info('Window', 'Creating main window');
+    
+    mainWindow = new BrowserWindow({
+      width: 1024,
+      height: 768,
+      webPreferences: {
+        nodeIntegration: false,
+        contextIsolation: true,
+        preload: MAIN_WINDOW_PRELOAD_WEBPACK_ENTRY,
+        sandbox: true,
+        webSecurity: true
+      },
     });
-  });
+
+    mainWindow.webContents.on('did-finish-load', () => {
+      logger.info('Window', 'Main window finished loading');
+    });
+
+    mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
+      logger.error('Window', 'Main window failed to load', { 
+        errorCode, 
+        errorDescription 
+      });
+    });
+
+    mainWindow.on('closed', () => {
+      logger.info('Window', 'Main window closed');
+      mainWindow = null;
+    });
+
+    logger.debug('Window', 'Loading webpack entry', { url: MAIN_WINDOW_WEBPACK_ENTRY });
+    mainWindow.loadURL(MAIN_WINDOW_WEBPACK_ENTRY);
+
+    if (process.env.NODE_ENV === 'development') {
+      logger.debug('Window', 'Opening DevTools (development mode)');
+      mainWindow.webContents.openDevTools();
+    }
+
+    mainWindow.webContents.session.webRequest.onHeadersReceived((details, callback) => {
+      logger.trace('Security', 'Setting CSP headers', { url: details.url });
+      callback({
+        responseHeaders: {
+          ...details.responseHeaders,
+          'Content-Security-Policy': ["default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://unpkg.com; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: https:;"]
+        }
+      });
+    });
+
+    logger.info('Window', 'Main window created successfully');
+  } catch (error) {
+    logger.error('Window', 'Failed to create main window', { 
+      error: error.message, 
+      stack: error.stack 
+    });
+    throw error;
+  }
 }
 
-// Create window when app is ready
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  logger.info('App', 'App is ready, creating window');
   createWindow();
+  
+  logger.cleanupOldLogs();
+  
+  if (process.env.NODE_ENV === 'development') {
+    try {
+      logger.info('App', 'Running startup tests in development mode');
+      const { createTestSuite } = require('../utils/testRunner');
+      const testRunner = createTestSuite();
+      
+      setTimeout(async () => {
+        const results = await testRunner.runTests();
+        logger.info('App', 'Startup tests completed', results);
+      }, 2000);
+    } catch (testError) {
+      logger.warn('App', 'Could not run startup tests', { error: testError.message });
+    }
+  }
 
   app.on('activate', () => {
+    logger.debug('App', 'App activated');
     if (BrowserWindow.getAllWindows().length === 0) {
+      logger.info('App', 'No windows open, creating new window');
       createWindow();
     }
   });
 });
 
 app.on('window-all-closed', () => {
-  // Clean up temp files
-  try {
-    const tempDir = path.join(app.getPath('temp'), 'seamless-encryptor');
-    if (fs.existsSync(tempDir)) {
-      // Delete all files in the temp folder
-      const files = fs.readdirSync(tempDir);
-      for (const file of files) {
-        const filePath = path.join(tempDir, file);
-        fs.unlinkSync(filePath);
-      }
-      // Try to delete the directory
-      fs.rmdirSync(tempDir);
-    }
-  } catch (error) {
-    console.error('Error cleaning up temp directory:', error);
-  }
+  logger.info('App', 'All windows closed, cleaning up');
+  
+  cleanupTempFiles();
 
   if (process.platform !== 'darwin') {
+    logger.info('App', 'Quitting application (non-macOS)');
     app.quit();
   }
 });
 
-// Save/read/delete encrypted blobs under userData/encrypted
+app.on('before-quit', () => {
+  logger.info('App', 'Application is about to quit');
+});
+function cleanupTempFiles() {
+  try {
+    const tempDir = path.join(app.getPath('temp'), 'seamless-encryptor');
+    
+    if (!fs.existsSync(tempDir)) {
+      logger.debug('Cleanup', 'Temp directory does not exist, nothing to clean');
+      return;
+    }
+
+    logger.info('Cleanup', 'Starting temp directory cleanup', { tempDir });
+    
+    const files = fs.readdirSync(tempDir);
+    let cleanedFiles = 0;
+    
+    for (const file of files) {
+      try {
+        const filePath = path.join(tempDir, file);
+        const stats = fs.statSync(filePath);
+        
+        if (stats.isFile()) {
+          fs.unlinkSync(filePath);
+          cleanedFiles++;
+          logger.trace('Cleanup', `Deleted temp file: ${file}`);
+        } else if (stats.isDirectory()) {
+          // Recursively clean subdirectories
+          cleanupDirectory(filePath);
+          logger.trace('Cleanup', `Cleaned temp directory: ${file}`);
+        }
+      } catch (fileError) {
+        logger.warn('Cleanup', `Failed to delete temp file: ${file}`, { 
+          error: fileError.message 
+        });
+      }
+    }
+    
+    // Try to delete the main temp directory if it's empty
+    try {
+      const remainingFiles = fs.readdirSync(tempDir);
+      if (remainingFiles.length === 0) {
+        fs.rmdirSync(tempDir);
+        logger.info('Cleanup', 'Removed empty temp directory');
+      } else {
+        logger.debug('Cleanup', `Temp directory not empty, ${remainingFiles.length} items remaining`);
+      }
+    } catch (dirError) {
+      logger.warn('Cleanup', 'Failed to remove temp directory', { 
+        error: dirError.message 
+      });
+    }
+    
+    logger.info('Cleanup', `Temp cleanup completed, ${cleanedFiles} files cleaned`);
+    
+  } catch (error) {
+    logger.error('Cleanup', 'Error during temp directory cleanup', { 
+      error: error.message, 
+      stack: error.stack 
+    });
+  }
+}
+
+// Helper function for recursive directory cleanup
+function cleanupDirectory(dirPath) {
+  try {
+    const files = fs.readdirSync(dirPath);
+    
+    for (const file of files) {
+      const filePath = path.join(dirPath, file);
+      const stats = fs.statSync(filePath);
+      
+      if (stats.isFile()) {
+        fs.unlinkSync(filePath);
+      } else if (stats.isDirectory()) {
+        cleanupDirectory(filePath);
+      }
+    }
+    
+    fs.rmdirSync(dirPath);
+  } catch (error) {
+    logger.warn('Cleanup', `Failed to cleanup directory: ${dirPath}`, { 
+      error: error.message 
+    });
+  }
+}
+
 const storageService = {
-  uploadFile: async (key, data) => {
+  uploadFile: logger.wrapFunction('Storage', async (key, data) => {
+    if (!key || !data) {
+      throw new Error('Key and data are required for upload');
+    }
+    
+    if (typeof key !== 'string' || key.includes('..') || key.includes('\\')) {
+      throw new Error('Invalid key format');
+    }
+    
     const storageDir = path.join(app.getPath('userData'), 'encrypted');
+    logger.debug('Storage', 'Uploading file', { key, dataSize: data.length, storageDir });
     
     if (!fs.existsSync(storageDir)) {
       fs.mkdirSync(storageDir, { recursive: true });
+      logger.info('Storage', 'Created storage directory', { storageDir });
     }
     
     const keyParts = key.split('/');
@@ -92,115 +231,271 @@ const storageService = {
       const dirPart = path.join(storageDir, keyParts[0]);
       if (!fs.existsSync(dirPart)) {
         fs.mkdirSync(dirPart, { recursive: true });
+        logger.debug('Storage', 'Created subdirectory', { dirPart });
       }
     }
     
     const filePath = path.join(storageDir, key);
+    
+    if (fs.existsSync(filePath)) {
+      logger.warn('Storage', 'Overwriting existing file', { filePath });
+    }
+    
     await fs.promises.writeFile(filePath, data);
-    return { key };
-  },
+    logger.info('Storage', 'File uploaded successfully', { key, size: data.length });
+    
+    return { key, size: data.length, path: filePath };
+  }, 'uploadFile'),
   
-  downloadFile: async (key) => {
+  downloadFile: logger.wrapFunction('Storage', async (key) => {
+    if (!key || typeof key !== 'string') {
+      throw new Error('Valid key is required for download');
+    }
+    
     const storageDir = path.join(app.getPath('userData'), 'encrypted');
     const filePath = path.join(storageDir, key);
     
-    if (fs.existsSync(filePath)) {
-      return await fs.promises.readFile(filePath);
+    logger.debug('Storage', 'Downloading file', { key, filePath });
+    
+    if (!fs.existsSync(filePath)) {
+      logger.error('Storage', 'File not found for download', { key, filePath });
+      throw new Error(`File not found: ${key}`);
     }
-    throw new Error('File not found');
-  },
+    
+    const stats = fs.statSync(filePath);
+    const data = await fs.promises.readFile(filePath);
+    
+    logger.info('Storage', 'File downloaded successfully', { 
+      key, 
+      size: data.length,
+      lastModified: stats.mtime
+    });
+    
+    return data;
+  }, 'downloadFile'),
   
-  deleteFile: async (key) => {
+  deleteFile: logger.wrapFunction('Storage', async (key) => {
+    if (!key || typeof key !== 'string') {
+      throw new Error('Valid key is required for deletion');
+    }
+    
     const storageDir = path.join(app.getPath('userData'), 'encrypted');
     const filePath = path.join(storageDir, key);
     
-    if (fs.existsSync(filePath)) {
-      await fs.promises.unlink(filePath);
-      return true;
+    logger.debug('Storage', 'Deleting file', { key, filePath });
+    
+    if (!fs.existsSync(filePath)) {
+      logger.warn('Storage', 'Attempted to delete non-existent file', { key });
+      return false;
     }
-    return false;
-  }
+    
+    await fs.promises.unlink(filePath);
+    logger.info('Storage', 'File deleted successfully', { key });
+    
+    try {
+      const dirPath = path.dirname(filePath);
+      if (dirPath !== storageDir) {
+        const remainingFiles = fs.readdirSync(dirPath);
+        if (remainingFiles.length === 0) {
+          fs.rmdirSync(dirPath);
+          logger.debug('Storage', 'Cleaned up empty directory', { dirPath });
+        }
+      }
+    } catch (cleanupError) {
+      logger.debug('Storage', 'Could not cleanup directory', { 
+        error: cleanupError.message 
+      });
+    }
+    
+    return true;
+  }, 'deleteFile')
 };
 
-// Decrypts Buffer. Tries [iv|tag|ciphertext] then [iv|ciphertext|tag]
-async function decryptData(encryptedData, encryptionKeyBuffer) {
+const decryptData = logger.wrapFunction('Crypto', async (encryptedData, encryptionKeyBuffer) => {
+  logger.debug('Crypto', 'Starting decryption', { 
+    dataLength: encryptedData?.length || 0,
+    keyLength: encryptionKeyBuffer?.length || 0
+  });
+  
+  if (!encryptedData) {
+    throw new Error('Encrypted data is required');
+  }
+  
   if (!Buffer.isBuffer(encryptedData)) {
     encryptedData = Buffer.from(encryptedData);
+    logger.trace('Crypto', 'Converted encrypted data to Buffer');
   }
-  if (encryptedData.length < 33) {
-    throw new Error('Invalid encrypted payload');
+  
+  const minSize = 33;
+  if (encryptedData.length < minSize) {
+    logger.error('Crypto', 'Encrypted data too small', { 
+      actualSize: encryptedData.length, 
+      minSize 
+    });
+    throw new Error(`Invalid encrypted payload: file too small (${encryptedData.length} < ${minSize} bytes)`);
   }
+  
+  if (!Buffer.isBuffer(encryptionKeyBuffer) || encryptionKeyBuffer.length !== 32) {
+    logger.error('Crypto', 'Invalid encryption key', { 
+      keyType: typeof encryptionKeyBuffer,
+      keyLength: encryptionKeyBuffer?.length || 0
+    });
+    throw new Error('Invalid encryption key: must be 32 bytes');
+  }
+  
   const tryLayouts = [
-    () => ({ iv: encryptedData.slice(0, 16), tag: encryptedData.slice(16, 32), ct: encryptedData.slice(32) }),
-    () => ({ iv: encryptedData.slice(0, 16), tag: encryptedData.slice(encryptedData.length - 16), ct: encryptedData.slice(16, encryptedData.length - 16) })
+    () => ({ 
+      iv: encryptedData.slice(0, 16), 
+      tag: encryptedData.slice(16, 32), 
+      ct: encryptedData.slice(32),
+      layout: 'standard'
+    }),
+    () => ({ 
+      iv: encryptedData.slice(0, 16), 
+      tag: encryptedData.slice(encryptedData.length - 16), 
+      ct: encryptedData.slice(16, encryptedData.length - 16),
+      layout: 'alternative'
+    })
   ];
+  
   let lastError = null;
   for (const pick of tryLayouts) {
     try {
-      const { iv, tag, ct } = pick();
+      const { iv, tag, ct, layout } = pick();
+      
+      logger.trace('Crypto', `Trying ${layout} layout`, {
+        ivLength: iv.length,
+        tagLength: tag.length,
+        ctLength: ct.length
+      });
+      
+      if (iv.length !== 16) throw new Error(`Invalid IV length: ${iv.length}`);
+      if (tag.length !== 16) throw new Error(`Invalid auth tag length: ${tag.length}`);
+      if (ct.length === 0) throw new Error('No ciphertext data');
+      
       const decipher = crypto.createDecipheriv('aes-256-gcm', encryptionKeyBuffer, iv);
       decipher.setAuthTag(tag);
-      return Buffer.concat([decipher.update(ct), decipher.final()]);
+      
+      const decrypted = Buffer.concat([decipher.update(ct), decipher.final()]);
+      
+      logger.info('Crypto', `Decryption successful using ${layout} layout`, {
+        originalSize: encryptedData.length,
+        decryptedSize: decrypted.length
+      });
+      
+      return decrypted;
     } catch (e) {
+      logger.debug('Crypto', `${pick().layout} layout failed`, { error: e.message });
       lastError = e;
     }
   }
-  throw new Error(`Decryption failed: ${lastError ? lastError.message : 'Unknown error'}`);
-}
+  
+  logger.error('Crypto', 'All decryption layouts failed', { 
+    lastError: lastError?.message 
+  });
+  throw new Error(`Decryption failed: ${lastError ? lastError.message : 'Authentication failed or corrupted data'}`);
+}, 'decryptData');
 
-// IPC
-ipcMain.handle('encrypt-file', async (event, filePath) => {
-  try {
-    // Progress
-    event.sender.send('progress', 0);
-    
-    // Key + file
-    const key = await getEncryptionKey();
-    const inputBuffer = await fs.promises.readFile(filePath);
-    
-    event.sender.send('progress', 20);
-    
-    // Encrypt
-    const iv = crypto.randomBytes(16);
-    const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
-    
-    const encrypted = Buffer.concat([
-      cipher.update(inputBuffer),
-      cipher.final()
-    ]);
-    
-    event.sender.send('progress', 50);
-    
-    // Assemble [iv|tag|ciphertext]
-    const authTag = cipher.getAuthTag();
-    const encryptedData = Buffer.concat([iv, authTag, encrypted]);
-    
-    // Save
-    const fileId = crypto.randomBytes(16).toString('hex');
-    const fileName = path.basename(filePath);
-    const storageKey = `${fileId}/${fileName}.enc`;
-    
-    event.sender.send('progress', 70);
-    
-    await storageService.uploadFile(storageKey, encryptedData);
-    
-    // Complete
-    event.sender.send('progress', 100);
-    event.sender.send('success', 'File encrypted and uploaded successfully!');
-    
-    return {
-      success: true,
-      fileId,
-      fileName
-    };
-  } catch (error) {
-    event.sender.send('error', `Encryption failed: ${error.message}`);
-    return {
-      success: false,
-      error: error.message
-    };
+ipcMain.handle('encrypt-file', logger.wrapFunction('IPC', async (event, filePath) => {
+  logger.info('IPC', 'Starting file encryption', { filePath });
+  
+  if (!filePath || typeof filePath !== 'string') {
+    throw new Error('Valid file path is required');
   }
-});
+  
+  event.sender.send('progress', 0);
+  
+  if (!fs.existsSync(filePath)) {
+    logger.error('IPC', 'File does not exist', { filePath });
+    throw new Error('File does not exist');
+  }
+  
+  const stats = await fs.promises.stat(filePath);
+  if (!stats.isFile()) {
+    logger.error('IPC', 'Path is not a file', { filePath, isDirectory: stats.isDirectory() });
+    throw new Error('Path is not a file');
+  }
+  
+  logger.debug('IPC', 'File validation passed', { 
+    filePath, 
+    fileSize: stats.size,
+    lastModified: stats.mtime
+  });
+  
+  const MAX_FILE_SIZE = 500 * 1024 * 1024;
+  if (stats.size > MAX_FILE_SIZE) {
+    logger.error('IPC', 'File too large for encryption', { 
+      fileSize: stats.size,
+      maxSize: MAX_FILE_SIZE,
+      filePath
+    });
+    throw new Error(`File too large. Maximum size is ${MAX_FILE_SIZE / (1024 * 1024)}MB`);
+  }
+  
+  const key = await getEncryptionKey();
+  logger.debug('IPC', 'Encryption key obtained');
+  
+  const inputBuffer = await fs.promises.readFile(filePath);
+  logger.debug('IPC', 'File read into buffer', { bufferSize: inputBuffer.length });
+  
+  event.sender.send('progress', 20);
+  
+  if (inputBuffer.length === 0) {
+    logger.error('IPC', 'Cannot encrypt empty file', { filePath });
+    throw new Error('Cannot encrypt empty file');
+  }
+  
+  const iv = crypto.randomBytes(16);
+  const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+  logger.trace('IPC', 'Cipher initialized', { ivLength: iv.length });
+  
+  const encrypted = Buffer.concat([
+    cipher.update(inputBuffer),
+    cipher.final()
+  ]);
+  
+  logger.debug('IPC', 'Data encrypted', { 
+    originalSize: inputBuffer.length,
+    encryptedSize: encrypted.length
+  });
+  
+  event.sender.send('progress', 50);
+  
+  const authTag = cipher.getAuthTag();
+  logger.trace('IPC', 'Authentication tag generated', { tagLength: authTag.length });
+  
+  const encryptedData = Buffer.concat([iv, authTag, encrypted]);
+  
+  const fileId = crypto.randomBytes(16).toString('hex');
+  const fileName = path.basename(filePath);
+  const storageKey = `${fileId}/${fileName}.enc`;
+  
+  logger.info('IPC', 'Preparing to store encrypted file', {
+    fileId,
+    fileName,
+    storageKey,
+    totalSize: encryptedData.length
+  });
+  
+  event.sender.send('progress', 70);
+  
+  await storageService.uploadFile(storageKey, encryptedData);
+  
+  event.sender.send('progress', 100);
+  event.sender.send('success', 'File encrypted and saved successfully!');
+  
+  const result = {
+    success: true,
+    fileId,
+    fileName,
+    originalSize: inputBuffer.length,
+    encryptedSize: encryptedData.length
+  };
+  
+  logger.info('IPC', 'File encryption completed successfully', result);
+  return result;
+  
+}, 'encrypt-file'));
 
 ipcMain.handle('decrypt-file', async (_event, encryptedData) => {
   try {
@@ -215,22 +510,92 @@ ipcMain.handle('decrypt-file', async (_event, encryptedData) => {
   }
 });
 
-// Decrypt an encrypted .enc file by path and return a temp file path
-ipcMain.handle('decrypt-file-from-path', async (_event, encryptedFilePath) => {
+// Decrypt an encrypted file by path and prompt user for save location
+ipcMain.handle('decrypt-file-from-path', async (event, encryptedFilePath) => {
   try {
     const key = await getEncryptionKey();
     const encryptedData = await fs.promises.readFile(encryptedFilePath);
+    
+    // Send progress update
+    event.sender.send('progress', 30);
+    
     const decrypted = await decryptData(encryptedData, key);
-    const defaultName = path.basename(encryptedFilePath).replace(/\.enc$/i, '');
-    const tempDir = path.join(app.getPath('temp'), 'seamless-encryptor');
-    if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
-    const tempOut = path.join(tempDir, `${Date.now()}-${defaultName || 'decrypted'}`);
-    await fs.promises.writeFile(tempOut, decrypted);
-    return { success: true, path: tempOut };
+    
+    // Send progress update
+    event.sender.send('progress', 70);
+    
+    // Get original filename without .enc extension
+    let defaultName = path.basename(encryptedFilePath).replace(/\.enc$/i, '').replace(/\.encrypted$/i, '');
+    
+    // If no extension remains, try to detect file type from magic bytes
+    if (!path.extname(defaultName)) {
+      const fileType = detectFileType(decrypted);
+      if (fileType) {
+        defaultName += fileType;
+      }
+    }
+    
+    // Prompt user for save location
+    const savePath = await dialog.showSaveDialog({
+      defaultPath: defaultName,
+      filters: [
+        { name: 'All Files', extensions: ['*'] },
+        { name: 'Images', extensions: ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'] },
+        { name: 'Documents', extensions: ['pdf', 'doc', 'docx', 'txt', 'rtf'] },
+        { name: 'Videos', extensions: ['mp4', 'avi', 'mov', 'mkv', 'webm'] },
+        { name: 'Audio', extensions: ['mp3', 'wav', 'flac', 'aac', 'm4a'] }
+      ]
+    });
+
+    if (savePath.canceled) {
+      return { success: false, error: 'Decryption cancelled by user' };
+    }
+
+    // Save the decrypted file
+    await fs.promises.writeFile(savePath.filePath, decrypted);
+    
+    // Send progress update
+    event.sender.send('progress', 100);
+    
+    return { success: true, path: savePath.filePath, originalSize: encryptedData.length, decryptedSize: decrypted.length };
   } catch (error) {
+    console.error('Decryption error:', error);
     return { success: false, error: error.message };
   }
 });
+
+// Helper function to detect file type from magic bytes
+function detectFileType(buffer) {
+  if (!buffer || buffer.length < 4) return null;
+  
+  const header = buffer.slice(0, 16);
+  
+  // Image formats
+  if (header[0] === 0xFF && header[1] === 0xD8 && header[2] === 0xFF) return '.jpg';
+  if (header[0] === 0x89 && header[1] === 0x50 && header[2] === 0x4E && header[3] === 0x47) return '.png';
+  if (header[0] === 0x47 && header[1] === 0x49 && header[2] === 0x46) return '.gif';
+  if (header[0] === 0x42 && header[1] === 0x4D) return '.bmp';
+  if (header.slice(0, 4).toString() === 'RIFF' && header.slice(8, 12).toString() === 'WEBP') return '.webp';
+  
+  // Document formats
+  if (header.slice(0, 4).toString() === '%PDF') return '.pdf';
+  if (header[0] === 0xD0 && header[1] === 0xCF && header[2] === 0x11 && header[3] === 0xE0) return '.doc';
+  if (header.slice(0, 4).toString() === 'PK\x03\x04') return '.docx'; // Could be docx, xlsx, etc.
+  
+  // Video formats
+  if (header.slice(4, 8).toString() === 'ftyp') return '.mp4';
+  if (header.slice(0, 4).toString() === 'RIFF' && header.slice(8, 12).toString() === 'AVI ') return '.avi';
+  
+  // Audio formats
+  if (header[0] === 0xFF && (header[1] & 0xE0) === 0xE0) return '.mp3';
+  if (header.slice(0, 4).toString() === 'RIFF' && header.slice(8, 12).toString() === 'WAVE') return '.wav';
+  if (header.slice(0, 4).toString() === 'fLaC') return '.flac';
+  
+  // Text formats (UTF-8 BOM)
+  if (header[0] === 0xEF && header[1] === 0xBB && header[2] === 0xBF) return '.txt';
+  
+  return null;
+}
 
 ipcMain.handle('download-file', async (event, { fileId, fileName }) => {
     try {
@@ -358,13 +723,35 @@ ipcMain.handle('get-key', async () => {
   return key ? key.toString('hex') : null;
 });
 
-async function getEncryptionKey() {
+const getEncryptionKey = logger.wrapFunction('KeyManager', async () => {
+  logger.debug('KeyManager', 'Retrieving encryption key');
+  
   const key = await keyManager.getMasterKey();
-  if (!key || key.length !== 32) {
-    throw new Error('Encryption key not set');
+  
+  if (!key) {
+    logger.error('KeyManager', 'No encryption key found');
+    throw new Error('Encryption key not set - please generate or import a key');
   }
+  
+  if (!Buffer.isBuffer(key)) {
+    logger.error('KeyManager', 'Encryption key is not a Buffer', { keyType: typeof key });
+    throw new Error('Invalid encryption key format');
+  }
+  
+  if (key.length !== 32) {
+    logger.error('KeyManager', 'Encryption key has invalid length', { 
+      actualLength: key.length,
+      expectedLength: 32
+    });
+    throw new Error('Encryption key must be 32 bytes');
+  }
+  
+  logger.trace('KeyManager', 'Encryption key retrieved successfully', {
+    keyLength: key.length
+  });
+  
   return key;
-}
+}, 'getEncryptionKey');
 
 ipcMain.handle('open-file-dialog', async () => {
   const result = await dialog.showOpenDialog({
@@ -380,6 +767,31 @@ ipcMain.handle('open-file-dialog', async () => {
   return null;
 });
 
+ipcMain.handle('open-multiple-file-dialog', async () => {
+  const result = await dialog.showOpenDialog({
+    properties: ['openFile', 'multiSelections'],
+    filters: [
+      { name: 'Encrypted Files', extensions: ['enc', 'encrypted'] },
+      { name: 'All Files', extensions: ['*'] }
+    ]
+  });
+  
+  if (!result.canceled && result.filePaths.length > 0) {
+    return result.filePaths;
+  }
+  return null;
+});
+
+ipcMain.handle('open-file-location', async (event, filePath) => {
+  try {
+    await shell.showItemInFolder(filePath);
+    return { success: true };
+  } catch (error) {
+    console.error('Error opening file location:', error);
+    return { success: false, error: error.message };
+  }
+});
+
 ipcMain.handle('save-file-dialog', async () => {
   const result = await dialog.showSaveDialog({
     filters: [
@@ -391,6 +803,39 @@ ipcMain.handle('save-file-dialog', async () => {
     return result.filePath;
   }
   return null;
+});
+
+// Key file management
+ipcMain.handle('save-key-file', async (event, { filePath, keyData }) => {
+  try {
+    await fs.promises.writeFile(filePath, keyData, 'utf8');
+    return { success: true };
+  } catch (error) {
+    console.error('Error saving key file:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('load-key-file', async (event, filePath) => {
+  try {
+    const fileContent = await fs.promises.readFile(filePath, 'utf8');
+    const keyData = JSON.parse(fileContent);
+    
+    // Validate key file format
+    if (!keyData.key || typeof keyData.key !== 'string') {
+      throw new Error('Invalid key file format: missing or invalid key');
+    }
+    
+    // Validate key length (should be 64 hex characters for 32 bytes)
+    if (keyData.key.length !== 64 || !/^[0-9a-fA-F]+$/.test(keyData.key)) {
+      throw new Error('Invalid key format: key must be 64 hexadecimal characters');
+    }
+    
+    return keyData;
+  } catch (error) {
+    console.error('Error loading key file:', error);
+    throw new Error(`Failed to load key file: ${error.message}`);
+  }
 });
 
 // Handle drag and drop files

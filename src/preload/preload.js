@@ -14,10 +14,14 @@ contextBridge.exposeInMainWorld('api', {
   generateKey: () => ipcRenderer.invoke('generate-key'),
   getKey: () => ipcRenderer.invoke('get-key'),
   setKey: (key) => ipcRenderer.invoke('set-key', key),
+  saveKeyFile: (filePath, keyData) => ipcRenderer.invoke('save-key-file', { filePath, keyData }),
+  loadKeyFile: (filePath) => ipcRenderer.invoke('load-key-file', filePath),
   
   // Dialogs
   openFileDialog: () => ipcRenderer.invoke('open-file-dialog'),
+  openMultipleFileDialog: () => ipcRenderer.invoke('open-multiple-file-dialog'),
   saveFileDialog: () => ipcRenderer.invoke('save-file-dialog'),
+  openFileLocation: (filePath) => ipcRenderer.invoke('open-file-location', filePath),
   
   // Events
   onProgress: (callback) => {
