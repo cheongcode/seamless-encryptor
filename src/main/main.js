@@ -4,6 +4,12 @@ const fs = require('fs');
 const crypto = require('crypto');
 const keyManager = require('../config/keyManager');
 const logger = require('../utils/logger');
+const googleDriveService = require('../services/googleDriveService');
+const http = require('http');
+const url = require('url');
+
+// Load environment variables
+require('dotenv').config();
 
 let mainWindow;
 
@@ -65,7 +71,7 @@ function createWindow() {
       callback({
         responseHeaders: {
           ...details.responseHeaders,
-          'Content-Security-Policy': ["default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://unpkg.com; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: https:;"]
+          'Content-Security-Policy': ["default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://unpkg.com https://accounts.google.com; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: https:; connect-src 'self' https://accounts.google.com https://www.googleapis.com https://oauth2.googleapis.com; frame-src 'self' https://accounts.google.com;"]
         }
       });
     });
@@ -792,6 +798,17 @@ ipcMain.handle('open-file-location', async (event, filePath) => {
   }
 });
 
+// Open URL in external browser
+ipcMain.handle('open-external-url', async (event, url) => {
+  try {
+    await shell.openExternal(url);
+    return { success: true };
+  } catch (error) {
+    console.error('Error opening external URL:', error);
+    return { success: false, error: error.message };
+  }
+});
+
 ipcMain.handle('save-file-dialog', async () => {
   const result = await dialog.showSaveDialog({
     filters: [
@@ -873,6 +890,353 @@ ipcMain.handle('save-dropped-file', async (event, fileInfo) => {
   } catch (error) {
     event.sender.send('error', `Failed to process dropped file: ${error.message}`);
     throw error;
+  }
+});
+
+// Google Drive Integration IPC Handlers
+
+// Check if Google Drive credentials are available in environment
+ipcMain.handle('google-drive-check-env-credentials', async () => {
+  try {
+    const hasCredentials = !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
+    const credentials = hasCredentials ? {
+      client_id: process.env.GOOGLE_CLIENT_ID,
+      client_secret: process.env.GOOGLE_CLIENT_SECRET,
+      redirect_uris: [process.env.GOOGLE_REDIRECT_URI || 'http://localhost:3001/oauth2callback']
+    } : null;
+    
+    return { 
+      success: true, 
+      hasCredentials,
+      credentials: hasCredentials ? credentials : null
+    };
+  } catch (error) {
+    logger.error('IPC', 'Failed to check environment credentials', { error: error.message });
+    return { success: false, error: error.message };
+  }
+});
+
+// Initialize Google Drive with credentials (either from env or provided)
+ipcMain.handle('google-drive-init', async (event, providedCredentials) => {
+  try {
+    logger.info('IPC', 'Initializing Google Drive service');
+    
+    // Use environment credentials if available, otherwise use provided credentials
+    let credentials = providedCredentials;
+    if (!credentials && process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
+      credentials = {
+        client_id: process.env.GOOGLE_CLIENT_ID,
+        client_secret: process.env.GOOGLE_CLIENT_SECRET,
+        redirect_uris: [process.env.GOOGLE_REDIRECT_URI || 'http://localhost:3001/oauth2callback']
+      };
+      logger.info('IPC', 'Using Google Drive credentials from environment variables');
+    }
+    
+    if (!credentials) {
+      throw new Error('No Google Drive credentials available');
+    }
+    
+    const result = await googleDriveService.initialize(credentials);
+    return { success: true, authenticated: result };
+  } catch (error) {
+    logger.error('IPC', 'Google Drive initialization failed', { error: error.message });
+    return { success: false, error: error.message };
+  }
+});
+
+// Get Google Drive auth URL
+ipcMain.handle('google-drive-get-auth-url', async () => {
+  try {
+    const authUrl = googleDriveService.getAuthUrl();
+    return { success: true, authUrl };
+  } catch (error) {
+    logger.error('IPC', 'Failed to get Google Drive auth URL', { error: error.message });
+    return { success: false, error: error.message };
+  }
+});
+
+// Start OAuth flow with temporary server
+ipcMain.handle('google-drive-start-oauth', async (event) => {
+  try {
+    logger.info('IPC', 'Starting Google Drive OAuth flow');
+    
+    return new Promise((resolve) => {
+      // Create temporary HTTP server to handle OAuth callback
+      const server = http.createServer((req, res) => {
+        const parsedUrl = url.parse(req.url, true);
+        
+        if (parsedUrl.pathname === '/oauth2callback') {
+          const code = parsedUrl.query.code;
+          const error = parsedUrl.query.error;
+          
+          // Send response to browser
+          res.writeHead(200, { 'Content-Type': 'text/html' });
+          
+          if (code) {
+            res.end(`
+              <html>
+                <head>
+                  <title>Authorization Successful</title>
+                  <style>
+                    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
+                           text-align: center; padding: 50px; background: #f5f5f5; }
+                    .container { max-width: 400px; margin: 0 auto; background: white; 
+                                padding: 40px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+                    .success { color: #4CAF50; font-size: 24px; margin-bottom: 20px; }
+                    .message { color: #666; line-height: 1.6; }
+                  </style>
+                </head>
+                <body>
+                  <div class="container">
+                    <div class="success">✅ Authorization Successful!</div>
+                    <div class="message">
+                      You have successfully authorized Seamless Encryptor to access your Google Drive.
+                      <br><br>
+                      <strong>You can now close this tab and return to the application.</strong>
+                    </div>
+                  </div>
+                  <script>
+                    // Auto-close after 3 seconds
+                    setTimeout(() => {
+                      window.close();
+                    }, 3000);
+                  </script>
+                </body>
+              </html>
+            `);
+            
+            // Close server and resolve with code
+            server.close();
+            resolve({ success: true, code });
+          } else {
+            res.end(`
+              <html>
+                <head>
+                  <title>Authorization Failed</title>
+                  <style>
+                    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
+                           text-align: center; padding: 50px; background: #f5f5f5; }
+                    .container { max-width: 400px; margin: 0 auto; background: white; 
+                                padding: 40px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+                    .error { color: #f44336; font-size: 24px; margin-bottom: 20px; }
+                    .message { color: #666; line-height: 1.6; }
+                  </style>
+                </head>
+                <body>
+                  <div class="container">
+                    <div class="error">❌ Authorization Failed</div>
+                    <div class="message">
+                      Authorization was cancelled or failed: ${error || 'Unknown error'}
+                      <br><br>
+                      <strong>You can close this tab and try again in the application.</strong>
+                    </div>
+                  </div>
+                  <script>
+                    setTimeout(() => {
+                      window.close();
+                    }, 5000);
+                  </script>
+                </body>
+              </html>
+            `);
+            
+            server.close();
+            resolve({ success: false, error: error || 'Authorization cancelled' });
+          }
+        }
+      });
+      
+      // Use port 3001 to avoid conflict with webpack dev server on 3000
+      server.listen(3001, () => {
+        logger.debug('IPC', 'OAuth callback server started on port 3001');
+        
+        // Get auth URL and open it
+        const authUrl = googleDriveService.getAuthUrl();
+        shell.openExternal(authUrl);
+        
+        // Set timeout to close server if no response
+        setTimeout(() => {
+          if (server.listening) {
+            server.close();
+            resolve({ success: false, error: 'Authorization timeout' });
+          }
+        }, 300000); // 5 minutes timeout
+      });
+      
+      server.on('error', (err) => {
+        logger.error('IPC', 'OAuth server error', { error: err.message });
+        resolve({ success: false, error: `Server error: ${err.message}` });
+      });
+    });
+  } catch (error) {
+    logger.error('IPC', 'Failed to start OAuth flow', { error: error.message });
+    return { success: false, error: error.message };
+  }
+});
+
+// Authenticate with authorization code
+ipcMain.handle('google-drive-authenticate', async (event, code) => {
+  try {
+    logger.info('IPC', 'Authenticating with Google Drive');
+    await googleDriveService.authenticate(code);
+    return { success: true };
+  } catch (error) {
+    logger.error('IPC', 'Google Drive authentication failed', { error: error.message });
+    return { success: false, error: error.message };
+  }
+});
+
+// Check if Google Drive is connected
+ipcMain.handle('google-drive-is-connected', async () => {
+  return { success: true, connected: googleDriveService.isConnected() };
+});
+
+// Upload file to Google Drive
+ipcMain.handle('google-drive-upload', async (event, { fileId, fileName }) => {
+  try {
+    event.sender.send('google-drive-progress', { 
+      progress: 0, 
+      status: 'Preparing to upload to Google Drive...' 
+    });
+
+    // Get the encrypted file from local storage
+    const storageDir = path.join(app.getPath('userData'), 'encrypted');
+    const encryptedFilePath = path.join(storageDir, fileId, `${fileName}.enc`);
+
+    if (!fs.existsSync(encryptedFilePath)) {
+      throw new Error(`Encrypted file not found: ${fileName}`);
+    }
+
+    event.sender.send('google-drive-progress', { 
+      progress: 25, 
+      status: 'Uploading to Google Drive...' 
+    });
+
+    const result = await googleDriveService.uploadFile(encryptedFilePath, fileName, fileId);
+
+    event.sender.send('google-drive-progress', { 
+      progress: 100, 
+      status: 'Upload completed!' 
+    });
+
+    logger.info('IPC', 'File uploaded to Google Drive', { fileId, fileName });
+    return { success: true, ...result };
+  } catch (error) {
+    logger.error('IPC', 'Google Drive upload failed', { 
+      fileId, 
+      fileName, 
+      error: error.message 
+    });
+    return { success: false, error: error.message };
+  }
+});
+
+// Download file from Google Drive
+ipcMain.handle('google-drive-download', async (event, { driveFileId, fileName, fileId }) => {
+  try {
+    event.sender.send('google-drive-progress', { 
+      progress: 0, 
+      status: 'Preparing to download from Google Drive...' 
+    });
+
+    // Create temp path for download
+    const tempDir = path.join(app.getPath('temp'), 'seamless-encryptor');
+    if (!fs.existsSync(tempDir)) {
+      fs.mkdirSync(tempDir, { recursive: true });
+    }
+
+    const tempFilePath = path.join(tempDir, `${Date.now()}_${fileName}.enc`);
+
+    event.sender.send('google-drive-progress', { 
+      progress: 25, 
+      status: 'Downloading from Google Drive...' 
+    });
+
+    await googleDriveService.downloadFile(driveFileId, tempFilePath);
+
+    event.sender.send('google-drive-progress', { 
+      progress: 50, 
+      status: 'Storing file locally...' 
+    });
+
+    // Store in local encrypted storage
+    const storageDir = path.join(app.getPath('userData'), 'encrypted');
+    const targetDir = path.join(storageDir, fileId);
+    
+    if (!fs.existsSync(targetDir)) {
+      fs.mkdirSync(targetDir, { recursive: true });
+    }
+
+    const targetPath = path.join(targetDir, `${fileName}.enc`);
+    fs.copyFileSync(tempFilePath, targetPath);
+    
+    // Clean up temp file
+    fs.unlinkSync(tempFilePath);
+
+    event.sender.send('google-drive-progress', { 
+      progress: 100, 
+      status: 'Download completed!' 
+    });
+
+    logger.info('IPC', 'File downloaded from Google Drive', { driveFileId, fileName });
+    return { success: true };
+  } catch (error) {
+    logger.error('IPC', 'Google Drive download failed', { 
+      driveFileId, 
+      fileName, 
+      error: error.message 
+    });
+    return { success: false, error: error.message };
+  }
+});
+
+// List files in Google Drive
+ipcMain.handle('google-drive-list-files', async () => {
+  try {
+    logger.debug('IPC', 'Listing Google Drive files');
+    const files = await googleDriveService.listFiles();
+    return { success: true, files };
+  } catch (error) {
+    logger.error('IPC', 'Failed to list Google Drive files', { error: error.message });
+    return { success: false, error: error.message };
+  }
+});
+
+// Delete file from Google Drive
+ipcMain.handle('google-drive-delete', async (event, driveFileId) => {
+  try {
+    logger.info('IPC', 'Deleting file from Google Drive', { driveFileId });
+    await googleDriveService.deleteFile(driveFileId);
+    return { success: true };
+  } catch (error) {
+    logger.error('IPC', 'Google Drive delete failed', { 
+      driveFileId, 
+      error: error.message 
+    });
+    return { success: false, error: error.message };
+  }
+});
+
+// Get Google Drive user info
+ipcMain.handle('google-drive-get-user-info', async () => {
+  try {
+    const userInfo = await googleDriveService.getUserInfo();
+    return { success: true, ...userInfo };
+  } catch (error) {
+    logger.error('IPC', 'Failed to get Google Drive user info', { error: error.message });
+    return { success: false, error: error.message };
+  }
+});
+
+// Sign out from Google Drive
+ipcMain.handle('google-drive-sign-out', async () => {
+  try {
+    logger.info('IPC', 'Signing out from Google Drive');
+    await googleDriveService.signOut();
+    return { success: true };
+  } catch (error) {
+    logger.error('IPC', 'Google Drive sign out failed', { error: error.message });
+    return { success: false, error: error.message };
   }
 });
 

@@ -624,6 +624,609 @@
             }
         }
 
+        /* Google Drive specific styles */
+        .connection-status {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            font-size: 0.875rem;
+            font-weight: 500;
+            background: rgba(248, 113, 113, 0.1);
+            color: var(--danger-color);
+            border: 1px solid rgba(248, 113, 113, 0.2);
+        }
+
+        .connection-status.connected {
+            background: rgba(72, 187, 120, 0.1);
+            color: var(--success-color);
+            border-color: rgba(72, 187, 120, 0.2);
+        }
+
+        .google-credentials-form input {
+            transition: var(--transition);
+        }
+
+        .google-credentials-form input:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .google-drive-file-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem 1.5rem;
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            background: white;
+            transition: var(--transition);
+            position: relative;
+            overflow: hidden;
+            margin-bottom: 0.5rem;
+        }
+
+        .google-drive-file-item::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 4px;
+            height: 100%;
+            background: linear-gradient(135deg, #4285f4, #34a853);
+            transform: scaleY(0);
+            transition: transform 0.3s ease;
+        }
+
+        .google-drive-file-item:hover::before {
+            transform: scaleY(1);
+        }
+
+        .google-drive-file-item:hover {
+            box-shadow: var(--shadow-lg);
+            transform: translateY(-1px);
+        }
+
+        .sync-status {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.25rem;
+            padding: 0.25rem 0.5rem;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+
+        .sync-status.synced {
+            background: rgba(72, 187, 120, 0.1);
+            color: var(--success-color);
+        }
+
+        .sync-status.local-only {
+            background: rgba(237, 137, 54, 0.1);
+            color: var(--warning-color);
+        }
+
+        .sync-status.cloud-only {
+            background: rgba(66, 133, 244, 0.1);
+            color: #4285f4;
+        }
+
+        .storage-info {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin: 1rem 0;
+        }
+
+        .storage-stat {
+            text-align: center;
+            padding: 1rem;
+            background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+        }
+
+        .storage-stat-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--primary-color);
+            margin-bottom: 0.25rem;
+        }
+
+        .storage-stat-label {
+            font-size: 0.875rem;
+            color: var(--text-muted);
+        }
+
+        /* Google Drive Interface Styles */
+        .drive-manager {
+            margin-top: 0;
+            padding: 0;
+            overflow: hidden;
+        }
+
+        .drive-header {
+            padding: 1.5rem;
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+            color: white;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 1rem;
+            border-radius: var(--border-radius) var(--border-radius) 0 0;
+        }
+
+        .drive-user-info {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .drive-user-info img {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .drive-user-info .user-details h4 {
+            margin: 0;
+            font-size: 1.1rem;
+        }
+
+        .drive-user-info .user-details p {
+            margin: 0;
+            opacity: 0.9;
+            font-size: 0.9rem;
+        }
+
+        .auto-upload-settings {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .setting-item {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .setting-label strong {
+            display: block;
+            font-size: 0.9rem;
+        }
+
+        .setting-label span {
+            font-size: 0.8rem;
+            opacity: 0.9;
+        }
+
+        /* Toggle Switch */
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 50px;
+            height: 24px;
+        }
+
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(255, 255, 255, 0.3);
+            transition: 0.3s;
+            border-radius: 24px;
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 18px;
+            width: 18px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: 0.3s;
+            border-radius: 50%;
+        }
+
+        input:checked + .slider {
+            background-color: rgba(255, 255, 255, 0.8);
+        }
+
+        input:checked + .slider:before {
+            transform: translateX(26px);
+        }
+
+        /* Drive Toolbar */
+        .drive-toolbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem 1.5rem;
+            border-bottom: 1px solid var(--border-color);
+            background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+        }
+
+        .drive-nav .breadcrumb {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .breadcrumb-item {
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+            color: var(--text-muted);
+            font-size: 0.9rem;
+        }
+
+        .breadcrumb-item.active {
+            color: var(--text-color);
+            font-weight: 500;
+        }
+
+        .drive-actions {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .view-toggle {
+            display: flex;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            overflow: hidden;
+            margin-left: 0.5rem;
+        }
+
+        .view-toggle .btn {
+            border: none;
+            border-radius: 0;
+            margin: 0;
+            padding: 0.5rem;
+        }
+
+        .view-toggle .btn.active {
+            background: var(--primary-color);
+            color: white;
+        }
+
+        /* Drive Content */
+        .drive-content {
+            padding: 1.5rem;
+        }
+
+        .quick-actions {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .quick-action {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 1.25rem;
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            background: white;
+            cursor: pointer;
+            transition: var(--transition);
+        }
+
+        .quick-action:hover {
+            border-color: var(--primary-color);
+            box-shadow: var(--shadow);
+            transform: translateY(-1px);
+        }
+
+        .quick-action-icon {
+            width: 56px;
+            height: 56px;
+            border-radius: var(--border-radius);
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 1.5rem;
+            box-shadow: var(--shadow);
+        }
+
+        .quick-action-text strong {
+            display: block;
+            color: var(--text-color);
+            margin-bottom: 0.25rem;
+        }
+
+        .quick-action-text span {
+            color: var(--text-muted);
+            font-size: 0.9rem;
+        }
+
+        /* Drive Files */
+        .drive-files {
+            min-height: 300px;
+        }
+
+        .empty-vault {
+            text-align: center;
+            padding: 3rem 2rem;
+            color: var(--text-muted);
+        }
+
+        .empty-vault-icon {
+            width: 80px;
+            height: 80px;
+            margin: 0 auto 1.5rem;
+            background: linear-gradient(135deg, #e2e8f0, #cbd5e0);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2rem;
+            color: var(--text-muted);
+        }
+
+        .file-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 1rem;
+        }
+
+        .file-card {
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 1rem;
+            background: white;
+            transition: var(--transition);
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .file-card:hover {
+            border-color: var(--primary-color);
+            box-shadow: var(--shadow-lg);
+            transform: translateY(-2px);
+        }
+
+        .file-card-icon {
+            width: 64px;
+            height: 64px;
+            border-radius: var(--border-radius);
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 1.5rem;
+            margin-bottom: 1rem;
+            box-shadow: var(--shadow);
+        }
+
+        .file-card-name {
+            font-weight: 500;
+            color: var(--text-color);
+            margin-bottom: 0.5rem;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .file-card-meta {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .file-card-actions {
+            position: absolute;
+            top: 0.5rem;
+            right: 0.5rem;
+            opacity: 0;
+            transition: var(--transition);
+        }
+
+        .file-card:hover .file-card-actions {
+            opacity: 1;
+        }
+
+        .file-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .file-list-item {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 1rem;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            background: white;
+            transition: var(--transition);
+            cursor: pointer;
+        }
+
+        .file-list-item:hover {
+            border-color: var(--primary-color);
+            box-shadow: var(--shadow);
+        }
+
+        .file-list-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 8px;
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 1rem;
+        }
+
+        .file-list-details {
+            flex: 1;
+        }
+
+        .file-list-name {
+            font-weight: 500;
+            color: var(--text-color);
+            margin-bottom: 0.25rem;
+        }
+
+        .file-list-meta {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+
+        .file-list-actions {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        /* Storage Usage */
+        .storage-usage {
+            padding: 1.5rem;
+            border-top: 1px solid var(--border-color);
+            background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+        }
+
+        .storage-bar {
+            height: 8px;
+            background: var(--border-color);
+            border-radius: 4px;
+            overflow: hidden;
+            margin-bottom: 0.75rem;
+            box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.1);
+        }
+
+        .storage-used {
+            height: 100%;
+            background: linear-gradient(90deg, var(--primary-color), var(--secondary-color));
+            border-radius: 4px;
+            transition: width 0.3s ease;
+            position: relative;
+        }
+
+        .storage-used::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+            animation: storageShimmer 2s infinite;
+        }
+
+        @keyframes storageShimmer {
+            0%, 100% { transform: translateX(-100%); }
+            50% { transform: translateX(100%); }
+        }
+
+        .storage-text {
+            font-size: 0.9rem;
+            color: var(--text-color);
+            text-align: center;
+            font-weight: 500;
+        }
+
+        /* Upload Drop Zone */
+        .upload-drop-zone {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(66, 133, 244, 0.1);
+            backdrop-filter: blur(10px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10000;
+        }
+
+        .drop-zone-content {
+            text-align: center;
+            padding: 3rem;
+            background: white;
+            border-radius: 16px;
+            box-shadow: var(--shadow-lg);
+            border: 2px dashed var(--primary-color);
+        }
+
+        .drop-zone-content i {
+            font-size: 3rem;
+            color: var(--primary-color);
+            margin-bottom: 1rem;
+        }
+
+        .drop-zone-content h3 {
+            color: var(--text-color);
+            margin-bottom: 0.5rem;
+        }
+
+        .drop-zone-content p {
+            color: var(--text-muted);
+        }
+
+        /* Sync Status Indicators */
+        .sync-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.25rem;
+            padding: 0.25rem 0.5rem;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+
+        .sync-indicator.synced {
+            background: rgba(72, 187, 120, 0.1);
+            color: var(--success-color);
+            border: 1px solid rgba(72, 187, 120, 0.2);
+        }
+
+        .sync-indicator.uploading {
+            background: rgba(102, 126, 234, 0.1);
+            color: var(--primary-color);
+            border: 1px solid rgba(102, 126, 234, 0.2);
+        }
+
+        .sync-indicator.error {
+            background: rgba(245, 101, 101, 0.1);
+            color: var(--danger-color);
+            border: 1px solid rgba(245, 101, 101, 0.2);
+        }
+
+        .sync-indicator.local-only {
+            background: rgba(237, 137, 54, 0.1);
+            color: var(--warning-color);
+            border: 1px solid rgba(237, 137, 54, 0.2);
+        }
+
         /* Dark mode support */
         @media (prefers-color-scheme: dark) {
             :root {
@@ -649,8 +1252,80 @@
                 background: #2d3748;
             }
             
+            .google-drive-file-item {
+                background: #2d3748;
+            }
+            
             .key-display {
                 background: #2d3748;
+            }
+
+            .google-credentials-form input {
+                background: #2d3748;
+                color: var(--text-color);
+            }
+
+            .storage-stat {
+                background: #2d3748;
+            }
+
+            .drive-header {
+                background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+            }
+
+            .drive-toolbar {
+                background: #2d3748;
+            }
+
+            .file-card {
+                background: #2d3748;
+            }
+
+            .file-list-item {
+                background: #2d3748;
+            }
+
+            .storage-usage {
+                background: #2d3748;
+            }
+        }
+
+        /* Mobile Responsive for Drive Interface */
+        @media (max-width: 768px) {
+            .drive-header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 1rem;
+            }
+
+            .auto-upload-settings {
+                width: 100%;
+                justify-content: space-between;
+            }
+
+            .drive-toolbar {
+                flex-direction: column;
+                gap: 1rem;
+                align-items: stretch;
+            }
+
+            .drive-actions {
+                justify-content: center;
+                flex-wrap: wrap;
+            }
+
+            .quick-actions {
+                grid-template-columns: 1fr;
+            }
+
+            .file-grid {
+                grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            }
+
+            .file-card-icon {
+                width: 48px;
+                height: 48px;
+                font-size: 1.25rem;
             }
         }
     </style>
@@ -896,43 +1571,223 @@
 
         <!-- Cloud Tab -->
         <div id="cloud-tab" class="tab-content">
-            <div class="empty-state">
-                <div class="empty-state-icon">
-                    <i data-feather="cloud-off"></i>
+            <!-- Google Drive Setup Card -->
+            <div class="card" id="googleDriveSetupCard">
+                <div class="card-header">
+                    <h2 class="card-title">
+                        <i data-feather="cloud"></i>
+                        Google Drive Vault
+                    </h2>
+                    <div id="googleDriveConnectionStatus" class="connection-status">
+                        <i data-feather="cloud-off"></i>
+                        Not Connected
+                    </div>
                 </div>
-                <h2 style="margin-bottom: 1rem;">Cloud Sync Coming Soon</h2>
-                <div class="alert warning">
-                    <i data-feather="tool"></i>
-                    <span>We're working hard on secure cloud synchronization features! This will allow you to safely sync your encrypted files across all your devices.</span>
+                
+                <div id="googleDriveNotConnected">
+                    <div class="alert warning">
+                        <i data-feather="info"></i>
+                        <div>
+                            <strong>Secure Cloud Vault:</strong> Connect your Google Drive to create an encrypted vault for your files. 
+                            All files are encrypted locally before upload - Google cannot access your data.
+                        </div>
+                    </div>
+                    
+                    <div style="margin: 2rem 0;">
+                        <div class="alert success" style="margin: 1rem 0;">
+                            <i data-feather="check-circle"></i>
+                            <div>
+                                <strong>Credentials Configured:</strong> Google Drive credentials are already configured in your environment. 
+                                Click the button below to connect automatically.
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="google-credentials-form" style="display: none;">
+                        <div style="display: grid; gap: 1rem; margin-bottom: 2rem;">
+                            <div>
+                                <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">Client ID:</label>
+                                <input type="text" id="googleClientId" placeholder="Your Google OAuth2 Client ID" style="width: 100%; padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 8px; font-size: 1rem;">
+                            </div>
+                            <div>
+                                <label style="display: block; margin-bottom: 0.5rem; font-weight: 600;">Client Secret:</label>
+                                <input type="password" id="googleClientSecret" placeholder="Your Google OAuth2 Client Secret" style="width: 100%; padding: 0.75rem; border: 1px solid var(--border-color); border-radius: 8px; font-size: 1rem;">
+                            </div>
+                        </div>
+                        
+                        <div class="button-group">
+                            <button class="btn" id="connectGoogleDrive">
+                                <i data-feather="cloud"></i>
+                                Connect to Google Drive (Auto)
+                            </button>
+                            <a href="https://console.cloud.google.com" target="_blank" class="btn secondary">
+                                <i data-feather="external-link"></i>
+                                Google Cloud Console
+                            </a>
+                        </div>
+                    </div>
+                    
+                    <div class="button-group" id="autoConnectSection">
+                        <button class="btn" id="connectGoogleDriveAuto">
+                            <i data-feather="cloud"></i>
+                            Connect to Google Drive (Auto)
+                        </button>
+                        <a href="https://console.cloud.google.com" target="_blank" class="btn secondary">
+                            <i data-feather="external-link"></i>
+                            Google Cloud Console
+                        </a>
+                    </div>
                 </div>
-                <div style="margin-top: 2rem; text-align: left; max-width: 500px; margin-left: auto; margin-right: auto;">
-                    <h3 style="margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem;">
-                        <i data-feather="list"></i>
-                        Planned Features:
-                    </h3>
-                    <ul style="list-style: none; padding: 0;">
-                        <li style="padding: 0.5rem 0; display: flex; align-items: center; gap: 0.5rem;">
-                            <i data-feather="cloud" style="color: var(--primary-color);"></i>
-                            End-to-end encrypted cloud storage
-                        </li>
-                        <li style="padding: 0.5rem 0; display: flex; align-items: center; gap: 0.5rem;">
-                            <i data-feather="smartphone" style="color: var(--primary-color);"></i>
-                            Multi-device synchronization
-                        </li>
-                        <li style="padding: 0.5rem 0; display: flex; align-items: center; gap: 0.5rem;">
-                            <i data-feather="share-2" style="color: var(--primary-color);"></i>
-                            Secure file sharing
-                        </li>
-                        <li style="padding: 0.5rem 0; display: flex; align-items: center; gap: 0.5rem;">
-                            <i data-feather="hard-drive" style="color: var(--primary-color);"></i>
-                            Automatic backup and restore
-                        </li>
-                        <li style="padding: 0.5rem 0; display: flex; align-items: center; gap: 0.5rem;">
-                            <i data-feather="users" style="color: var(--primary-color);"></i>
-                            Team collaboration features
-                        </li>
-                    </ul>
+                
+                <div id="googleDriveConnected" style="display: none;">
+                    <!-- Drive Header with User Info -->
+                    <div class="drive-header">
+                        <div id="googleDriveUserInfo" class="drive-user-info">
+                            <!-- User info will be populated here -->
+                        </div>
+                        
+                        <!-- Auto Upload Settings -->
+                        <div class="auto-upload-settings">
+                            <div class="setting-item">
+                                <label class="switch">
+                                    <input type="checkbox" id="autoUploadToggle">
+                                    <span class="slider"></span>
+                                </label>
+                                <div class="setting-label">
+                                    <strong>Auto Upload</strong>
+                                    <span>Automatically upload new files to Drive</span>
+                                </div>
+                            </div>
+                            <button class="btn danger" id="disconnectGoogleDrive" style="margin-left: 1rem;">
+                                <i data-feather="log-out"></i>
+                                Disconnect
+                            </button>
+                        </div>
+                    </div>
                 </div>
+            </div>
+
+            <!-- Google Drive File Manager -->
+            <div class="card drive-manager" id="googleDriveManager" style="display: none;">
+                <!-- Drive Toolbar -->
+                <div class="drive-toolbar">
+                    <div class="drive-nav">
+                        <div class="breadcrumb" id="driveBreadcrumb">
+                            <span class="breadcrumb-item active">
+                                <i data-feather="cloud"></i>
+                                Encrypted Vault
+                            </span>
+                        </div>
+                    </div>
+                    
+                    <div class="drive-actions">
+                        <button class="btn secondary" id="uploadToDrive" title="Upload Files">
+                            <i data-feather="upload"></i>
+                            Upload
+                        </button>
+                        <button class="btn secondary" id="createFolder" title="Create Folder">
+                            <i data-feather="folder-plus"></i>
+                            New Folder
+                        </button>
+                        <button class="btn secondary" id="refreshDrive" title="Refresh">
+                            <i data-feather="refresh-cw"></i>
+                        </button>
+                        <div class="view-toggle">
+                            <button class="btn secondary active" id="gridView" title="Grid View">
+                                <i data-feather="grid"></i>
+                            </button>
+                            <button class="btn secondary" id="listView" title="List View">
+                                <i data-feather="list"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Drive Content Area -->
+                <div class="drive-content">
+                    <!-- Quick Actions -->
+                    <div class="quick-actions">
+                        <div class="quick-action" id="uploadLocalFiles">
+                            <div class="quick-action-icon">
+                                <i data-feather="upload-cloud"></i>
+                            </div>
+                            <div class="quick-action-text">
+                                <strong>Upload Local Files</strong>
+                                <span>Sync all encrypted local files</span>
+                            </div>
+                        </div>
+                        <div class="quick-action" id="downloadAllFiles">
+                            <div class="quick-action-icon">
+                                <i data-feather="download-cloud"></i>
+                            </div>
+                            <div class="quick-action-text">
+                                <strong>Download All</strong>
+                                <span>Download all vault files</span>
+                            </div>
+                        </div>
+                        <div class="quick-action" id="syncStatus">
+                            <div class="quick-action-icon">
+                                <i data-feather="refresh-cw"></i>
+                            </div>
+                            <div class="quick-action-text">
+                                <strong>Sync Status</strong>
+                                <span id="syncStatusText">All files synced</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- File Grid/List -->
+                    <div class="drive-files" id="driveFiles">
+                        <div class="empty-vault">
+                            <div class="empty-vault-icon">
+                                <i data-feather="shield"></i>
+                            </div>
+                            <h3>Your Encrypted Vault is Empty</h3>
+                            <p>Upload files to start building your secure cloud vault</p>
+                            <button class="btn" id="uploadFirstFile">
+                                <i data-feather="upload"></i>
+                                Upload Your First File
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Storage Usage -->
+                <div class="storage-usage">
+                    <div class="storage-bar">
+                        <div class="storage-used" id="storageUsed" style="width: 0%"></div>
+                    </div>
+                    <div class="storage-text">
+                        <span id="storageUsedText">0 GB</span> of <span id="storageTotalText">15 GB</span> used
+                    </div>
+                </div>
+            </div>
+
+            <!-- File Upload Drop Zone -->
+            <div class="upload-drop-zone" id="uploadDropZone" style="display: none;">
+                <div class="drop-zone-content">
+                    <i data-feather="upload-cloud"></i>
+                    <h3>Drop files here to upload</h3>
+                    <p>Files will be encrypted and uploaded to your vault</p>
+                </div>
+            </div>
+
+            <!-- Sync Progress -->
+            <div class="progress-container" id="googleDriveProgressContainer" style="display: none;">
+                <div class="progress-bar">
+                    <div class="progress" id="googleDriveProgressBar"></div>
+                </div>
+                <div class="status" id="googleDriveStatus">Syncing...</div>
+            </div>
+
+            <!-- Google Drive Alerts -->
+            <div class="alert error" id="googleDriveError" style="display: none;">
+                <i data-feather="alert-circle"></i>
+                <span id="googleDriveErrorMessage"></span>
+            </div>
+            <div class="alert success" id="googleDriveSuccess" style="display: none;">
+                <i data-feather="check-circle"></i>
+                <span id="googleDriveSuccessMessage"></span>
             </div>
         </div>
     </div>

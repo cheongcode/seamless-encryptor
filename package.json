@@ -40,8 +40,11 @@
     "webpack-cli": "^5.1.4"
   },
   "dependencies": {
+    "dotenv": "^16.6.1",
     "electron-squirrel-startup": "^1.0.1",
     "feather-icons": "^4.29.2",
+    "google-auth-library": "^9.14.1",
+    "googleapis": "^144.0.0",
     "lucide": "^0.544.0",
     "lucide-react": "^0.544.0"
   }
