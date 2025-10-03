@@ -97,8 +97,11 @@ function createTestSuite() {
     const key1 = keyManager.generateMasterKey();
     const key2 = keyManager.generateMasterKey();
     
-    testRunner.assertBuffer(key1, 32, 'Generated key 1');
-    testRunner.assertBuffer(key2, 32, 'Generated key 2');
+    // Check if keys are Buffers
+    testRunner.assert(Buffer.isBuffer(key1), 'Generated key 1 should be a Buffer');
+    testRunner.assert(Buffer.isBuffer(key2), 'Generated key 2 should be a Buffer');
+    testRunner.assertEqual(key1.length, 32, 'Generated key 1 should be 32 bytes');
+    testRunner.assertEqual(key2.length, 32, 'Generated key 2 should be 32 bytes');
     testRunner.assert(!key1.equals(key2), 'Keys should be unique');
   });
 
@@ -191,8 +194,6 @@ function createTestSuite() {
   });
 
   testRunner.addTest('File System Operations', async () => {
-    const { app } = require('electron');
-    
     const testPath = path.join(__dirname, 'test.tmp');
     const testData = 'Test file content';
     
@@ -204,6 +205,123 @@ function createTestSuite() {
     
     await fs.promises.unlink(testPath);
     testRunner.assert(!fs.existsSync(testPath), 'Test file should be deleted');
+  });
+
+  testRunner.addTest('File Naming Conventions', async () => {
+    // Test encrypted file naming
+    const originalName = 'document.pdf';
+    const extension = path.extname(originalName);
+    const nameWithoutExt = path.basename(originalName, extension);
+    const expectedEncrypted = `${nameWithoutExt}_encrypted${extension}`;
+    
+    testRunner.assertEqual(expectedEncrypted, 'document_encrypted.pdf', 'Encrypted file naming');
+    
+    // Test decrypted file naming
+    const encryptedName = 'document_encrypted.pdf';
+    const decryptedExt = path.extname(encryptedName);
+    const decryptedBase = path.basename(encryptedName, decryptedExt).replace(/_encrypted$/, '');
+    const expectedDecrypted = `${decryptedBase}_decrypted${decryptedExt}`;
+    
+    testRunner.assertEqual(expectedDecrypted, 'document_decrypted.pdf', 'Decrypted file naming');
+  });
+
+  testRunner.addTest('Encryption Key Operations', async () => {
+    const keyManager = require('../config/keyManager');
+    
+    // Generate a test key
+    const testKey = keyManager.generateMasterKey();
+    testRunner.assert(Buffer.isBuffer(testKey), 'Generated test key should be a Buffer');
+    testRunner.assertEqual(testKey.length, 32, 'Generated test key should be 32 bytes');
+    
+    // Test key setting and retrieval
+    await keyManager.setMasterKey(testKey);
+    const retrievedKey = await keyManager.getMasterKey();
+    
+    testRunner.assert(Buffer.isBuffer(retrievedKey), 'Retrieved key should be a Buffer');
+    testRunner.assertEqual(retrievedKey.length, 32, 'Retrieved key should be 32 bytes');
+    testRunner.assert(testKey.equals(retrievedKey), 'Keys should match after set/get');
+    
+    // Test key uniqueness
+    const anotherKey = keyManager.generateMasterKey();
+    testRunner.assert(!testKey.equals(anotherKey), 'Different keys should not match');
+  });
+
+  testRunner.addTest('Encryption/Decryption Round Trip', async () => {
+    const testData = 'This is a test document with special characters: éñ中文🎉';
+    const testBuffer = Buffer.from(testData, 'utf8');
+    
+    // Generate encryption key
+    const key = crypto.randomBytes(32);
+    
+    // Encrypt data
+    const iv = crypto.randomBytes(16);
+    const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+    const encrypted = Buffer.concat([cipher.update(testBuffer), cipher.final()]);
+    const authTag = cipher.getAuthTag();
+    const encryptedData = Buffer.concat([iv, authTag, encrypted]);
+    
+    testRunner.assert(encryptedData.length > testBuffer.length, 'Encrypted data should be larger');
+    
+    // Decrypt data
+    const decryptedIv = encryptedData.slice(0, 16);
+    const decryptedTag = encryptedData.slice(16, 32);
+    const decryptedCiphertext = encryptedData.slice(32);
+    
+    const decipher = crypto.createDecipheriv('aes-256-gcm', key, decryptedIv);
+    decipher.setAuthTag(decryptedTag);
+    const decrypted = Buffer.concat([decipher.update(decryptedCiphertext), decipher.final()]);
+    
+    testRunner.assertEqual(decrypted.toString('utf8'), testData, 'Decrypted data should match original');
+  });
+
+  testRunner.addTest('File Extension Detection', async () => {
+    const testFiles = [
+      { name: 'document.pdf', expected: '.pdf' },
+      { name: 'image.jpg', expected: '.jpg' },
+      { name: 'archive.tar.gz', expected: '.gz' },
+      { name: 'noextension', expected: '' },
+      { name: '.hidden', expected: '' },
+      { name: 'file.', expected: '.' }
+    ];
+    
+    testFiles.forEach(test => {
+      const actual = path.extname(test.name);
+      testRunner.assertEqual(actual, test.expected, `Extension for ${test.name}`);
+    });
+  });
+
+  testRunner.addTest('Storage Path Validation', async () => {
+    const validStorageKeys = [
+      'abc123/document.pdf.enc',
+      'def456/image_encrypted.jpg.enc',
+      '789xyz/file.txt.enc'
+    ];
+    
+    const invalidStorageKeys = [
+      '../file.enc',
+      'folder/../file.enc',
+      'folder\\file.enc',
+      '',
+      'abc123/',
+      '/absolute/path.enc'
+    ];
+    
+    validStorageKeys.forEach(key => {
+      const parts = key.split('/');
+      testRunner.assertEqual(parts.length, 2, `Valid key structure: ${key}`);
+      testRunner.assert(!key.includes('..'), `No path traversal: ${key}`);
+      testRunner.assert(!key.includes('\\'), `No backslashes: ${key}`);
+    });
+    
+    invalidStorageKeys.forEach(key => {
+      const isInvalid = !key || 
+        key.includes('..') || 
+        key.includes('\\') || 
+        key.startsWith('/') ||
+        key.split('/').length !== 2 ||
+        key.endsWith('/');
+      testRunner.assert(isInvalid, `Should be invalid: ${key}`);
+    });
   });
 
   return testRunner;

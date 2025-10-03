@@ -11,6 +11,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const success = document.getElementById('success');
   const fileList = document.getElementById('fileList');
   const refreshFilesBtn = document.getElementById('refreshFiles');
+  const decryptedFilesList = document.getElementById('decryptedFilesList');
+  const clearDecryptedFilesBtn = document.getElementById('clearDecryptedFiles');
   
   const decryptDropZone = document.getElementById('decryptDropZone');
   const selectEncryptedFileBtn = document.getElementById('selectEncryptedFile');
@@ -74,6 +76,13 @@ document.addEventListener('DOMContentLoaded', () => {
   let driveFilesList = [];
   let syncQueue = [];
 
+  navTabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      const tabName = tab.dataset.tab;
+      switchTab(tabName);
+    });
+  });
+  
   initializeApp();
 
   async function initializeApp() {
@@ -89,6 +98,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       
       updateFileList();
+      updateDecryptedFilesList();
       
       // Check Google Drive connection status
       await checkGoogleDriveConnection();
@@ -111,21 +121,18 @@ document.addEventListener('DOMContentLoaded', () => {
     keyManagementCard.style.display = 'block';
   }
 
-  // Enhanced key generation with better UX
   startKeyGenerationBtn.addEventListener('click', async () => {
     try {
       startKeyGenerationBtn.disabled = true;
       startKeyGenerationBtn.innerHTML = '<i data-feather="loader"></i> Generating secure key...';
       feather.replace();
 
-      // Add a slight delay for better UX
       await new Promise(resolve => setTimeout(resolve, 1000));
 
       const newKey = await window.api.generateKey();
       await window.api.setKey(newKey);
       encryptionKey = newKey;
 
-      // Animate transition
       keyWizard.style.transform = 'translateY(-20px)';
       keyWizard.style.opacity = '0';
       
@@ -152,16 +159,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // Tab switching with enhanced animations
-  navTabs.forEach(tab => {
-    tab.addEventListener('click', () => {
-      const tabName = tab.dataset.tab;
-      switchTab(tabName);
-    });
-  });
 
   function switchTab(tabName) {
-    // Update nav tabs
     navTabs.forEach(tab => {
       if (tab.dataset.tab === tabName) {
         tab.classList.add('active');
@@ -170,7 +169,6 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
 
-    // Update tab content with fade animation
     tabContents.forEach(content => {
       if (content.id === `${tabName}-tab`) {
         content.classList.add('active');
@@ -179,16 +177,15 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
 
-    // Refresh data when switching to certain tabs
     if (tabName === 'manage') {
       updateFileList();
+      updateDecryptedFilesList();
     } else if (tabName === 'keys') {
       updateKeyDisplay();
     } else if (tabName === 'decrypt') {
       updateDecryptHistory();
     }
 
-    // Re-initialize icons after tab switch
     setTimeout(() => {
       if (typeof feather !== 'undefined') {
         feather.replace();
@@ -196,14 +193,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }, 100);
   }
 
-  // Enhanced key display with better security
   async function updateKeyDisplay() {
     try {
       const key = await window.api.getKey();
       if (key) {
         encryptionKey = key;
         if (keyVisible) {
-          // Format key for better readability
           const formattedKey = key.match(/.{1,8}/g).join(' ');
           currentKeyDisplay.innerHTML = `<span style="font-family: 'SF Mono', Monaco, monospace;">${formattedKey}</span>`;
         } else {
@@ -223,7 +218,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // Enhanced key management event listeners
   generateNewKeyBtn.addEventListener('click', async () => {
     const confirmed = await showConfirmDialog(
       '⚠️ Generate New Key?',
@@ -341,23 +335,30 @@ document.addEventListener('DOMContentLoaded', () => {
     feather.replace();
   });
 
-  // Enhanced file management
   refreshFilesBtn.addEventListener('click', () => {
     refreshFilesBtn.disabled = true;
     refreshFilesBtn.innerHTML = '<i data-feather="loader"></i> Refreshing...';
     feather.replace();
     
     updateFileList();
+    updateDecryptedFilesList();
     
     setTimeout(() => {
       refreshFilesBtn.disabled = false;
       refreshFilesBtn.innerHTML = '<i data-feather="refresh-cw"></i> Refresh';
       feather.replace();
-      showSuccess('📁 File list refreshed!');
+      showSuccess('📁 File lists refreshed!');
     }, 1000);
   });
 
-  // Enhanced drag and drop
+  if (clearDecryptedFilesBtn) {
+    clearDecryptedFilesBtn.addEventListener('click', () => {
+      localStorage.removeItem('decryptedFilesList');
+      updateDecryptedFilesList();
+      showSuccess('🗑️ Decrypted files list cleared!');
+    });
+  }
+
   ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
     dropZone.addEventListener(eventName, preventDefaults, false);
     document.body.addEventListener(eventName, preventDefaults, false);
@@ -373,7 +374,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
   dropZone.addEventListener('drop', handleDrop, false);
 
-  // File selection
   selectFileBtn.addEventListener('click', async () => {
     const filePath = await window.api.openFileDialog();
     if (filePath) {
@@ -382,7 +382,6 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
 
-  // Decryption tab event listeners
   if (selectEncryptedFileBtn) {
     selectEncryptedFileBtn.addEventListener('click', async () => {
       const filePath = await window.api.openFileDialog();
@@ -409,7 +408,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Decrypt drop zone functionality
   if (decryptDropZone) {
     ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
       decryptDropZone.addEventListener(eventName, preventDefaults, false);
@@ -462,7 +460,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // Enhanced progress display
   function showProgress(message, percentage = 0) {
     progressContainer.style.display = 'block';
     progressBar.style.width = `${percentage}%`;
@@ -475,7 +472,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }, 1500);
   }
 
-  // Enhanced alert system
   function showSuccess(message) {
     const successMessage = document.getElementById('successMessage');
     if (successMessage) {
@@ -504,7 +500,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }, 6000);
   }
 
-  // Enhanced confirmation dialog
   async function showConfirmDialog(title, message, confirmText, cancelText) {
     return new Promise((resolve) => {
       const dialog = document.createElement('div');
@@ -663,7 +658,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Enhanced file list with better UI
   function updateFileList() {
     const files = Object.keys(localStorage)
       .filter(key => key.startsWith('file-'))
@@ -722,6 +716,62 @@ document.addEventListener('DOMContentLoaded', () => {
         </div>
       `;
       fileList.appendChild(fileElement);
+    });
+    feather.replace();
+  }
+
+  function updateDecryptedFilesList() {
+    const decryptedFiles = JSON.parse(localStorage.getItem('decryptedFilesList') || '[]')
+      .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+    if (decryptedFiles.length === 0) {
+      decryptedFilesList.innerHTML = `
+        <div class="empty-state">
+          <div class="empty-state-icon">
+            <i data-feather="unlock"></i>
+          </div>
+          <h3>No decrypted files yet</h3>
+          <p>Decrypt files to see them listed here</p>
+        </div>
+      `;
+      feather.replace();
+      return;
+    }
+
+    decryptedFilesList.innerHTML = '';
+    decryptedFiles.forEach((file, index) => {
+      const fileElement = document.createElement('div');
+      fileElement.className = 'file-item';
+      
+      const extension = file.name.split('.').pop().toUpperCase();
+      const displayExtension = extension.length > 3 ? extension.substring(0, 3) : extension;
+      
+      const timestamp = new Date(file.timestamp);
+      const timeString = timestamp.toLocaleDateString() + ' ' + timestamp.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+      
+      fileElement.innerHTML = `
+        <div class="file-info">
+          <div class="file-icon">${displayExtension}</div>
+          <div class="file-details">
+            <div class="file-name">${file.name}</div>
+            <div class="file-meta">
+              <i data-feather="unlock" style="width: 14px; height: 14px; margin-right: 4px;"></i>
+              Decrypted on ${timeString}
+            </div>
+          </div>
+        </div>
+        <div class="file-actions">
+          <button class="btn secondary" onclick="openDecryptedFile('${file.path}')">
+            <i data-feather="external-link"></i>
+            Open Location
+          </button>
+          <button class="btn danger" onclick="removeFromDecryptedList(${index})">
+            <i data-feather="x"></i>
+            Remove
+          </button>
+        </div>
+      `;
+      decryptedFilesList.appendChild(fileElement);
     });
     feather.replace();
   }
@@ -794,6 +844,15 @@ document.addEventListener('DOMContentLoaded', () => {
           ` (${(result.originalSize / 1024).toFixed(1)}KB → ${(result.decryptedSize / 1024).toFixed(1)}KB)` : '';
         
         showDecryptSuccess(`🔓 File decrypted successfully! Saved to: ${result.path}${sizeInfo}`);
+        
+        // Add to decrypted files list
+        const decryptedFileName = result.path.split('/').pop() || result.path.split('\\').pop() || result.path;
+        addToDecryptedFilesList({
+          name: decryptedFileName,
+          path: result.path,
+          timestamp: new Date().toISOString()
+        });
+        
         updateDecryptHistory();
       } else {
         throw new Error((result && result.error) || 'Failed to decrypt file');
@@ -1000,6 +1059,8 @@ document.addEventListener('DOMContentLoaded', () => {
       
       if (result.success) {
         showSuccess('📥 File downloaded and decrypted successfully!');
+        // The main process should provide the saved file path, but for now we'll use a placeholder
+        // This will be updated when we get the actual path from the main process
       } else {
         throw new Error(result.error || 'Unknown error during download');
       }
@@ -1007,6 +1068,40 @@ document.addEventListener('DOMContentLoaded', () => {
       showError(`Download failed: ${err.message || 'Unknown error'}`);
     } finally {
       hideProgress();
+    }
+  };
+
+  function addToDecryptedFilesList(fileInfo) {
+    try {
+      let decryptedFiles = JSON.parse(localStorage.getItem('decryptedFilesList') || '[]');
+      
+      // Check if file already exists (avoid duplicates)
+      const exists = decryptedFiles.some(file => file.path === fileInfo.path);
+      if (!exists) {
+        decryptedFiles.unshift(fileInfo);
+        
+        // Keep only last 20 decrypted files
+        if (decryptedFiles.length > 20) {
+          decryptedFiles = decryptedFiles.slice(0, 20);
+        }
+        
+        localStorage.setItem('decryptedFilesList', JSON.stringify(decryptedFiles));
+        updateDecryptedFilesList();
+      }
+    } catch (err) {
+      console.error('Error adding to decrypted files list:', err);
+    }
+  }
+
+  window.removeFromDecryptedList = function(index) {
+    try {
+      let decryptedFiles = JSON.parse(localStorage.getItem('decryptedFilesList') || '[]');
+      decryptedFiles.splice(index, 1);
+      localStorage.setItem('decryptedFilesList', JSON.stringify(decryptedFiles));
+      updateDecryptedFilesList();
+      showSuccess('🗑️ File removed from decrypted list!');
+    } catch (err) {
+      showError(`Error removing file: ${err.message}`);
     }
   };
 
@@ -1764,29 +1859,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  if (refreshGoogleDriveFilesBtn) {
-    refreshGoogleDriveFilesBtn.addEventListener('click', async () => {
-      refreshGoogleDriveFilesBtn.disabled = true;
-      refreshGoogleDriveFilesBtn.innerHTML = '<i data-feather="loader"></i> Refreshing...';
-      feather.replace();
-      
-      await updateGoogleDriveFilesList();
-      
-      setTimeout(() => {
-        refreshGoogleDriveFilesBtn.disabled = false;
-        refreshGoogleDriveFilesBtn.innerHTML = '<i data-feather="refresh-cw"></i> Refresh Files';
-        feather.replace();
-        showGoogleDriveSuccess('📁 File list refreshed!');
-      }, 1000);
-    });
-  }
 
-  if (viewGoogleDriveStorageBtn) {
-    viewGoogleDriveStorageBtn.addEventListener('click', async () => {
-      await updateGoogleDriveUserInfo();
-      showGoogleDriveSuccess('📊 Storage information updated!');
-    });
-  }
 
   if (disconnectGoogleDriveBtn) {
     disconnectGoogleDriveBtn.addEventListener('click', async () => {
@@ -1810,90 +1883,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  if (uploadAllToGoogleDriveBtn) {
-    uploadAllToGoogleDriveBtn.addEventListener('click', async () => {
-      try {
-        const localFiles = getLocalFiles();
-        if (localFiles.length === 0) {
-          showGoogleDriveError('No local files to upload');
-          return;
-        }
 
-        showGoogleDriveProgress('Preparing to upload files...', 0);
-        
-        for (let i = 0; i < localFiles.length; i++) {
-          const file = localFiles[i];
-          const progress = Math.round(((i + 1) / localFiles.length) * 100);
-          
-          showGoogleDriveProgress(`Uploading ${file.name}...`, progress);
-          
-          const result = await window.api.googleDriveUpload(file.id, file.name);
-          if (!result.success) {
-            throw new Error(`Failed to upload ${file.name}: ${result.error}`);
-          }
-        }
-
-        hideGoogleDriveProgress();
-        await updateGoogleDriveFilesList();
-        showGoogleDriveSuccess(`📤 Successfully uploaded ${localFiles.length} file(s) to Google Drive!`);
-      } catch (err) {
-        hideGoogleDriveProgress();
-        showGoogleDriveError(`Upload failed: ${err.message}`);
-      }
-    });
-  }
-
-  if (downloadAllFromGoogleDriveBtn) {
-    downloadAllFromGoogleDriveBtn.addEventListener('click', async () => {
-      try {
-        const result = await window.api.googleDriveListFiles();
-        if (!result.success) {
-          throw new Error(result.error);
-        }
-
-        const cloudFiles = result.files || [];
-        const localFiles = getLocalFiles();
-        const filesToDownload = cloudFiles.filter(cloudFile => 
-          !localFiles.some(localFile => localFile.id === cloudFile.fileId)
-        );
-
-        if (filesToDownload.length === 0) {
-          showGoogleDriveError('All Google Drive files are already available locally');
-          return;
-        }
-
-        showGoogleDriveProgress('Preparing to download files...', 0);
-        
-        for (let i = 0; i < filesToDownload.length; i++) {
-          const file = filesToDownload[i];
-          const progress = Math.round(((i + 1) / filesToDownload.length) * 100);
-          
-          showGoogleDriveProgress(`Downloading ${file.originalName}...`, progress);
-          
-          const downloadResult = await window.api.googleDriveDownload(file.driveFileId, file.originalName, file.fileId);
-          if (!downloadResult.success) {
-            throw new Error(`Failed to download ${file.originalName}: ${downloadResult.error}`);
-          }
-
-          // Add to local storage
-          const fileInfo = {
-            id: file.fileId,
-            name: file.originalName,
-            timestamp: new Date().toISOString()
-          };
-          localStorage.setItem(`file-${file.fileId}`, JSON.stringify(fileInfo));
-        }
-
-        hideGoogleDriveProgress();
-        updateFileList();
-        await updateGoogleDriveFilesList();
-        showGoogleDriveSuccess(`📥 Successfully downloaded ${filesToDownload.length} file(s) from Google Drive!`);
-      } catch (err) {
-        hideGoogleDriveProgress();
-        showGoogleDriveError(`Download failed: ${err.message}`);
-      }
-    });
-  }
 
   // Global functions for Google Drive file operations
   window.downloadFromGoogleDrive = async function(driveFileId, fileName, fileId) {

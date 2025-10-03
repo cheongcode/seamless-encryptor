@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://unpkg.com; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: https:;">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://unpkg.com; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: https:; connect-src 'self' https: ws://localhost:3000 http://localhost:3000;">
     <title>Seamless Encryptor</title>
     <style>
         :root {
@@ -1407,7 +1407,7 @@
                         Select Encrypted File
                     </button>
                     <button class="btn secondary" id="selectMultipleEncrypted">
-                        <i data-feather="files"></i>
+                        <i data-feather="file-text"></i>
                         Select Multiple Files
                     </button>
                 </div>
@@ -1481,11 +1481,12 @@
 
         <!-- Manage Files Tab -->
         <div id="manage-tab" class="tab-content">
+            <!-- Encrypted Files Section -->
             <div class="card">
                 <div class="card-header">
                     <h2 class="card-title">
-                        <i data-feather="archive"></i>
-                        Your Encrypted Files
+                        <i data-feather="lock"></i>
+                        Encrypted Files
                     </h2>
                     <button class="btn secondary" id="refreshFiles">
                         <i data-feather="refresh-cw"></i>
@@ -1499,6 +1500,29 @@
                         </div>
                         <h3>No encrypted files yet</h3>
                         <p>Start by encrypting your first file in the Encrypt Files tab</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Decrypted Files Section -->
+            <div class="card">
+                <div class="card-header">
+                    <h2 class="card-title">
+                        <i data-feather="unlock"></i>
+                        Recently Decrypted Files
+                    </h2>
+                    <button class="btn secondary" id="clearDecryptedFiles">
+                        <i data-feather="trash-2"></i>
+                        Clear List
+                    </button>
+                </div>
+                <div class="file-list" id="decryptedFilesList">
+                    <div class="empty-state">
+                        <div class="empty-state-icon">
+                            <i data-feather="unlock"></i>
+                        </div>
+                        <h3>No decrypted files yet</h3>
+                        <p>Decrypt files to see them listed here</p>
                     </div>
                 </div>
             </div>

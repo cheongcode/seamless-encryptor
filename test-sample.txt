@@ -1,0 +1,10 @@
+Test file for encryption/decryption workflow.
+This file tests:
+1. File encryption with _encrypted suffix
+2. File decryption with _decrypted suffix
+3. File management display
+4. Round-trip integrity
+
+Special characters: éñ中文🎉
+Numbers: 123456789
+Symbols: !@#$%^&*()_+-=[]{}|;:,.<>?

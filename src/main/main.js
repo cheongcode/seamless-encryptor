@@ -68,10 +68,16 @@ function createWindow() {
 
     mainWindow.webContents.session.webRequest.onHeadersReceived((details, callback) => {
       logger.trace('Security', 'Setting CSP headers', { url: details.url });
+      
+      // Allow unsafe-eval in development mode for webpack dev server
+      const scriptSrc = process.env.NODE_ENV === 'development' 
+        ? "'self' 'unsafe-inline' 'unsafe-eval' https://unpkg.com https://accounts.google.com"
+        : "'self' 'unsafe-inline' https://unpkg.com https://accounts.google.com";
+      
       callback({
         responseHeaders: {
           ...details.responseHeaders,
-          'Content-Security-Policy': ["default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://unpkg.com https://accounts.google.com; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: https:; connect-src 'self' https://accounts.google.com https://www.googleapis.com https://oauth2.googleapis.com; frame-src 'self' https://accounts.google.com;"]
+          'Content-Security-Policy': [`default-src 'self'; script-src ${scriptSrc}; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: https:; connect-src 'self' https://accounts.google.com https://www.googleapis.com https://oauth2.googleapis.com ws://localhost:3000 http://localhost:3000; frame-src 'self' https://accounts.google.com;`]
         }
       });
     });
@@ -473,12 +479,16 @@ ipcMain.handle('encrypt-file', logger.wrapFunction('IPC', async (event, filePath
   const encryptedData = Buffer.concat([iv, authTag, encrypted]);
   
   const fileId = crypto.randomBytes(16).toString('hex');
-  const fileName = path.basename(filePath);
-  const storageKey = `${fileId}/${fileName}.enc`;
+  const originalFileName = path.basename(filePath);
+  const fileExt = path.extname(originalFileName);
+  const fileNameWithoutExt = path.basename(originalFileName, fileExt);
+  const encryptedFileName = `${fileNameWithoutExt}_encrypted${fileExt}`;
+  const storageKey = `${fileId}/${encryptedFileName}.enc`;
   
   logger.info('IPC', 'Preparing to store encrypted file', {
     fileId,
-    fileName,
+    fileName: encryptedFileName,
+    originalFileName,
     storageKey,
     totalSize: encryptedData.length
   });
@@ -493,7 +503,8 @@ ipcMain.handle('encrypt-file', logger.wrapFunction('IPC', async (event, filePath
   const result = {
     success: true,
     fileId,
-    fileName,
+    fileName: encryptedFileName,
+    originalFileName,
     originalSize: inputBuffer.length,
     encryptedSize: encryptedData.length
   };
@@ -531,13 +542,23 @@ ipcMain.handle('decrypt-file-from-path', async (event, encryptedFilePath) => {
     event.sender.send('progress', 70);
     
     // Get original filename without .enc extension
-    let defaultName = path.basename(encryptedFilePath).replace(/\.enc$/i, '').replace(/\.encrypted$/i, '');
+    let baseName = path.basename(encryptedFilePath).replace(/\.enc$/i, '').replace(/\.encrypted$/i, '');
+    
+    // Extract file extension first
+    const fileExt = path.extname(baseName);
+    let nameWithoutExt = path.basename(baseName, fileExt);
+    
+    // Remove "_encrypted" suffix if present
+    nameWithoutExt = nameWithoutExt.replace(/_encrypted$/i, '');
+    
+    // Add "_decrypted" suffix
+    let defaultName = `${nameWithoutExt}_decrypted${fileExt}`;
     
     // If no extension remains, try to detect file type from magic bytes
-    if (!path.extname(defaultName)) {
+    if (!fileExt) {
       const fileType = detectFileType(decrypted);
       if (fileType) {
-        defaultName += fileType;
+        defaultName = `${nameWithoutExt}_decrypted${fileType}`;
       }
     }
     
@@ -614,21 +635,55 @@ ipcMain.handle('download-file', async (event, { fileId, fileName }) => {
             throw new Error('Encryption key not found');
         }
 
-        // Construct storage key
-        const storageKey = `${fileId}/${fileName}.enc`;
+        // Construct storage key - try multiple formats for backward compatibility
+        let storageKey = `${fileId}/${fileName}.enc`;
+        let encryptedData;
+        let foundFormat = null;
+        
+        const tryFormats = [
+            `${fileId}/${fileName}.enc`,  // New format with _encrypted suffix
+            `${fileId}/${fileName.replace(/_encrypted/, '')}.enc`,  // Old format without suffix
+            `${fileId}/${fileName}`,  // Without .enc extension
+            `${fileId}/${fileName.replace(/_encrypted/, '')}`  // Old format without suffix or .enc
+        ];
+        
+        for (const format of tryFormats) {
+            try {
+                encryptedData = await storageService.downloadFile(format);
+                foundFormat = format;
+                storageKey = format;
+                logger.debug('Storage', 'Found file with format', { format, fileId, fileName });
+                break;
+            } catch (error) {
+                logger.trace('Storage', 'Format not found', { format, error: error.message });
+                continue;
+            }
+        }
+        
+        if (!encryptedData) {
+            throw new Error(`Encrypted file not found for ${fileName}. Tried multiple formats.`);
+        }
 
         // Download encrypted data
         event.sender.send('download-progress', { progress: 25, status: 'Downloading encrypted file...' });
-        const encryptedData = await storageService.downloadFile(storageKey);
 
         // Decrypt the data
         event.sender.send('download-progress', { progress: 50, status: 'Decrypting file...' });
         const decryptedData = await decryptData(encryptedData, encryptionKey);
 
+        // Create decrypted filename
+        const fileExt = path.extname(fileName);
+        let nameWithoutExt = path.basename(fileName, fileExt);
+        
+        // Remove "_encrypted" suffix if present
+        nameWithoutExt = nameWithoutExt.replace(/_encrypted$/i, '');
+        
+        const decryptedFileName = `${nameWithoutExt}_decrypted${fileExt}`;
+
         // Save the decrypted file
         event.sender.send('download-progress', { progress: 75, status: 'Saving file...' });
         const savePath = await dialog.showSaveDialog({
-            defaultPath: fileName,
+            defaultPath: decryptedFileName,
             filters: [{ name: 'All Files', extensions: ['*'] }]
         });
 
@@ -652,18 +707,46 @@ ipcMain.handle('download-encrypted-file', async (event, { fileId, fileName }) =>
         // Send progress updates
         event.sender.send('download-progress', { progress: 0, status: 'Starting download...' });
         
-        // Construct storage key
-        const storageKey = `${fileId}/${fileName}.enc`;
+        // Construct storage key - try multiple formats for backward compatibility
+        let storageKey = `${fileId}/${fileName}.enc`;
+        let encryptedData;
+        
+        const tryFormats = [
+            `${fileId}/${fileName}.enc`,
+            `${fileId}/${fileName.replace(/_encrypted/, '')}.enc`,
+            `${fileId}/${fileName}`,
+            `${fileId}/${fileName.replace(/_encrypted/, '')}`
+        ];
+        
+        for (const format of tryFormats) {
+            try {
+                encryptedData = await storageService.downloadFile(format);
+                storageKey = format;
+                break;
+            } catch (error) {
+                continue;
+            }
+        }
+        
+        if (!encryptedData) {
+            throw new Error(`Encrypted file not found for ${fileName}`);
+        }
 
         // Download encrypted data
         event.sender.send('download-progress', { progress: 50, status: 'Downloading encrypted file...' });
-        const encryptedData = await storageService.downloadFile(storageKey);
+
+        // Create encrypted filename for download
+        const fileExt = path.extname(fileName);
+        const nameWithoutExt = path.basename(fileName, fileExt);
+        const downloadFileName = nameWithoutExt.endsWith('_encrypted') ? 
+            `${nameWithoutExt}.enc` : 
+            `${nameWithoutExt}_encrypted.enc`;
 
         // Save the encrypted file
         event.sender.send('download-progress', { progress: 75, status: 'Saving file...' });
         const savePath = await dialog.showSaveDialog({
-            defaultPath: `${fileName}.encrypted`,
-            filters: [{ name: 'Encrypted Files', extensions: ['encrypted'] }]
+            defaultPath: downloadFileName,
+            filters: [{ name: 'Encrypted Files', extensions: ['enc'] }, { name: 'All Files', extensions: ['*'] }]
         });
 
         if (savePath.canceled) {
